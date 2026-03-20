@@ -1,0 +1,32 @@
+{
+  "accent_color": "#FF6B6B",
+  "pages": [
+    {
+      "id": "showcase",
+      "label": "Server Showcase",
+      "description": "See what our server looks like",
+      "icon": "🖼",
+      "content": {
+        "components": [
+          {"type": "text", "content": "# Server Showcase\n\nHighlights from our community:"},
+          {
+            "type": "media_gallery",
+            "items": [
+              {"media": "https://example.com/banner.png", "description": "Our server banner"},
+              {"media": "https://example.com/event.png", "description": "Community event", "spoiler": true}
+            ]
+          },
+          {"type": "separator"},
+          {
+            "type": "section",
+            "content": [
+              {"type": "text", "content": "**Meet the team!**"},
+              {"type": "text", "content": "Our moderators keep things running smoothly."}
+            ],
+            "accessory": {"type": "thumbnail", "media": "member_avatar", "description": "Your avatar"}
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "accent_color": "#57F287",
+  "components": [
+    {"type": "separator"},
+    {
+      "type": "section",
+      "content": [
+        {"type": "text", "content": "## Hey {member_name}!"},
+        {"type": "text", "content": "Welcome to **{guild_name}**. You're member #{member_count}."}
+      ],
+      "accessory": {
+        "type": "thumbnail",
+        "media": "member_avatar",
+        "description": "New member avatar"
+      }
+    },
+    {"type": "separator"},
+    {"type": "text", "content": "Read the rules and say hello in chat. {voice_active} voice channels are active right now!"},
+    {
+      "type": "action_row",
+      "buttons": [
+        {"type": "button", "style": "success", "label": "Guide", "action": "open_guide"},
+        {"type": "button", "style": "link", "label": "Rules", "url": "https://discord.com/channels/GUILD/CHANNEL"}
+      ]
+    }
+  ]
+}

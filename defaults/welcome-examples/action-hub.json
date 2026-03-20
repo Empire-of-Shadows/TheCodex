@@ -1,0 +1,36 @@
+{
+  "accent_color": "#EB459E",
+  "components": [
+    {
+      "type": "section",
+      "content": [
+        {"type": "text", "content": "# Welcome, {member}!"},
+        {"type": "text", "content": "Here's everything you can explore in **{guild_name}**."},
+        {"type": "text", "content": "-# Member #{member_count}"}
+      ],
+      "accessory": {"type": "thumbnail", "media": "member_avatar"}
+    },
+    {"type": "separator"},
+    {
+      "type": "action_row",
+      "buttons": [
+        {"type": "button", "style": "success", "label": "Guide", "emoji": "📖", "action": "open_guide"},
+        {"type": "button", "style": "primary", "label": "Suggest", "emoji": "💡", "action": "suggest"},
+        {"type": "button", "style": "secondary", "label": "Free Drops", "emoji": "🎁", "action": "browse_drops"},
+        {"type": "button", "style": "danger", "label": "Rules", "emoji": "📜", "action": "server_rules"}
+      ]
+    },
+    {
+      "type": "action_row",
+      "select": {
+        "placeholder": "More things to explore…",
+        "options": [
+          {"label": "Server Info", "action": "server_info", "description": "Stats and boost status", "emoji": "📊"},
+          {"label": "All Channels", "action": "channel_list", "description": "Browse every channel", "emoji": "📋"},
+          {"label": "Getting Started", "action": "getting_started", "description": "Tips for new members", "emoji": "🚀"},
+          {"label": "Role Info", "action": "role_info", "description": "See all server roles", "emoji": "🏷️"}
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+.idea/
+/log/
+**/would_you_rather_questions/
+bot_permissions.csv
+storage/logs/
+.claude/
+.vscode/
+.DS_Store
+*.log
+.venv/
+venv/
+
+# Python
+__pycache__/
+
+# Node
+node_modules/
+
+# Build artifacts
+dashboard/frontend/dist/
+tsconfig.tsbuildinfo
+
+# Environment
+.env

@@ -1,0 +1,20 @@
+{
+  "accent_color": "#ED4245",
+  "components": [
+    {"type": "text", "content": "# Welcome to {guild_name}, {member}!"},
+    {
+      "type": "media_gallery",
+      "items": [
+        {"media": "https://example.com/server-banner.png", "description": "Our server banner"},
+        {"media": "https://example.com/community-event.png", "description": "Recent community event"}
+      ]
+    },
+    {
+      "type": "action_row",
+      "buttons": [
+        {"type": "button", "style": "success", "label": "Guide", "action": "open_guide"},
+        {"type": "button", "style": "primary", "label": "Server Info", "action": "server_info"}
+      ]
+    }
+  ]
+}

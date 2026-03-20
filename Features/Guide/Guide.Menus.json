@@ -1,0 +1,171 @@
+[
+  {
+    "name": "Welcome",
+    "order": "1",
+    "meta_description": "Welcome to the Server Guide",
+    "type": "select",
+    "options": [
+      {
+        "name": "About the Server Guide",
+        "meta_description": "What is the Server Guide?",
+        "type": "embed",
+        "description": [
+          "**Welcome to the Server Guide**",
+          "This is your server's built-in guide, powered by the Imperial Codex.",
+          "",
+          "The Server Guide is a navigable information system that helps members find answers about your server quickly.",
+          "",
+          "**How it works:**",
+          "- Mention or reply to the bot and ask a question",
+          "- Use keywords to find matching guide pages",
+          "- Navigate using the buttons and menus below each response",
+          "",
+          "This guide was automatically created with default pages. Your server admins can customize it to fit your community."
+        ]
+      },
+      {
+        "name": "Customizing Your Guide",
+        "meta_description": "How to edit this guide",
+        "type": "embed",
+        "description": [
+          "**Guide Customization**",
+          "A guide editor is a planned feature that will allow server admins to create, edit, and organize guide pages directly from Discord.",
+          "",
+          "**Planned capabilities:**",
+          "- Add and remove guide pages",
+          "- Edit page content",
+          "- Organize pages into categories",
+          "- Link pages to specific channels",
+          "",
+          "Stay tuned for updates on this feature."
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Server Info",
+    "order": "2",
+    "meta_description": "Learn about the server and community",
+    "type": "select",
+    "options": [
+      {
+        "name": "Community Overview",
+        "meta_description": "General info about the community",
+        "type": "embed",
+        "description": [
+          "**Your Community**",
+          "This is where you can describe your server to new and existing members.",
+          "",
+          "**Example topics to cover:**",
+          "- What your server is about",
+          "- What makes your community unique",
+          "- Links to important channels",
+          "",
+          "This page is a direct embed inside a top-level menu. Simple and effective for quick info."
+        ]
+      },
+      {
+        "name": "Roles & Channels",
+        "meta_description": "Info about roles and channels",
+        "type": "select",
+        "options": [
+          {
+            "name": "Available Roles",
+            "meta_description": "Roles you can pick up",
+            "type": "embed",
+            "description": [
+              "**Server Roles**",
+              "This page is inside a nested menu. The user selected a category first, then picked this page.",
+              "",
+              "Use this structure when a topic has multiple related pages that belong under one group.",
+              "",
+              "**Example:**",
+              "- Notification roles",
+              "- Color roles",
+              "- Region roles",
+              "",
+              "Organize your roles info here so members can find what they need."
+            ]
+          },
+          {
+            "name": "Channel Guide",
+            "meta_description": "What each channel is for",
+            "type": "embed",
+            "description": [
+              "**Channel Guide**",
+              "Another page inside the same nested menu.",
+              "",
+              "Use pages like this to explain what each channel or category in your server is for.",
+              "",
+              "**Tip:** You can link directly to channels using Discord's channel mention format.",
+              "Example: Head to #general to start chatting."
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Guide Structure",
+    "order": "3",
+    "meta_description": "See how deep guide menus can go",
+    "type": "select",
+    "options": [
+      {
+        "name": "Topics",
+        "meta_description": "Browse topics by category",
+        "type": "select",
+        "options": [
+          {
+            "name": "Topic Details",
+            "meta_description": "Detailed info on a specific topic",
+            "type": "select",
+            "options": [
+              {
+                "name": "Deep Dive",
+                "meta_description": "The deepest level of info",
+                "type": "embed",
+                "description": [
+                  "**You found the deep end!**",
+                  "This page is nested three levels deep, but it can go deeper if needed:",
+                  "",
+                  "Guide Structure > Topics > Topic Details > Deep Dive",
+                  "",
+                  "Menus can go as deep as you need them to. Each level adds a select menu that lets you drill down further into a topic.",
+                  "",
+                  "**Use deeper nesting for:**",
+                  "- Large servers with lots of info to organize",
+                  "- Command references with many categories",
+                  "- Detailed guides that cover a topic step by step",
+                  "",
+                  "Keep in mind that simpler is usually better. Only go deep when the content calls for it."
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "How Menus Work",
+        "meta_description": "Understanding the menu structure",
+        "type": "embed",
+        "description": [
+          "**Understanding Menu Types**",
+          "",
+          "There are two types of items in the guide:",
+          "",
+          "**Embeds** (type: embed)",
+          "- A page that displays content directly",
+          "- Contains a title, description, and optional thumbnail",
+          "",
+          "**Selects** (type: select)",
+          "- A menu that contains other items",
+          "- Can hold embeds, other selects, or a mix of both",
+          "- Creates a dropdown for the user to pick from",
+          "",
+          "By combining these two types, you can build a guide as simple or as detailed as your server needs."
+        ]
+      }
+    ]
+  }
+]

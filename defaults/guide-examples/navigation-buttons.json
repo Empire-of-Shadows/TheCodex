@@ -1,0 +1,52 @@
+{
+  "accent_color": "#5865F2",
+  "pages": [
+    {
+      "id": "home",
+      "label": "Home",
+      "description": "Main guide page",
+      "icon": "🏠",
+      "content": {
+        "components": [
+          {"type": "text", "content": "# Server Guide\n\nWelcome! Choose a topic below."},
+          {
+            "type": "action_row",
+            "buttons": [
+              {"style": "primary", "label": "Rules", "action": "navigate", "target": "rules"},
+              {"style": "success", "label": "Channels", "action": "navigate", "target": "channels"},
+              {"style": "link", "label": "Website", "url": "https://example.com"}
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "rules",
+      "label": "Rules",
+      "description": "Server rules and guidelines",
+      "icon": "📜",
+      "content": {
+        "components": [
+          {"type": "text", "content": "# Rules\n\n1. Be respectful\n2. No spam\n3. Have fun!"},
+          {
+            "type": "action_row",
+            "buttons": [
+              {"style": "secondary", "label": "Back to Home", "action": "navigate", "target": "home"}
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "channels",
+      "label": "Channels",
+      "description": "Channel overview",
+      "icon": "📺",
+      "content": {
+        "components": [
+          {"type": "text", "content": "# Channels\n\nHere are our main channels:\n- General\n- Gaming\n- Media"}
+        ]
+      }
+    }
+  ]
+}

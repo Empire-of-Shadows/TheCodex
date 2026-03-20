@@ -1,0 +1,22 @@
+{
+  "pages": [
+    {
+      "label": "Personalized Guide",
+      "content": {
+        "components": [
+          {"type": "text", "content": "# Hello, {member}!\n\nWelcome to **{guild_name}**. You are one of {member_count} members!"},
+          {"type": "separator"},
+          {
+            "type": "section",
+            "content": [
+              {"type": "text", "content": "There are currently **{voice_active}** active voice channels. Jump in and say hi, {member_name}!"}
+            ],
+            "accessory": {"type": "thumbnail", "media": "member_avatar"}
+          },
+          {"type": "separator"},
+          {"type": "text", "content": "-# {random_greeting}"}
+        ]
+      }
+    }
+  ]
+}

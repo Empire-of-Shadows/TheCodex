@@ -1,0 +1,22 @@
+{
+  "accent_color": "#FEE75C",
+  "components": [
+    {
+      "type": "section",
+      "content": [{"type": "text", "content": "# Welcome to {guild_name}, {member}!"}],
+      "accessory": {"type": "thumbnail", "media": "member_avatar"}
+    },
+    {
+      "type": "action_row",
+      "select": {
+        "placeholder": "What would you like to know?",
+        "options": [
+          {"label": "Server Guide", "action": "open_guide", "description": "Browse the full guide", "emoji": "📖"},
+          {"label": "Server Info", "action": "server_info", "description": "Stats and boost info", "emoji": "📊"},
+          {"label": "All Channels", "action": "channel_list", "description": "Browse channel categories", "emoji": "📋"},
+          {"label": "Getting Started", "action": "getting_started", "description": "Tips for new members", "emoji": "🚀"}
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,122 @@
+{
+  "accent_color": "#4D0EB3",
+  "pages": [
+    {
+      "id": "getting-started",
+      "label": "Getting Started",
+      "description": "New here? Start with this guide",
+      "icon": "👋",
+      "order": 1,
+      "content": {
+        "components": [
+          {"type": "text", "content": "# Welcome to the Server Guide!\n\nThis guide will help you get familiar with our community. Use the navigation below to explore different topics."},
+          {"type": "separator"},
+          {"type": "text", "content": "**Quick Tips:**\n- Read the rules to stay in good standing\n- Check out our channels to find your interests\n- Join voice channels when they're active\n- Have fun and be respectful!"}
+        ]
+      },
+      "children": [
+        {
+          "id": "about-us",
+          "label": "About Us",
+          "description": "Learn about our community",
+          "content": {
+            "components": [
+              {"type": "text", "content": "# About Us\n\nWelcome to our community! We're a group of passionate gamers and friends who enjoy hanging out, playing games, and having fun together."}
+            ]
+          }
+        },
+        {
+          "id": "server-rules",
+          "label": "Server Rules",
+          "description": "Community guidelines and rules",
+          "icon": "📜",
+          "content": {
+            "components": [
+              {"type": "text", "content": "# Server Rules\n\nPlease follow these guidelines to keep our community welcoming:\n\n1. **Be Respectful** — Treat everyone with kindness\n2. **No Spam** — Keep channels clean and on-topic\n3. **No NSFW** — Keep content appropriate\n4. **Have Fun** — That's what we're here for!"}
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "channels",
+      "label": "Channels Guide",
+      "description": "Overview of server channels and categories",
+      "icon": "📺",
+      "order": 2,
+      "content": {
+        "components": [
+          {"type": "text", "content": "# Channel Guide\n\nHere's an overview of our server channels. Select a category below to learn more."}
+        ]
+      },
+      "children": [
+        {
+          "id": "general-channels",
+          "label": "General Channels",
+          "description": "Social and casual discussion channels",
+          "content": {
+            "components": [
+              {"type": "text", "content": "# General Channels\n\nOur social channels are open to everyone. Come hang out, share memes, and chat about anything!"}
+            ]
+          }
+        },
+        {
+          "id": "gaming-channels",
+          "label": "Gaming Channels",
+          "description": "Game discussion and media channels",
+          "content": {
+            "components": [
+              {"type": "text", "content": "# Gaming Channels\n\nDedicated spaces for game discussions, clips, strategies, and finding people to play with."}
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "commands",
+      "label": "Bot Commands",
+      "description": "Available bot commands and how to use them",
+      "icon": "🤖",
+      "order": 3,
+      "content": {
+        "components": [
+          {"type": "text", "content": "# Bot Commands\n\nOur bots provide various features. Select a category below to see available commands."}
+        ]
+      },
+      "children": [
+        {
+          "id": "basic-commands",
+          "label": "Basic Commands",
+          "description": "Essential commands for everyday use",
+          "content": {
+            "components": [
+              {"type": "text", "content": "# Basic Commands\n\n- `/help` — Show this guide\n- `/suggest` — Submit a suggestion\n- `/info` — View server information"}
+            ]
+          }
+        },
+        {
+          "id": "game-commands",
+          "label": "Game Commands",
+          "description": "Interactive game commands",
+          "content": {
+            "components": [
+              {"type": "text", "content": "# Game Commands\n\n- `/uno` — Start a UNO game\n- `/hangman` — Play Hangman\n- `/tictactoe` — Play Tic-Tac-Toe"}
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "faq",
+      "label": "FAQ",
+      "description": "Frequently asked questions",
+      "icon": "❓",
+      "order": 4,
+      "content": {
+        "components": [
+          {"type": "text", "content": "# Frequently Asked Questions\n\n**Q: How do I get roles?**\nCheck the role selection channel for self-assignable roles.\n\n**Q: How do I report someone?**\nUse the modmail system or contact a moderator directly.\n\n**Q: Can I suggest features?**\nYes! Use the `/suggest` command to submit your ideas."}
+        ]
+      }
+    }
+  ]
+}

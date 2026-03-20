@@ -1,0 +1,12 @@
+{
+  "pages": [
+    {
+      "label": "Welcome",
+      "content": {
+        "components": [
+          {"type": "text", "content": "# Welcome to our server!\n\nThis is the server guide."}
+        ]
+      }
+    }
+  ]
+}

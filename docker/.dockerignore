@@ -1,0 +1,11 @@
+.git
+.idea
+.vscode
+.claude
+__pycache__
+node_modules
+log/
+storage/logs/
+*.log
+.env
+.DS_Store

@@ -1,0 +1,55 @@
+{
+  "accent_color": "#57F287",
+  "pages": [
+    {
+      "id": "community",
+      "label": "Community",
+      "icon": "🌍",
+      "children": [
+        {
+          "id": "events",
+          "label": "Events",
+          "description": "Community events",
+          "icon": "🎉",
+          "content": {
+            "components": [
+              {"type": "text", "content": "# Events\n\nBrowse our event categories below."}
+            ]
+          },
+          "children": [
+            {
+              "id": "weekly-events",
+              "label": "Weekly Events",
+              "description": "Events that happen every week",
+              "content": {
+                "components": [
+                  {"type": "text", "content": "# Weekly Events\n\n- **Movie Night** — Every Friday at 8 PM\n- **Game Tournament** — Every Saturday at 3 PM\n- **Trivia Night** — Every Wednesday at 7 PM"}
+                ]
+              }
+            },
+            {
+              "id": "special-events",
+              "label": "Special Events",
+              "description": "One-time and seasonal events",
+              "content": {
+                "components": [
+                  {"type": "text", "content": "# Special Events\n\nCheck announcements for upcoming special events!"}
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "partnerships",
+          "label": "Partnerships",
+          "description": "Partner servers",
+          "content": {
+            "components": [
+              {"type": "text", "content": "# Partnerships\n\nWe partner with other communities to bring you more content."}
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
