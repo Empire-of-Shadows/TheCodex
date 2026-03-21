@@ -29,6 +29,8 @@ class DatabaseManager(DefineCollections, DatabaseProperties):
 
     def __init__(self, primary_uri: str = None, secondary_uri: str = None, third_uri: str = None, **additional_uris):
         self.primary_uri = primary_uri or primary
+        self.secondary_uri = secondary_uri
+        self.third_uri = third_uri
         self.additional_uris = additional_uris
 
         if not self.primary_uri:
@@ -45,8 +47,6 @@ class DatabaseManager(DefineCollections, DatabaseProperties):
         if self.third_uri:
             self.connection_pools['third'] = ConnectionPool(self.third_uri, connection_name='third')
             logger.info("Third connection pool configured")
-        else:
-            logger.warning("No Third MongoDB URI provided")
 
         # Add additional connections (third, fourth, fifth, etc.)
         connection_names = ['fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth']
