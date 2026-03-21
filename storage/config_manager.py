@@ -126,6 +126,7 @@ def _default_drops() -> Dict[str, Any]:
         "enabled": False,
         "channel_id": None,
         "tracker_channels": {"Updates": None, "Free": None, "Prime": None},
+        "manager_role_id": None,
     }
 
 

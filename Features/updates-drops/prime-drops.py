@@ -1,10 +1,8 @@
 import asyncio
-import os
 from datetime import datetime, timezone, time, timedelta
-from typing import Optional, List, Dict, Any
+from typing import List, Dict, Any
 
 import discord
-from discord import app_commands
 from discord.ext import commands, tasks
 import pytz
 
@@ -21,52 +19,6 @@ UTC_TIME = datetime.combine(datetime.today(), CHICAGO_TIME)
 UTC_TIME = CHICAGO_TZ.localize(UTC_TIME).astimezone(pytz.UTC).time()
 SEND_TIME = UTC_TIME
 GRACE_PERIOD_MINUTES = 20
-
-
-
-class DropsPaginator(discord.ui.View):
-    """Paginator for drops listings"""
-
-    def __init__(self, embeds: List[discord.Embed], timeout: int = 300):
-        super().__init__(timeout=timeout)
-        self.embeds = embeds
-        self.current_page = 0
-
-        # Update button states
-        self._update_buttons()
-
-    def _update_buttons(self):
-        """Update button enabled/disabled states"""
-        self.first_page.disabled = self.current_page == 0
-        self.prev_page.disabled = self.current_page == 0
-        self.next_page.disabled = self.current_page >= len(self.embeds) - 1
-        self.last_page.disabled = self.current_page >= len(self.embeds) - 1
-
-    @discord.ui.button(label='⏮️', style=discord.ButtonStyle.gray)
-    async def first_page(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.current_page = 0
-        self._update_buttons()
-        await interaction.response.edit_message(embed=self.embeds[self.current_page], view=self)
-
-    @discord.ui.button(label='◀️', style=discord.ButtonStyle.gray)
-    async def prev_page(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if self.current_page > 0:
-            self.current_page -= 1
-        self._update_buttons()
-        await interaction.response.edit_message(embed=self.embeds[self.current_page], view=self)
-
-    @discord.ui.button(label='▶️', style=discord.ButtonStyle.gray)
-    async def next_page(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if self.current_page < len(self.embeds) - 1:
-            self.current_page += 1
-        self._update_buttons()
-        await interaction.response.edit_message(embed=self.embeds[self.current_page], view=self)
-
-    @discord.ui.button(label='⏭️', style=discord.ButtonStyle.gray)
-    async def last_page(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.current_page = len(self.embeds) - 1
-        self._update_buttons()
-        await interaction.response.edit_message(embed=self.embeds[self.current_page], view=self)
 
 
 class PrimeDrops(commands.Cog):
@@ -177,21 +129,8 @@ class PrimeDrops(commands.Cog):
         except Exception as e:
             logger.error(f"Error during missed drops run check: {e}", exc_info=True)
 
-    async def _has_admin_permissions(self, user: discord.Member) -> bool:
-        """Check if user has admin permissions using dynamic config"""
-        if user.guild_permissions.administrator:
-            return True
-
-        # Get guild config for dynamic role checks
-        guild_config = await get_config(user.guild.id)
-
-        user_role_ids = {role.id for role in user.roles}
-        admin_set = set(guild_config.roles["admin"])
-
-        return bool(user_role_ids & admin_set)
-
     def _create_drop_embed(self, drop: Dict[str, Any]) -> discord.Embed:
-        """Create an embed for a single drop"""
+        """Create an embed for a single drop (used by daily_drops_check to post to channels)."""
         embed = discord.Embed(
             title=drop.get('label', 'Unknown Game'),
             description=drop.get('description', 'No description available'),
@@ -199,7 +138,6 @@ class PrimeDrops(commands.Cog):
             timestamp=datetime.now(timezone.utc)
         )
 
-        # Set thumbnail if image_url is available
         image_url = drop.get('image_url')
         if image_url:
             embed.set_thumbnail(url=image_url)
@@ -211,12 +149,10 @@ class PrimeDrops(commands.Cog):
             elif isinstance(expires, datetime):
                 embed.add_field(name="Expires", value=expires.strftime("%Y-%m-%d %H:%M UTC"), inline=True)
 
-        # Show genres if available
         genres = drop.get('genres')
         if genres:
             embed.add_field(name="Genres", value=genres, inline=True)
 
-        # Show publisher if available
         publisher = drop.get('publisher')
         if publisher:
             embed.add_field(name="Publisher", value=publisher, inline=True)
@@ -228,52 +164,6 @@ class PrimeDrops(commands.Cog):
         embed.set_footer(text="Amazon Prime Gaming Drops")
 
         return embed
-
-    def _create_drops_embeds(self, drops: List[Dict[str, Any]], title: str) -> List[discord.Embed]:
-        """Create paginated embeds for multiple drops"""
-        if not drops:
-            embed = discord.Embed(
-                title=title,
-                description="No drops found.",
-                color=discord.Color.orange()
-            )
-            return [embed]
-
-        embeds = []
-        drops_per_page = 5
-
-        for i in range(0, len(drops), drops_per_page):
-            page_drops = drops[i:i + drops_per_page]
-
-            embed = discord.Embed(
-                title=title,
-                color=discord.Color.blue(),
-                timestamp=datetime.now(timezone.utc)
-            )
-
-            for drop in page_drops:
-                label = drop.get('label', 'Unknown Game')
-                description = drop.get('description', 'No description')
-                expires = drop.get('expires', 'Unknown')
-                short_href = drop.get('short_href', '')
-                sent = drop.get('sent', False)
-
-                # Truncate description if too long
-                if len(description) > 100:
-                    description = description[:97] + "..."
-
-                status = "✅ Sent" if sent else "📤 Not Sent"
-                link_text = f"[Link]({short_href})" if short_href else "No link"
-
-                field_value = f"{description}\n**Expires:** {expires}\n**Status:** {status}\n**Link:** {link_text}"
-                embed.add_field(name=label, value=field_value, inline=False)
-
-            embed.set_footer(
-                text=f"Page {len(embeds) + 1}/{(len(drops) + drops_per_page - 1) // drops_per_page} • {len(drops)} total drops"
-            )
-            embeds.append(embed)
-
-        return embeds
 
     @tasks.loop(time=SEND_TIME)
     async def daily_drops_check(self):
@@ -361,119 +251,6 @@ class PrimeDrops(commands.Cog):
         """Wait for bot to be ready before starting daily task"""
         await self.bot.wait_until_ready()
         logger.info(f"Daily drops check scheduled for 6:00 AM Chicago time (UTC: {SEND_TIME})")
-
-    # Slash Commands
-    @app_commands.command(name="drops", description="Browse all Prime Gaming drops")
-    async def drops_command(self, interaction: discord.Interaction):
-        """Show all drops with pagination"""
-        try:
-            await interaction.response.defer(thinking=True)
-
-            if not self.collection_manager:
-                await interaction.followup.send("Database not initialized. Please try again later.", ephemeral=True)
-                return
-
-            # Get all drops, sorted by expiration date
-            drops = await self.collection_manager.find_many(
-                {},
-                sort=[("expires", 1)]
-            )
-
-            embeds = self._create_drops_embeds(drops, "🎮 All Prime Gaming Drops")
-
-            if len(embeds) == 1:
-                await interaction.followup.send(embed=embeds[0])
-            else:
-                view = DropsPaginator(embeds)
-                await interaction.followup.send(embed=embeds[0], view=view)
-
-        except Exception as e:
-            logger.error(f"Error in drops command: {e}", exc_info=True)
-            await interaction.followup.send("An error occurred while fetching drops.", ephemeral=True)
-
-    @app_commands.command(name="drops-unsent", description="[Admin] Show unsent drops")
-    async def drops_unsent_command(self, interaction: discord.Interaction):
-        """Admin command to show unsent drops"""
-        if not await self._has_admin_permissions(interaction.user):
-            await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
-            return
-
-        try:
-            await interaction.response.defer(thinking=True)
-
-            if not self.collection_manager:
-                await interaction.followup.send("Database not initialized. Please try again later.", ephemeral=True)
-                return
-
-            # Get unsent drops
-            drops = await self.collection_manager.find_many(
-                {"sent": {"$ne": True}},
-                sort=[("expires", 1)]
-            )
-
-            embeds = self._create_drops_embeds(drops, "📤 Unsent Prime Gaming Drops")
-
-            if len(embeds) == 1:
-                await interaction.followup.send(embed=embeds[0], ephemeral=True)
-            else:
-                view = DropsPaginator(embeds)
-                await interaction.followup.send(embed=embeds[0], view=view, ephemeral=True)
-
-        except Exception as e:
-            logger.error(f"Error in drops-unsent command: {e}", exc_info=True)
-            await interaction.followup.send("An error occurred while fetching unsent drops.", ephemeral=True)
-
-    @app_commands.command(name="drops-sent", description="[Admin] Show sent drops")
-    async def drops_sent_command(self, interaction: discord.Interaction):
-        """Admin command to show sent drops"""
-        if not await self._has_admin_permissions(interaction.user):
-            await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
-            return
-
-        try:
-            await interaction.response.defer(thinking=True)
-
-            if not self.collection_manager:
-                await interaction.followup.send("Database not initialized. Please try again later.", ephemeral=True)
-                return
-
-            # Get sent drops
-            drops = await self.collection_manager.find_many(
-                {"sent": True},
-                sort=[("expires", 1)]
-            )
-
-            embeds = self._create_drops_embeds(drops, "✅ Sent Prime Gaming Drops")
-
-            if len(embeds) == 1:
-                await interaction.followup.send(embed=embeds[0], ephemeral=True)
-            else:
-                view = DropsPaginator(embeds)
-                await interaction.followup.send(embed=embeds[0], view=view, ephemeral=True)
-
-        except Exception as e:
-            logger.error(f"Error in drops-sent command: {e}", exc_info=True)
-            await interaction.followup.send("An error occurred while fetching sent drops.", ephemeral=True)
-
-    @app_commands.command(name="drops-test", description="[Admin] Test the daily drops check")
-    async def drops_test_command(self, interaction: discord.Interaction):
-        """Admin command to manually trigger drops check"""
-        if not await self._has_admin_permissions(interaction.user):
-            await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
-            return
-
-        try:
-            await interaction.response.defer(thinking=True)
-
-            # Run the daily check manually
-            await self.daily_drops_check()
-
-            await interaction.followup.send("Manual drops check completed. Check the drops channel for results.",
-                                            ephemeral=True)
-
-        except Exception as e:
-            logger.error(f"Error in drops-test command: {e}", exc_info=True)
-            await interaction.followup.send("An error occurred while running the drops check.", ephemeral=True)
 
 
 async def setup(bot: commands.Bot):

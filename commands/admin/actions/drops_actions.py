@@ -7,6 +7,8 @@ Stats queries go directly to the updates_* collections.
 
 from typing import Any, Dict
 
+import discord
+
 from utils.logger import get_logger
 from storage.config_manager import get_config, get_guild_config_manager
 
@@ -98,6 +100,47 @@ class DropsActions:
             **settings,
             "stats": stats,
         }
+
+    # -- Manager Role -------------------------------------------------------
+
+    @staticmethod
+    async def get_manager_role(guild_id: int) -> int | None:
+        """Get the drops manager role ID for a guild."""
+        config = await get_config(guild_id)
+        return config.drops.get("manager_role_id")
+
+    @staticmethod
+    async def set_manager_role(guild_id: int, role_id: int) -> bool:
+        """Set the drops manager role ID for a guild."""
+        manager = await get_guild_config_manager()
+        config = await manager.get_config(guild_id)
+        config.drops["manager_role_id"] = role_id
+        return await manager.save_config(config)
+
+    @staticmethod
+    async def has_drops_management(member: discord.Member) -> bool:
+        """Check if a member has drops management access.
+
+        Returns True if the member has the configured manager_role_id,
+        any admin role, or the administrator permission.
+        """
+        if member.guild_permissions.administrator:
+            return True
+
+        config = await get_config(member.guild.id)
+
+        user_role_ids = {role.id for role in member.roles}
+
+        # Check admin roles
+        if user_role_ids & set(config.roles["admin"]):
+            return True
+
+        # Check drops manager role
+        manager_role_id = config.drops.get("manager_role_id")
+        if manager_role_id and manager_role_id in user_role_ids:
+            return True
+
+        return False
 
     # -- Enabled toggle -----------------------------------------------------
 

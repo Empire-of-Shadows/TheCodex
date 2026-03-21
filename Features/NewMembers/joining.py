@@ -628,7 +628,7 @@ guild_handler = GuildEventHandler(bot, cache_manager)
 # Section: Interactions
 # Missing in this section:
 # - (None, all handled via on_interaction)
-@bot.event
+@bot.listen()
 async def on_interaction(interaction: discord.Interaction):
     await guild_handler.handle_interaction(interaction)
 

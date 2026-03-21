@@ -68,6 +68,7 @@ class PanelNode:
 
     # file_upload only
     schema_validator: Optional[Callable] = None  # (data) → (bool, error_msg)
+    template_data: Optional[Callable] = None     # () → (bytes, filename); returns template file content for download
 
     # dual_modal_input — second field
     modal_label_2: str = ""
@@ -640,6 +641,24 @@ def build_file_upload_status_view(
 
         upload_btn.callback = upload_btn_cb
         btn_row.add_item(upload_btn)
+
+    if node.template_data is not None:
+        import io
+        template_btn = discord.ui.Button(
+            label="Download Template",
+            style=discord.ButtonStyle.secondary,
+            custom_id=f"template_{unique_id}",
+        )
+
+        async def template_btn_cb(ti: discord.Interaction):
+            template_bytes, filename = node.template_data()
+            await ti.response.send_message(
+                file=discord.File(io.BytesIO(template_bytes), filename=filename),
+                ephemeral=True,
+            )
+
+        template_btn.callback = template_btn_cb
+        btn_row.add_item(template_btn)
 
     if on_clear is not None:
         clear_btn = discord.ui.Button(

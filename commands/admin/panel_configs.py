@@ -6,6 +6,8 @@ Each top-level node is passed to AdminCog._navigate_to() from the relevant
 _show_* handler.
 """
 
+import json
+import os
 from functools import partial
 
 from .views.panel_engine import PanelNode
@@ -19,6 +21,66 @@ from .actions.guide_actions import GuideActions
 from storage.setup_gatekeeper import setup_gatekeeper
 from Features.NewMembers.welcome_schema import validate_welcome_schema
 from Features.Guide.guide_schema import validate_guide_schema
+
+
+# ── Template download helpers ────────────────────────────────────────────────
+
+_WELCOME_TEMPLATE = {
+    "accent_color": "#5865F2",
+    "components": [
+        {"type": "separator"},
+        {
+            "type": "section",
+            "content": [{"type": "text", "content": "# Welcome to {guild_name}, {member}!\n*You are member #{member_count}!*"}],
+            "accessory": {"type": "thumbnail", "media": "member_avatar"},
+        },
+        {
+            "type": "action_row",
+            "buttons": [
+                {"type": "button", "style": "success", "label": "Guide", "action": "open_guide"},
+                {"type": "button", "style": "link", "label": "Rules", "url": "https://discord.com/channels/GUILD/CHANNEL"},
+                {"type": "button", "style": "link", "label": "Come Chat!", "url": "https://discord.com/channels/GUILD/CHANNEL"},
+            ],
+        },
+        {"type": "separator"},
+        {
+            "type": "section",
+            "content": [{"type": "text", "content": "**Explore and have fun!**\n- Play games, compete in leaderboards\n- Join voice ({voice_active} active now!)"}],
+            "accessory": {"type": "button", "style": "link", "label": "Server Info", "url": "https://discord.com/channels/GUILD/CHANNEL"},
+        },
+        {"type": "separator"},
+        {
+            "type": "section",
+            "content": [{"type": "text", "content": "Some other channels you might like"}],
+            "accessory": {"type": "button", "style": "secondary", "label": "All Channels", "action": "channel_list"},
+        },
+        {
+            "type": "action_row",
+            "buttons": [
+                {"type": "button", "style": "link", "label": "Media", "url": "https://discord.com/channels/GUILD/CHANNEL"},
+                {"type": "button", "style": "link", "label": "Game Clips", "url": "https://discord.com/channels/GUILD/CHANNEL"},
+                {"type": "button", "style": "link", "label": "Gamer Chat", "url": "https://discord.com/channels/GUILD/CHANNEL"},
+            ],
+        },
+        {"type": "separator"},
+        {"type": "text", "content": "-# {random_greeting}"},
+    ],
+}
+
+_GUIDE_TEMPLATE_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+    "defaults", "guide_template.json",
+)
+
+
+def _welcome_template_data() -> tuple[bytes, str]:
+    return json.dumps(_WELCOME_TEMPLATE, indent=2, ensure_ascii=False).encode("utf-8"), "welcome_template.json"
+
+
+def _guide_template_data() -> tuple[bytes, str]:
+    with open(_GUIDE_TEMPLATE_PATH, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return json.dumps(data, indent=2, ensure_ascii=False).encode("utf-8"), "guide_template.json"
 
 
 _FEATURE_AUTO_ENABLE = {
@@ -492,7 +554,7 @@ NM_WELCOME_TEXT_CONFIG = PanelNode(
     description=(
         "Upload a JSON file to define a fully custom welcome message layout.\n\n"
         "**To upload:** Click **Upload JSON** below and attach a `.json` file.\n"
-        "**To get the template:** Use `/admin welcome-template` for a ready-to-edit example.\n\n"
+        "**To get the template:** Click **Download Template** for a ready-to-edit example.\n\n"
         "**Placeholders:** `{member}` · `{member_name}` · `{member_count}` · `{guild_name}` · `{voice_active}` · `{random_greeting}` (random themed greeting)\n\n"
         "Use **Clear** below to remove the custom layout. "
         "If no layout is configured, welcome messages will be skipped."
@@ -501,6 +563,7 @@ NM_WELCOME_TEXT_CONFIG = PanelNode(
     set_values=NewMemberActions.set_welcome_components_from_list,
     clear_values=NewMemberActions.clear_welcome_components,
     schema_validator=validate_welcome_schema,
+    template_data=_welcome_template_data,
 )
 
 NM_SETTINGS_CONFIG = PanelNode(
@@ -714,13 +777,14 @@ GUIDE_UPLOAD_CONFIG = PanelNode(
     description=(
         "Upload a JSON file to define a custom guide with pages, navigation, and rich content.\n\n"
         "**To upload:** Click **Upload JSON** below and attach a `.json` file.\n"
-        "**To get the template:** Use `/admin guide-template` for a ready-to-edit example.\n\n"
+        "**To get the template:** Click **Download Template** for a ready-to-edit example.\n\n"
         "Use **Clear** below to remove the custom guide and revert to the default template."
     ),
     get_values=GuideActions.get_guide_json_raw,
     set_values=GuideActions.set_guide_json_from_list,
     clear_values=GuideActions.clear_guide_json,
     schema_validator=validate_guide_schema,
+    template_data=_guide_template_data,
 )
 
 GUIDE_ENABLED_CONFIG = PanelNode(

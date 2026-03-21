@@ -6,7 +6,6 @@ Provides admin management for embed configuration (color tiers, role mappings,
 description limits, feature access).
 """
 
-import io
 import json
 import time
 from collections.abc import Awaitable, Callable
@@ -19,6 +18,7 @@ from utils.logger import get_logger
 
 from .actions import EmbedConfigActions, WYRConfigActions, NewMemberActions, TrackerActions, DropsActions, ColorSetActions, AnnouncementActions, SuggestionActions
 from .actions.guide_actions import GuideActions
+from .permission_checks import check_channel_permissions, check_role_permissions
 from .views import (
     build_main_panel,
     build_subcategory_panel,
@@ -79,49 +79,6 @@ from .panel_configs import (
 from storage.setup_gatekeeper import setup_gatekeeper
 
 logger = get_logger("AdminCog")
-
-_WELCOME_TEMPLATE = {
-    "accent_color": "#5865F2",
-    "components": [
-        {"type": "separator"},
-        {
-            "type": "section",
-            "content": [{"type": "text", "content": "# Welcome to {guild_name}, {member}!\n*You are member #{member_count}!*"}],
-            "accessory": {"type": "thumbnail", "media": "member_avatar"},
-        },
-        {
-            "type": "action_row",
-            "buttons": [
-                {"type": "button", "style": "success", "label": "Guide", "action": "open_guide"},
-                {"type": "button", "style": "link", "label": "Rules", "url": "https://discord.com/channels/GUILD/CHANNEL"},
-                {"type": "button", "style": "link", "label": "Come Chat!", "url": "https://discord.com/channels/GUILD/CHANNEL"},
-            ],
-        },
-        {"type": "separator"},
-        {
-            "type": "section",
-            "content": [{"type": "text", "content": "**Explore and have fun!**\n- Play games, compete in leaderboards\n- Join voice ({voice_active} active now!)"}],
-            "accessory": {"type": "button", "style": "link", "label": "Server Info", "url": "https://discord.com/channels/GUILD/CHANNEL"},
-        },
-        {"type": "separator"},
-        {
-            "type": "section",
-            "content": [{"type": "text", "content": "Some other channels you might like"}],
-            "accessory": {"type": "button", "style": "secondary", "label": "All Channels", "action": "channel_list"},
-        },
-        {
-            "type": "action_row",
-            "buttons": [
-                {"type": "button", "style": "link", "label": "Media", "url": "https://discord.com/channels/GUILD/CHANNEL"},
-                {"type": "button", "style": "link", "label": "Game Clips", "url": "https://discord.com/channels/GUILD/CHANNEL"},
-                {"type": "button", "style": "link", "label": "Gamer Chat", "url": "https://discord.com/channels/GUILD/CHANNEL"},
-            ],
-        },
-        {"type": "separator"},
-        {"type": "text", "content": "-# {random_greeting}"},
-    ],
-}
-
 
 class AdminCog(commands.Cog):
     """
@@ -258,6 +215,7 @@ class AdminCog(commands.Cog):
                 "tracker_status": self._show_tracker_status,
                 "drops_channel": self._show_drops_channel_menu,
                 "drops_tracker": self._show_drops_tracker_menu,
+                "drops_manager_role": self._show_drops_manager_role_menu,
                 "drops_status": self._show_drops_status,
                 "ann_channel": self._show_ann_channel_menu,
                 "ann_settings": self._show_ann_settings_menu,
@@ -551,6 +509,20 @@ class AdminCog(commands.Cog):
                 }
 
                 await save_interaction.response.defer(ephemeral=True)
+
+                # Permission pre-check before saving
+                if node.kind == "channel_select" and values:
+                    ok, err = check_channel_permissions(guild, int(values[0]), node.key)
+                    if not ok:
+                        await save_interaction.followup.send(err, ephemeral=True)
+                        return
+                elif node.kind == "role_select" and values:
+                    for rid in values:
+                        ok, err = check_role_permissions(guild, int(rid), node.key)
+                        if not ok:
+                            await save_interaction.followup.send(err, ephemeral=True)
+                            return
+
                 success = await node.set_values(guild.id, values)
                 if success:
                     setup_gatekeeper.invalidate_embed(guild.id)
@@ -1853,6 +1825,27 @@ class AdminCog(commands.Cog):
 
     async def _show_tag_tracker_menu(self, interaction: discord.Interaction):
         """Show Tag Tracker settings."""
+        import time
+        last_refresh = [0.0]
+        REFRESH_COOLDOWN = 2.0  # seconds between panel rebuilds
+
+        async def rebuild_panel(src_interaction: discord.Interaction):
+            """Rebuild the tag tracker panel in-place with fresh settings."""
+            now = time.monotonic()
+            if now - last_refresh[0] < REFRESH_COOLDOWN:
+                return
+            last_refresh[0] = now
+
+            fresh_settings = await TrackerActions.get_tag_tracker_settings(interaction.guild.id)
+            new_layout = build_tag_tracker_settings_view(
+                fresh_settings, interaction.guild, on_toggle, on_role_select, on_edit_tag, on_detect_tag, on_cancel
+            )
+            try:
+                await interaction.edit_original_response(view=new_layout)
+                attach_timeout_expiry_msg(new_layout, await interaction.original_response())
+            except Exception as e:
+                logger.debug(f"Could not refresh tag tracker panel: {e}")
+
         settings = await TrackerActions.get_tag_tracker_settings(interaction.guild.id)
 
         async def on_toggle(toggle_interaction: discord.Interaction, enabled: bool):
@@ -1860,59 +1853,102 @@ class AdminCog(commands.Cog):
             success = await TrackerActions.set_tag_tracker_enabled(interaction.guild.id, enabled)
             if success:
                 state = "enabled" if enabled else "disabled"
-                result = create_empty_layout(f"Tag Tracker **{state}**.")
                 logger.info(f"Admin {toggle_interaction.user} {state} tag tracker")
+                await rebuild_panel(toggle_interaction)
             else:
                 result = create_empty_layout("Failed to save tag tracker setting.")
-            await toggle_interaction.followup.send(view=result, ephemeral=True)
+                await toggle_interaction.followup.send(view=result, ephemeral=True)
 
         async def on_role_select(role_interaction: discord.Interaction, role_id: int):
             await role_interaction.response.defer(ephemeral=True)
+            ok, err = check_role_permissions(interaction.guild, role_id, "tag_tracker_role")
+            if not ok:
+                await role_interaction.followup.send(err, ephemeral=True)
+                return
             success = await TrackerActions.set_tag_tracker_role(interaction.guild.id, role_id)
             if success:
                 role = interaction.guild.get_role(role_id)
                 role_name = role.name if role else str(role_id)
-                result = create_empty_layout(f"Tag Tracker role set to **{role_name}**.")
                 logger.info(f"Admin {role_interaction.user} set tag tracker role to {role_name}")
+                await rebuild_panel(role_interaction)
             else:
                 result = create_empty_layout("Failed to save tag tracker role.")
-            await role_interaction.followup.send(view=result, ephemeral=True)
+                await role_interaction.followup.send(view=result, ephemeral=True)
 
         async def on_edit_tag(edit_interaction: discord.Interaction):
-            current_tag = settings.get("tag_tracker_server_tag") or ""
+            fresh = await TrackerActions.get_tag_tracker_settings(interaction.guild.id)
+            current_tag = fresh.get("tag_tracker_server_tag") or ""
 
             async def modal_callback(modal_interaction: discord.Interaction, tag: str):
                 await modal_interaction.response.defer(ephemeral=True)
                 success = await TrackerActions.set_tag_tracker_server_tag(interaction.guild.id, tag)
                 if success:
-                    result = create_empty_layout(f"Server tag set to **{tag}**.")
                     logger.info(f"Admin {modal_interaction.user} set server tag to {tag}")
+                    await rebuild_panel(modal_interaction)
                 else:
                     result = create_empty_layout("Failed to save server tag.")
-                await modal_interaction.followup.send(view=result, ephemeral=True)
+                    await modal_interaction.followup.send(view=result, ephemeral=True)
 
             modal = TagTrackerServerTagModal(modal_callback, current_tag=current_tag)
             await edit_interaction.response.send_modal(modal)
 
         async def on_detect_tag(detect_interaction: discord.Interaction):
             await detect_interaction.response.defer(ephemeral=True)
+            guild = interaction.guild
+            tag = None
+
             try:
-                data = await self.bot.http.get_guild(interaction.guild.id)
-                clan = data.get("clan")
-                if clan and clan.get("tag"):
-                    tag = clan["tag"]
-                    success = await TrackerActions.set_tag_tracker_server_tag(interaction.guild.id, tag)
+                # Try 1: Check the admin's own primary_guild tag
+                pg = getattr(detect_interaction.user, 'primary_guild', None)
+                if pg and pg.id == guild.id and pg.tag:
+                    tag = pg.tag
+                    logger.debug(f"Tag detected from admin's primary_guild: {tag}")
+
+                # Try 2: Fetch guild owner's member data and check their primary_guild
+                if not tag:
+                    try:
+                        owner_data = await self.bot.http.get_member(guild.id, guild.owner_id)
+                        owner_pg = (owner_data.get("user") or {}).get("primary_guild")
+                        if owner_pg and owner_pg.get("tag"):
+                            owner_guild_id = owner_pg.get("identity_guild_id")
+                            if owner_guild_id and int(owner_guild_id) == guild.id:
+                                tag = owner_pg["tag"]
+                                logger.debug(f"Tag detected from guild owner's primary_guild: {tag}")
+                    except Exception as e:
+                        logger.debug(f"Could not fetch guild owner for tag detection: {e}")
+
+                # Try 3: Legacy — check guild API for clan field (older API versions)
+                if not tag:
+                    try:
+                        data = await self.bot.http.get_guild(guild.id)
+                        clan = data.get("clan")
+                        if clan and clan.get("tag"):
+                            tag = clan["tag"]
+                            logger.debug(f"Tag detected from guild clan field: {tag}")
+                    except Exception as e:
+                        logger.debug(f"Could not fetch guild data for tag detection: {e}")
+
+                if tag:
+                    success = await TrackerActions.set_tag_tracker_server_tag(guild.id, tag)
                     if success:
-                        result = create_empty_layout(f"Detected and set server tag to **{tag}**.")
                         logger.info(f"Admin {detect_interaction.user} auto-detected server tag: {tag}")
+                        await rebuild_panel(detect_interaction)
                     else:
                         result = create_empty_layout("Detected tag but failed to save.")
+                        await detect_interaction.followup.send(view=result, ephemeral=True)
                 else:
-                    result = create_empty_layout("No server tag (clan tag) found for this server.\nThe server owner must set one in **Server Settings > Clan**.")
+                    result = create_empty_layout(
+                        "Could not auto-detect the server tag.\n\n"
+                        "**Possible reasons:**\n"
+                        "- The server tag hasn't been set yet (check **Server Settings > Identity**)\n"
+                        "- The guild owner hasn't enabled their server tag badge\n\n"
+                        "Use **Edit Server Tag** to enter the tag manually."
+                    )
+                    await detect_interaction.followup.send(view=result, ephemeral=True)
             except Exception as e:
-                logger.error(f"Failed to detect server tag: {e}")
-                result = create_empty_layout("Failed to fetch server tag from Discord.")
-            await detect_interaction.followup.send(view=result, ephemeral=True)
+                logger.error(f"Failed to detect server tag: {e}", exc_info=True)
+                result = create_empty_layout("Failed to detect server tag. Check bot logs for details.")
+                await detect_interaction.followup.send(view=result, ephemeral=True)
 
         async def on_cancel(cancel_interaction: discord.Interaction):
             layout = create_empty_layout("Tag Tracker settings closed.")
@@ -1929,6 +1965,27 @@ class AdminCog(commands.Cog):
 
     async def _show_boost_tracker_menu(self, interaction: discord.Interaction):
         """Show Boost Tracker settings."""
+        import time
+        last_refresh = [0.0]
+        REFRESH_COOLDOWN = 2.0
+
+        async def rebuild_panel(src_interaction: discord.Interaction):
+            """Rebuild the boost tracker panel in-place with fresh settings."""
+            now = time.monotonic()
+            if now - last_refresh[0] < REFRESH_COOLDOWN:
+                return
+            last_refresh[0] = now
+
+            fresh_settings = await TrackerActions.get_boost_tracker_settings(interaction.guild.id)
+            new_layout = build_boost_tracker_settings_view(
+                fresh_settings, interaction.guild, on_toggle, on_channel_select, on_cancel
+            )
+            try:
+                await interaction.edit_original_response(view=new_layout)
+                attach_timeout_expiry_msg(new_layout, await interaction.original_response())
+            except Exception as e:
+                logger.debug(f"Could not refresh boost tracker panel: {e}")
+
         settings = await TrackerActions.get_boost_tracker_settings(interaction.guild.id)
 
         async def on_toggle(toggle_interaction: discord.Interaction, enabled: bool):
@@ -1936,23 +1993,27 @@ class AdminCog(commands.Cog):
             success = await TrackerActions.set_boost_enabled(interaction.guild.id, enabled)
             if success:
                 state = "enabled" if enabled else "disabled"
-                result = create_empty_layout(f"Boost Tracker **{state}**.")
                 logger.info(f"Admin {toggle_interaction.user} {state} boost tracker")
+                await rebuild_panel(toggle_interaction)
             else:
                 result = create_empty_layout("Failed to save boost tracker setting.")
-            await toggle_interaction.followup.send(view=result, ephemeral=True)
+                await toggle_interaction.followup.send(view=result, ephemeral=True)
 
         async def on_channel_select(channel_interaction: discord.Interaction, channel_id: int):
             await channel_interaction.response.defer(ephemeral=True)
+            ok, err = check_channel_permissions(interaction.guild, channel_id, "boost_tracker_channel")
+            if not ok:
+                await channel_interaction.followup.send(err, ephemeral=True)
+                return
             success = await TrackerActions.set_boost_log_channel(interaction.guild.id, channel_id)
             if success:
                 channel = interaction.guild.get_channel(channel_id)
                 channel_name = channel.name if channel else str(channel_id)
-                result = create_empty_layout(f"Boost log channel set to **#{channel_name}**.")
                 logger.info(f"Admin {channel_interaction.user} set boost log channel to {channel_name}")
+                await rebuild_panel(channel_interaction)
             else:
                 result = create_empty_layout("Failed to save boost log channel.")
-            await channel_interaction.followup.send(view=result, ephemeral=True)
+                await channel_interaction.followup.send(view=result, ephemeral=True)
 
         async def on_cancel(cancel_interaction: discord.Interaction):
             layout = create_empty_layout("Boost Tracker settings closed.")
@@ -1985,6 +2046,10 @@ class AdminCog(commands.Cog):
 
         async def on_channel_select(channel_interaction: discord.Interaction, channel_id: int):
             await channel_interaction.response.defer(ephemeral=True)
+            ok, err = check_channel_permissions(interaction.guild, channel_id, "drops_channel")
+            if not ok:
+                await channel_interaction.followup.send(err, ephemeral=True)
+                return
             success = await DropsActions.set_drops_channel(interaction.guild.id, channel_id)
             if success:
                 channel = interaction.guild.get_channel(channel_id)
@@ -2012,6 +2077,10 @@ class AdminCog(commands.Cog):
 
         async def on_channel_select(channel_interaction: discord.Interaction, category: str, channel_id: int):
             await channel_interaction.response.defer(ephemeral=True)
+            ok, err = check_channel_permissions(interaction.guild, channel_id, "drops_tracker")
+            if not ok:
+                await channel_interaction.followup.send(err, ephemeral=True)
+                return
             success = await DropsActions.set_tracker_channel(interaction.guild.id, category, channel_id)
             if success:
                 channel = interaction.guild.get_channel(channel_id)
@@ -2037,6 +2106,75 @@ class AdminCog(commands.Cog):
             await cancel_interaction.response.edit_message(view=layout)
 
         layout = build_drops_tracker_view(settings, interaction.guild, on_channel_select, on_remove, on_cancel)
+        await interaction.response.send_message(view=layout, ephemeral=True)
+        msg = await interaction.original_response()
+        attach_timeout_expiry_msg(layout, msg)
+
+    # ==================== Drops Manager Role ====================
+
+    async def _show_drops_manager_role_menu(self, interaction: discord.Interaction):
+        """Show Drops manager role configuration."""
+        from .views.base import create_unique_id, AdminLayoutBuilder
+
+        unique_id = create_unique_id()
+        current_role_id = await DropsActions.get_manager_role(interaction.guild.id)
+
+        if current_role_id:
+            role = interaction.guild.get_role(current_role_id)
+            role_display = role.mention if role else f"Not found ({current_role_id})"
+        else:
+            role_display = "Not configured"
+
+        builder = AdminLayoutBuilder()
+        builder.add_header("## Drops Manager Role")
+        builder.add_text(
+            f"**Current Role:** {role_display}\n\n"
+            "Select a role below. Members with this role can use management\n"
+            "features in `/drop` (Test Drops, View Unsent)."
+        )
+        builder.add_separator()
+
+        role_select = discord.ui.RoleSelect(
+            placeholder="Select manager role...",
+            custom_id=f"drops_mgr_role_{unique_id}",
+        )
+
+        async def role_callback(role_interaction: discord.Interaction):
+            selected_role_id = int(role_interaction.data["values"][0])
+            await role_interaction.response.defer(ephemeral=True)
+            success = await DropsActions.set_manager_role(interaction.guild.id, selected_role_id)
+            if success:
+                role = interaction.guild.get_role(selected_role_id)
+                role_name = role.name if role else str(selected_role_id)
+                result = create_empty_layout(f"Drops manager role set to **@{role_name}**.")
+                logger.info(f"Admin {role_interaction.user} set drops manager role to {role_name}")
+            else:
+                result = create_empty_layout("Failed to save drops manager role.")
+            await role_interaction.followup.send(view=result, ephemeral=True)
+
+        role_select.callback = role_callback
+
+        select_row = discord.ui.ActionRow()
+        select_row.add_item(role_select)
+        builder.add_item(select_row)
+
+        done_btn = discord.ui.Button(
+            label="Done",
+            style=discord.ButtonStyle.secondary,
+            custom_id=f"drops_mgr_done_{unique_id}",
+        )
+
+        async def done_callback(done_interaction: discord.Interaction):
+            layout = create_empty_layout("Manager role configuration closed.")
+            await done_interaction.response.edit_message(view=layout)
+
+        done_btn.callback = done_callback
+
+        btn_row = discord.ui.ActionRow()
+        btn_row.add_item(done_btn)
+        builder.add_item(btn_row)
+
+        layout = builder.build()
         await interaction.response.send_message(view=layout, ephemeral=True)
         msg = await interaction.original_response()
         attach_timeout_expiry_msg(layout, msg)
@@ -2126,41 +2264,6 @@ class AdminCog(commands.Cog):
 
         layout.add_item(discord.ui.TextDisplay("\n".join(lines)))
         return layout
-
-    # ==================== Welcome Template ====================
-
-    @admin_group.command(name="welcome-template", description="Download the default welcome message JSON template")
-    async def welcome_template(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
-        template_bytes = json.dumps(_WELCOME_TEMPLATE, indent=2, ensure_ascii=False).encode("utf-8")
-        await interaction.followup.send(
-            "Here is the default welcome message template. Edit it and upload using the **Message Builder** panel button.",
-            file=discord.File(io.BytesIO(template_bytes), filename="welcome_template.json"),
-            ephemeral=True,
-        )
-
-    # ==================== Guide Template ====================
-
-    @admin_group.command(name="guide-template", description="Download the default guide JSON template")
-    async def guide_template(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
-        import os
-        template_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-            "defaults", "guide_template.json",
-        )
-        try:
-            with open(template_path, "r", encoding="utf-8") as f:
-                template_data = json.load(f)
-            template_bytes = json.dumps(template_data, indent=2, ensure_ascii=False).encode("utf-8")
-            await interaction.followup.send(
-                "Here is the default guide template. Edit it and upload using the **Guide JSON Builder** panel button.",
-                file=discord.File(io.BytesIO(template_bytes), filename="guide_template.json"),
-                ephemeral=True,
-            )
-        except Exception as e:
-            logger.error(f"Failed to load guide template: {e}")
-            await interaction.followup.send("Failed to load guide template.", ephemeral=True)
 
 
 async def setup(bot: commands.Bot):
