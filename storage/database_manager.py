@@ -18,8 +18,6 @@ from storage.define_collections import DefineCollections
 # Load environment variables
 load_dotenv()
 primary = os.getenv("IMPERIALCODEX")
-secondary = os.getenv("EMPIRESDATA")
-third = os.getenv("THIRD")
 logger = logging.getLogger("DatabaseManager")
 
 
@@ -31,8 +29,6 @@ class DatabaseManager(DefineCollections, DatabaseProperties):
 
     def __init__(self, primary_uri: str = None, secondary_uri: str = None, third_uri: str = None, **additional_uris):
         self.primary_uri = primary_uri or primary
-        self.secondary_uri = secondary_uri or secondary
-        self.third_uri = third_uri or third
         self.additional_uris = additional_uris
 
         if not self.primary_uri:

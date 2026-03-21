@@ -7,18 +7,13 @@ RUN apt-get update && \
     ffmpeg \
     curl \
     procps \
-    openssh-client \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Trust GitHub host key
-RUN mkdir -p /root/.ssh && \
-    ssh-keyscan github.com >> /root/.ssh/known_hosts
-
-# Clone your GitHub repo directly
-RUN --mount=type=ssh git clone git@github.com:Empire-of-Shadows/ImperialCodex.git .
+# Clone from public repo
+RUN git clone https://github.com/Empire-of-Shadows/TheCodex.git .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \

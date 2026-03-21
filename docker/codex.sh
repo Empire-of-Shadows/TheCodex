@@ -150,7 +150,7 @@ if docker compose up --build -d; then
         echo "Timestamp: $(date)"
         echo ""
         echo "  Bot:       $BOT_CONTAINER (port 50001)"
-        echo "  Dashboard: $DASH_CONTAINER (port 8048)"
+        echo "  Dashboard: $DASH_CONTAINER (port 54006)"
 
         # Clean up backup images
         docker rmi -f "$BACKUP_TAG_BOT" 2>/dev/null || true
