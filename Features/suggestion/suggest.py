@@ -4,9 +4,6 @@ from discord.ext import commands, tasks
 from datetime import datetime
 from typing import Optional, List, Dict, Any, cast
 import uuid
-import json
-import io
-import csv
 import os
 from dotenv import load_dotenv
 
@@ -85,9 +82,10 @@ class SuggestionView(discord.ui.View):
 
 
 class SuggestionModal(discord.ui.Modal):
-    def __init__(self, template_type: str):
+    def __init__(self, template_type: str, anonymous: bool = False):
         super().__init__(title=f"{template_type} Suggestion")
         self.template_type = template_type
+        self.anonymous = anonymous
         logger.debug(f"SuggestionModal initialized for template type: {template_type}")
 
         templates = {
@@ -158,7 +156,7 @@ class SuggestionModal(discord.ui.Modal):
             # Get the suggestion cog and call its suggest method
             cog = interaction.client.get_cog("SuggestionCog")
             if cog:
-                await cog._process_suggestion(interaction, suggestion_text, False, self.template_type)
+                await cog._process_suggestion(interaction, suggestion_text, self.anonymous, self.template_type)
             else:
                 logger.error("SuggestionCog not found when processing template submission")
                 await interaction.response.send_message("❌ System error: Suggestion service unavailable.",
@@ -525,390 +523,6 @@ class SuggestionDatabaseManager:
         return self.db_manager.get_raw_collection('Suggestions', 'Suggestions')
 
 
-class SuggestionCommandGroup(app_commands.Group):
-    """Command group for suggestion commands"""
-
-    def __init__(self, cog):
-        super().__init__(name="suggest", description="Suggestion system commands")
-        self.cog = cog
-
-    @app_commands.command(name="submit", description="Submit a suggestion")
-    @app_commands.describe(
-        suggestion_text="The text of your suggestion",
-        anonymous="Submit anonymously",
-        category="Category for your suggestion"
-    )
-    @app_commands.choices(category=[
-        app_commands.Choice(name="Bot Feature", value="Bot Feature"),
-        app_commands.Choice(name="Server Improvement", value="Server Improvement"),
-        app_commands.Choice(name="Event Idea", value="Event Idea"),
-        app_commands.Choice(name="Rule Change", value="Rule Change"),
-        app_commands.Choice(name="Other", value="Other")
-    ])
-    @app_commands.checks.cooldown(1, 30)
-    async def submit_suggestion(
-            self,
-            interaction: discord.Interaction,
-            suggestion_text: str,
-            anonymous: bool = False,
-            category: str = "Other"
-    ):
-        """Submit a suggestion"""
-        logger.info(
-            f"Suggestion submission command used by {interaction.user.id} - Category: {category}, Anonymous: {anonymous}")
-        await self.cog._process_suggestion(interaction, suggestion_text, anonymous, category)
-
-    @app_commands.command(name="template", description="Use a suggestion template")
-    @app_commands.describe(template_type="Choose a template type")
-    @app_commands.choices(template_type=[
-        app_commands.Choice(name="Bot Feature", value="Bot Feature"),
-        app_commands.Choice(name="Server Rule", value="Server Rule"),
-        app_commands.Choice(name="Event Proposal", value="Event Proposal"),
-        app_commands.Choice(name="Channel Request", value="Channel Request")
-    ])
-    async def submit_template(self, interaction: discord.Interaction, template_type: str):
-        """Submit suggestion using template"""
-        logger.info(f"Template submission command used by {interaction.user.id} - Template: {template_type}")
-        modal = SuggestionModal(template_type)
-        await interaction.response.send_modal(modal)
-
-    @app_commands.command(name="search", description="Search suggestions")
-    @app_commands.describe(
-        query="Search terms",
-        category="Filter by category",
-        status="Filter by status",
-        author="Filter by author (mention them)"
-    )
-    @app_commands.choices(
-        category=[
-            app_commands.Choice(name="All", value="All"),
-            app_commands.Choice(name="Bot Feature", value="Bot Feature"),
-            app_commands.Choice(name="Server Improvement", value="Server Improvement"),
-            app_commands.Choice(name="Event Idea", value="Event Idea"),
-            app_commands.Choice(name="Rule Change", value="Rule Change"),
-            app_commands.Choice(name="Other", value="Other")
-        ],
-        status=[
-            app_commands.Choice(name="All", value="All"),
-            app_commands.Choice(name="Pending", value="Pending"),
-            app_commands.Choice(name="Under Review", value="Under Review"),
-            app_commands.Choice(name="Approved", value="Approved"),
-            app_commands.Choice(name="Implemented", value="Implemented"),
-            app_commands.Choice(name="Rejected", value="Rejected"),
-            app_commands.Choice(name="On Hold", value="On Hold")
-        ]
-    )
-    async def search_suggestions(
-            self,
-            interaction: discord.Interaction,
-            query: Optional[str] = None,
-            category: Optional[str] = None,
-            status: Optional[str] = None,
-            author: Optional[discord.Member] = None
-    ):
-        """Search through suggestions"""
-        logger.info(
-            f"Search command used by {interaction.user.id} - Query: '{query}', Category: {category}, Status: {status}, Author: {author.id if author else None}")
-        await interaction.response.defer()
-
-        results = await self.cog.db_manager.search_suggestions(
-            query, category, status, author.id if author else None, limit=10,
-            guild_id=interaction.guild.id
-        )
-
-        if not results:
-            logger.info(f"Search returned no results for user {interaction.user.id}")
-            await interaction.followup.send("❌ No suggestions found matching your criteria.")
-            return
-
-        embed = discord.Embed(
-            title="🔍 Suggestion Search Results",
-            color=discord.Color.blue()
-        )
-
-        for i, suggestion in enumerate(results[:5], 1):
-            text_preview = suggestion["text"][:100] + "..." if len(suggestion["text"]) > 100 else suggestion["text"]
-
-            embed.add_field(
-                name=f"{i}. {suggestion['category']} - {suggestion['status']}",
-                value=f"**ID:** {suggestion['suggestion_id'][:8]}\n{text_preview}",
-                inline=False
-            )
-
-        embed.set_footer(text=f"Showing {len(results[:5])} of {len(results)} results")
-        logger.info(f"Search results displayed to user {interaction.user.id}: {len(results)} total results")
-
-        await interaction.followup.send(embed=embed)
-
-    @app_commands.command(name="mine", description="View your suggestion history")
-    async def my_suggestions(self, interaction: discord.Interaction):
-        """View user's suggestion history"""
-        logger.info(f"User {interaction.user.id} requested their suggestion history")
-        await interaction.response.defer(ephemeral=True)
-
-        suggestions = await self.cog.db_manager.get_user_suggestions(interaction.user.id, guild_id=interaction.guild.id)
-
-        if not suggestions:
-            logger.info(f"User {interaction.user.id} has no suggestions")
-            await interaction.followup.send("You haven't submitted any suggestions yet.", ephemeral=True)
-            return
-
-        embed = discord.Embed(
-            title="📝 Your Suggestions",
-            color=discord.Color.green()
-        )
-
-        for i, suggestion in enumerate(suggestions[:5], 1):
-            text_preview = suggestion["text"][:80] + "..." if len(suggestion["text"]) > 80 else suggestion["text"]
-            vote_counts = await self.cog.db_manager.get_vote_counts(suggestion["suggestion_id"])
-            total_votes = sum(vote_counts.values())
-
-            embed.add_field(
-                name=f"{i}. {suggestion['status']} - {suggestion['category']}",
-                value=f"**ID:** {suggestion['suggestion_id'][:8]}\n{text_preview}\n**Votes:** {total_votes}",
-                inline=False
-            )
-
-        embed.set_footer(text=f"Showing {len(suggestions[:5])} of {len(suggestions)} suggestions")
-        logger.info(f"Displayed {len(suggestions)} suggestions to user {interaction.user.id}")
-
-        await interaction.followup.send(embed=embed, ephemeral=True)
-
-
-class SuggestionAdminGroup(app_commands.Group):
-    """Command group for suggestion admin commands"""
-
-    def __init__(self, cog):
-        super().__init__(name="suggestion-admin", description="Admin commands for suggestion system")
-        self.cog = cog
-
-    @app_commands.command(name="status", description="Update suggestion status (Admin only)")
-    @app_commands.describe(
-        suggestion_id="The ID of the suggestion (first 8 characters)",
-        status="New status",
-        reason="Reason for status change"
-    )
-    @app_commands.choices(status=[
-        app_commands.Choice(name="Under Review", value="Under Review"),
-        app_commands.Choice(name="Approved", value="Approved"),
-        app_commands.Choice(name="Implemented", value="Implemented"),
-        app_commands.Choice(name="Rejected", value="Rejected"),
-        app_commands.Choice(name="On Hold", value="On Hold")
-    ])
-    @app_commands.default_permissions(manage_guild=True)
-    async def update_status(
-            self,
-            interaction: discord.Interaction,
-            suggestion_id: str,
-            status: str,
-            reason: Optional[str] = None
-    ):
-        """Update suggestion status"""
-        logger.info(f"Admin {interaction.user.id} attempting to update suggestion {suggestion_id} to status {status}")
-        await interaction.response.defer(ephemeral=True)
-
-        # Find full suggestion ID (scoped to this guild)
-        suggestions = await self.cog.db_manager.search_suggestions(limit=1000, guild_id=interaction.guild.id)
-        full_id = None
-
-        for suggestion in suggestions:
-            if suggestion["suggestion_id"].startswith(suggestion_id):
-                full_id = suggestion["suggestion_id"]
-                break
-
-        if not full_id:
-            logger.warning(f"Admin {interaction.user.id} attempted to update non-existent suggestion {suggestion_id}")
-            await interaction.followup.send("❌ Suggestion not found.", ephemeral=True)
-            return
-
-        success = await self.cog.db_manager.update_suggestion_status(
-            full_id, status, interaction.user.id, reason
-        )
-
-        if success:
-            logger.info(f"Admin {interaction.user.id} successfully updated suggestion {suggestion_id} to {status}")
-
-            # Try to update the original suggestion embed in the suggestions channel
-            try:
-                # Retrieve the full suggestion document to get message/thread IDs
-                doc = await db_manager.suggestions_suggestions.find_one({"suggestion_id": full_id})
-                if doc and doc.get("message_id"):
-                    # Resolve channel from the suggestion's guild config
-                    suggestion_guild_id = doc.get("guild_id") or interaction.guild.id
-                    suggestion_config = await get_config(suggestion_guild_id)
-                    channel = self.cog.bot.get_channel(suggestion_config.suggestions["channel_id"])
-                    if channel:
-                        message = await channel.fetch_message(doc["message_id"])
-                        if message and message.embeds:
-                            embed = message.embeds[0]
-
-                            # Update the "Status" field
-                            for i, field in enumerate(embed.fields):
-                                if field.name == "Status":
-                                    embed.set_field_at(i, name="Status", value=status, inline=True)
-                                    break
-                            else:
-                                embed.add_field(name="Status", value=status, inline=True)
-
-                            # Update embed color based on status
-                            status_colors = {
-                                "Pending": discord.Color.blue(),
-                                "Under Review": discord.Color.orange(),
-                                "Approved": discord.Color.green(),
-                                "Implemented": discord.Color.gold(),
-                                "Rejected": discord.Color.red(),
-                                "On Hold": discord.Color.purple(),
-                            }
-                            embed.color = status_colors.get(status, discord.Color.blue())
-
-                            await message.edit(embed=embed)
-
-                    # Optionally rename the thread to reflect status change
-                    if doc.get("thread_id"):
-                        thread = self.cog.bot.get_channel(doc["thread_id"])
-                        if thread and hasattr(thread, "edit"):
-                            try:
-                                await thread.edit(name=f"[{status}] {thread.name}")
-                            except Exception as thread_edit_err:
-                                logger.warning(f"Could not rename thread {doc['thread_id']}: {thread_edit_err}")
-
-            except Exception as edit_err:
-                logger.error(f"Failed to update suggestion embed for {full_id}: {edit_err}", exc_info=True)
-
-            await interaction.followup.send(
-                f"✅ Updated suggestion {suggestion_id} to **{status}**" +
-                (f"\nReason: {reason}" if reason else ""),
-                ephemeral=True
-            )
-
-        else:
-            logger.error(f"Failed to update suggestion {suggestion_id} by admin {interaction.user.id}")
-            await interaction.followup.send("❌ Failed to update suggestion.", ephemeral=True)
-
-    @app_commands.command(name="stats", description="View suggestion statistics (Admin only)")
-    @app_commands.default_permissions(manage_guild=True)
-    async def suggestion_stats(self, interaction: discord.Interaction):
-        """View suggestion statistics"""
-        logger.info(f"Admin {interaction.user.id} requested suggestion statistics")
-        await interaction.response.defer()
-
-        stats = await self.cog.db_manager.get_suggestion_stats(guild_id=interaction.guild.id)
-
-        if not stats:
-            logger.warning("No statistics available when requested by admin")
-            await interaction.followup.send("❌ No statistics available.")
-            return
-
-        embed = discord.Embed(
-            title="📊 Suggestion Statistics",
-            color=discord.Color.blue()
-        )
-
-        embed.add_field(
-            name="Total Suggestions",
-            value=str(stats.get("total_suggestions", 0)),
-            inline=True
-        )
-
-        # Status distribution
-        status_dist = stats.get("status_distribution", {})
-        if status_dist:
-            status_text = "\n".join([f"{status}: {count}" for status, count in status_dist.items()])
-            embed.add_field(name="By Status", value=status_text, inline=True)
-
-        # Category distribution
-        category_dist = stats.get("category_distribution", {})
-        if category_dist:
-            category_text = "\n".join([f"{cat}: {count}" for cat, count in category_dist.items()])
-            embed.add_field(name="By Category", value=category_text, inline=True)
-
-        # Top contributors
-        contributors = stats.get("top_contributors", [])
-        if contributors:
-            contributor_text = ""
-            for contrib in contributors[:5]:
-                user = self.cog.bot.get_user(contrib["_id"])
-                username = user.display_name if user else f"User {contrib['_id']}"
-                contributor_text += f"{username}: {contrib['count']}\n"
-            embed.add_field(name="Top Contributors", value=contributor_text, inline=False)
-
-        logger.info(f"Statistics displayed to admin {interaction.user.id}")
-        await interaction.followup.send(embed=embed)
-
-    @app_commands.command(name="export", description="Export suggestions (Admin only)")
-    @app_commands.describe(format_type="Export format")
-    @app_commands.choices(format_type=[
-        app_commands.Choice(name="CSV", value="CSV"),
-        app_commands.Choice(name="JSON", value="JSON")
-    ])
-    @app_commands.default_permissions(manage_guild=True)
-    async def export_suggestions(self, interaction: discord.Interaction, format_type: str):
-        """Export suggestions to file"""
-        logger.info(f"Admin {interaction.user.id} requested export in {format_type} format")
-        await interaction.response.defer(ephemeral=True)
-
-        suggestions = await self.cog.db_manager.search_suggestions(limit=1000, guild_id=interaction.guild.id)
-
-        if not suggestions:
-            logger.warning(f"No suggestions available for export requested by admin {interaction.user.id}")
-            await interaction.followup.send("❌ No suggestions to export.", ephemeral=True)
-            return
-
-        try:
-            if format_type == "CSV":
-                # Create CSV
-                output = io.StringIO()
-                writer = csv.writer(output)
-
-                # Headers
-                writer.writerow([
-                    "ID", "User ID", "Text", "Category", "Status", "Anonymous",
-                    "Created At", "Updated At"
-                ])
-
-                # Data
-                for suggestion in suggestions:
-                    writer.writerow([
-                        suggestion.get("suggestion_id", ""),
-                        suggestion.get("user_id", ""),
-                        suggestion.get("text", ""),
-                        suggestion.get("category", ""),
-                        suggestion.get("status", ""),
-                        suggestion.get("anonymous", False),
-                        suggestion.get("created_at", ""),
-                        suggestion.get("updated_at", "")
-                    ])
-
-                file_content = output.getvalue().encode('utf-8')
-                file = discord.File(io.BytesIO(file_content), filename="suggestions.csv")
-
-            else:  # JSON
-                # Prepare JSON data
-                json_data = []
-                for suggestion in suggestions:
-                    # Convert datetime objects to strings
-                    suggestion_copy = suggestion.copy()
-                    for key, value in suggestion_copy.items():
-                        if isinstance(value, datetime):
-                            suggestion_copy[key] = value.isoformat()
-                    json_data.append(suggestion_copy)
-
-                json_content = json.dumps(json_data, indent=2).encode('utf-8')
-                file = discord.File(io.BytesIO(json_content), filename="suggestions.json")
-
-            logger.info(
-                f"Successfully exported {len(suggestions)} suggestions in {format_type} format for admin {interaction.user.id}")
-            await interaction.followup.send(
-                f"📄 Exported {len(suggestions)} suggestions in {format_type} format:",
-                file=file,
-                ephemeral=True
-            )
-
-        except Exception as e:
-            logger.error(f"Error during export for admin {interaction.user.id}: {e}", exc_info=True)
-            await interaction.followup.send("❌ An error occurred during export.", ephemeral=True)
-
-
 class SuggestionCog(commands.Cog):
     def __init__(self, bot):
         logger.info("Initializing SuggestionCog with new DatabaseManager")
@@ -922,13 +536,155 @@ class SuggestionCog(commands.Cog):
             logger.error(f"Failed to initialize suggestion database manager: {e}", exc_info=True)
             raise
 
-        # Add command groups
-        self.suggestion_group = SuggestionCommandGroup(self)
-        self.admin_group = SuggestionAdminGroup(self)
-
         # Start notification task
         self.notification_task.start()
         logger.info("SuggestionCog initialization completed")
+
+    # ==================== Standalone Commands ====================
+
+    @app_commands.command(name="suggest", description="Submit a suggestion (text or template)")
+    @app_commands.describe(
+        suggestion_text="The text of your suggestion",
+        anonymous="Submit anonymously",
+        category="Category for your suggestion",
+        template="Use a guided template instead of free-text"
+    )
+    @app_commands.choices(
+        category=[
+            app_commands.Choice(name="Bot Feature", value="Bot Feature"),
+            app_commands.Choice(name="Server Improvement", value="Server Improvement"),
+            app_commands.Choice(name="Event Idea", value="Event Idea"),
+            app_commands.Choice(name="Rule Change", value="Rule Change"),
+            app_commands.Choice(name="Other", value="Other"),
+        ],
+        template=[
+            app_commands.Choice(name="Bot Feature", value="Bot Feature"),
+            app_commands.Choice(name="Server Rule", value="Server Rule"),
+            app_commands.Choice(name="Event Proposal", value="Event Proposal"),
+            app_commands.Choice(name="Channel Request", value="Channel Request"),
+        ],
+    )
+    @app_commands.checks.cooldown(1, 30)
+    async def suggest_command(
+            self,
+            interaction: discord.Interaction,
+            suggestion_text: Optional[str] = None,
+            anonymous: bool = False,
+            category: str = "Other",
+            template: Optional[str] = None,
+    ):
+        """Submit a suggestion via free text or a guided template."""
+        if template:
+            logger.info(f"Template submission command used by {interaction.user.id} - Template: {template}")
+            modal = SuggestionModal(template, anonymous)
+            await interaction.response.send_modal(modal)
+        elif suggestion_text:
+            logger.info(
+                f"Suggestion submission by {interaction.user.id} - Category: {category}, Anonymous: {anonymous}")
+            await self._process_suggestion(interaction, suggestion_text, anonymous, category)
+        else:
+            await interaction.response.send_message(
+                "Please provide either `suggestion_text` or choose a `template`.",
+                ephemeral=True,
+            )
+
+    @app_commands.command(name="suggest-search", description="Search suggestions")
+    @app_commands.describe(
+        query="Search terms",
+        category="Filter by category",
+        status="Filter by status",
+        author="Filter by author (mention them)"
+    )
+    @app_commands.choices(
+        category=[
+            app_commands.Choice(name="All", value="All"),
+            app_commands.Choice(name="Bot Feature", value="Bot Feature"),
+            app_commands.Choice(name="Server Improvement", value="Server Improvement"),
+            app_commands.Choice(name="Event Idea", value="Event Idea"),
+            app_commands.Choice(name="Rule Change", value="Rule Change"),
+            app_commands.Choice(name="Other", value="Other"),
+        ],
+        status=[
+            app_commands.Choice(name="All", value="All"),
+            app_commands.Choice(name="Pending", value="Pending"),
+            app_commands.Choice(name="Under Review", value="Under Review"),
+            app_commands.Choice(name="Approved", value="Approved"),
+            app_commands.Choice(name="Implemented", value="Implemented"),
+            app_commands.Choice(name="Rejected", value="Rejected"),
+            app_commands.Choice(name="On Hold", value="On Hold"),
+        ],
+    )
+    async def suggest_search_command(
+            self,
+            interaction: discord.Interaction,
+            query: Optional[str] = None,
+            category: Optional[str] = None,
+            status: Optional[str] = None,
+            author: Optional[discord.Member] = None,
+    ):
+        """Search through suggestions."""
+        logger.info(
+            f"Search command used by {interaction.user.id} - Query: '{query}', Category: {category}, Status: {status}, Author: {author.id if author else None}")
+        await interaction.response.defer()
+
+        results = await self.db_manager.search_suggestions(
+            query, category, status, author.id if author else None, limit=10,
+            guild_id=interaction.guild.id,
+        )
+
+        if not results:
+            logger.info(f"Search returned no results for user {interaction.user.id}")
+            await interaction.followup.send("No suggestions found matching your criteria.")
+            return
+
+        embed = discord.Embed(
+            title="Suggestion Search Results",
+            color=discord.Color.blue(),
+        )
+
+        for i, suggestion in enumerate(results[:5], 1):
+            text_preview = suggestion["text"][:100] + "..." if len(suggestion["text"]) > 100 else suggestion["text"]
+            embed.add_field(
+                name=f"{i}. {suggestion['category']} - {suggestion['status']}",
+                value=f"**ID:** {suggestion['suggestion_id'][:8]}\n{text_preview}",
+                inline=False,
+            )
+
+        embed.set_footer(text=f"Showing {len(results[:5])} of {len(results)} results")
+        logger.info(f"Search results displayed to user {interaction.user.id}: {len(results)} total results")
+        await interaction.followup.send(embed=embed)
+
+    @app_commands.command(name="suggest-mine", description="View your suggestion history")
+    async def suggest_mine_command(self, interaction: discord.Interaction):
+        """View user's suggestion history."""
+        logger.info(f"User {interaction.user.id} requested their suggestion history")
+        await interaction.response.defer(ephemeral=True)
+
+        suggestions = await self.db_manager.get_user_suggestions(interaction.user.id, guild_id=interaction.guild.id)
+
+        if not suggestions:
+            logger.info(f"User {interaction.user.id} has no suggestions")
+            await interaction.followup.send("You haven't submitted any suggestions yet.", ephemeral=True)
+            return
+
+        embed = discord.Embed(
+            title="Your Suggestions",
+            color=discord.Color.green(),
+        )
+
+        for i, suggestion in enumerate(suggestions[:5], 1):
+            text_preview = suggestion["text"][:80] + "..." if len(suggestion["text"]) > 80 else suggestion["text"]
+            vote_counts = await self.db_manager.get_vote_counts(suggestion["suggestion_id"])
+            total_votes = sum(vote_counts.values())
+            embed.add_field(
+                name=f"{i}. {suggestion['status']} - {suggestion['category']}",
+                value=f"**ID:** {suggestion['suggestion_id'][:8]}\n{text_preview}\n**Votes:** {total_votes}",
+                inline=False,
+            )
+
+        embed.set_footer(text=f"Showing {len(suggestions[:5])} of {len(suggestions)} suggestions")
+        logger.info(f"Displayed {len(suggestions)} suggestions to user {interaction.user.id}")
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
     def cog_unload(self):
         logger.info("Unloading SuggestionCog")
@@ -1223,9 +979,6 @@ async def setup(bot: commands.Bot):
     try:
         cog = SuggestionCog(bot)
         await bot.add_cog(cog)
-        # Add the command groups to the tree
-        bot.tree.add_command(cog.suggestion_group)
-        bot.tree.add_command(cog.admin_group)
         logger.info("SuggestionCog setup completed successfully")
     except Exception as e:
         logger.error(f"Failed to set up SuggestionCog: {e}", exc_info=True)

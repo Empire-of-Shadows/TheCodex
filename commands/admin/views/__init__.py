@@ -90,6 +90,8 @@ from .announcement_views import (
 
 from .suggestion_views import (
     build_suggestion_status_view,
+    SuggestionStatusUpdateModal,
+    build_suggestion_export_view,
 )
 
 __all__ = [
@@ -159,4 +161,6 @@ __all__ = [
     "build_announcement_status_view",
     # Suggestion views
     "build_suggestion_status_view",
+    "SuggestionStatusUpdateModal",
+    "build_suggestion_export_view",
 ]

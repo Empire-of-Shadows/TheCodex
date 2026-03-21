@@ -55,6 +55,8 @@ from .views import (
     build_drops_status_view,
     build_announcement_status_view,
     build_suggestion_status_view,
+    SuggestionStatusUpdateModal,
+    build_suggestion_export_view,
     PanelNode,
     build_menu_view,
     build_select_view,
@@ -221,6 +223,8 @@ class AdminCog(commands.Cog):
                 "ann_settings": self._show_ann_settings_menu,
                 "ann_status": self._show_ann_status,
                 "sug_channel": self._show_sug_channel_menu,
+                "sug_update_status": self._show_sug_update_status,
+                "sug_export": self._show_sug_export,
                 "sug_status": self._show_sug_status,
                 "guide_channel": self._show_guide_channel_menu,
                 "guide_upload": self._show_guide_upload_menu,
@@ -2234,11 +2238,61 @@ class AdminCog(commands.Cog):
         """Show suggestion channel configuration."""
         await self._navigate_to(interaction, SUG_CHANNEL_CONFIG, interaction.guild)
 
+    async def _show_sug_update_status(self, interaction: discord.Interaction):
+        """Open the status-update modal for a suggestion."""
+        async def on_modal_submit(
+            modal_interaction: discord.Interaction,
+            suggestion_id: str,
+            status: str,
+            reason: str,
+        ):
+            await modal_interaction.response.defer(ephemeral=True)
+            result = await SuggestionActions.update_suggestion_status(
+                guild_id=modal_interaction.guild.id,
+                suggestion_id_prefix=suggestion_id,
+                status=status,
+                admin_id=modal_interaction.user.id,
+                reason=reason,
+                bot=self.bot,
+            )
+            icon = "✅" if result["success"] else "❌"
+            await modal_interaction.followup.send(
+                f"{icon} {result['message']}", ephemeral=True,
+            )
+
+        modal = SuggestionStatusUpdateModal(callback=on_modal_submit)
+        await interaction.response.send_modal(modal)
+
+    async def _show_sug_export(self, interaction: discord.Interaction):
+        """Show the export format picker for suggestions."""
+        async def on_export(export_interaction: discord.Interaction, format_type: str):
+            await export_interaction.response.defer(ephemeral=True)
+            result = await SuggestionActions.export_suggestions(
+                guild_id=export_interaction.guild.id,
+                format_type=format_type,
+            )
+            if result is None:
+                await export_interaction.followup.send(
+                    "No suggestions to export.", ephemeral=True,
+                )
+                return
+            file, count = result
+            await export_interaction.followup.send(
+                f"Exported {count} suggestions as {format_type}:",
+                file=file,
+                ephemeral=True,
+            )
+
+        await interaction.response.defer(ephemeral=True)
+        layout = build_suggestion_export_view(export_callback=on_export)
+        msg = await interaction.followup.send(view=layout, ephemeral=True)
+        attach_timeout_expiry_msg(layout, msg)
+
     async def _show_sug_status(self, interaction: discord.Interaction):
-        """Show the suggestion system status."""
+        """Show the suggestion system status with enhanced stats."""
         await interaction.response.defer(ephemeral=True)
 
-        overview = await SuggestionActions.get_overview(interaction.guild.id)
+        overview = await SuggestionActions.get_overview(interaction.guild.id, bot=self.bot)
         layout = build_suggestion_status_view(overview, interaction.guild)
         msg = await interaction.followup.send(view=layout, ephemeral=True)
         attach_timeout_expiry_msg(layout, msg)

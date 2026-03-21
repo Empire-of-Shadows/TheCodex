@@ -66,7 +66,9 @@ PANEL_SUBCATEGORIES = {
     ],
     "suggestions": [
         ("sug_channel", "Suggestion Channel", "Set the channel for user suggestions"),
-        ("sug_status", "View Status", "View suggestion system stats"),
+        ("sug_update_status", "Update Status", "Update a suggestion's review status"),
+        ("sug_export", "Export", "Export suggestions as CSV or JSON"),
+        ("sug_status", "View Status", "View suggestion system stats and overview"),
     ],
     "guide_settings": [
         ("guide_channel", "Guide Channel", "Set a specific channel for the guide (optional)"),
