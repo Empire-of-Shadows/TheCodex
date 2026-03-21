@@ -2042,29 +2042,36 @@ class AdminCog(commands.Cog):
 
     async def _show_drops_channel_menu(self, interaction: discord.Interaction):
         """Show Drops posting channel configuration."""
-        settings = await DropsActions.get_drops_settings(interaction.guild.id)
+        guild = interaction.guild
+
+        async def _rebuild() -> discord.ui.LayoutView:
+            fresh = await DropsActions.get_drops_settings(guild.id)
+            return build_drops_channel_view(fresh, guild, on_channel_select, on_cancel)
 
         async def on_channel_select(channel_interaction: discord.Interaction, channel_id: int):
             await channel_interaction.response.defer(ephemeral=True)
-            ok, err = check_channel_permissions(interaction.guild, channel_id, "drops_channel")
+            ok, err = check_channel_permissions(guild, channel_id, "drops_channel")
             if not ok:
                 await channel_interaction.followup.send(err, ephemeral=True)
                 return
-            success = await DropsActions.set_drops_channel(interaction.guild.id, channel_id)
+            success = await DropsActions.set_drops_channel(guild.id, channel_id)
             if success:
-                channel = interaction.guild.get_channel(channel_id)
+                channel = guild.get_channel(channel_id)
                 channel_name = channel.name if channel else str(channel_id)
-                result = create_empty_layout(f"Drops channel set to **#{channel_name}**.")
                 logger.info(f"Admin {channel_interaction.user} set drops channel to {channel_name}")
+                await channel_interaction.edit_original_response(view=await _rebuild())
             else:
-                result = create_empty_layout("Failed to save drops channel.")
-            await channel_interaction.followup.send(view=result, ephemeral=True)
+                await channel_interaction.followup.send(
+                    view=create_empty_layout("Failed to save drops channel."), ephemeral=True
+                )
 
         async def on_cancel(cancel_interaction: discord.Interaction):
             layout = create_empty_layout("Drops channel configuration closed.")
             await cancel_interaction.response.edit_message(view=layout)
 
-        layout = build_drops_channel_view(settings, interaction.guild, on_channel_select, on_cancel)
+        layout = build_drops_channel_view(
+            await DropsActions.get_drops_settings(guild.id), guild, on_channel_select, on_cancel
+        )
         await interaction.response.send_message(view=layout, ephemeral=True)
         msg = await interaction.original_response()
         attach_timeout_expiry_msg(layout, msg)
@@ -2073,39 +2080,47 @@ class AdminCog(commands.Cog):
 
     async def _show_drops_tracker_menu(self, interaction: discord.Interaction):
         """Show Drops tracked channels configuration."""
-        settings = await DropsActions.get_drops_settings(interaction.guild.id)
+        guild = interaction.guild
+
+        async def _rebuild() -> discord.ui.LayoutView:
+            fresh = await DropsActions.get_drops_settings(guild.id)
+            return build_drops_tracker_view(fresh, guild, on_channel_select, on_remove, on_cancel)
 
         async def on_channel_select(channel_interaction: discord.Interaction, category: str, channel_id: int):
             await channel_interaction.response.defer(ephemeral=True)
-            ok, err = check_channel_permissions(interaction.guild, channel_id, "drops_tracker")
+            ok, err = check_channel_permissions(guild, channel_id, "drops_tracker")
             if not ok:
                 await channel_interaction.followup.send(err, ephemeral=True)
                 return
-            success = await DropsActions.set_tracker_channel(interaction.guild.id, category, channel_id)
+            success = await DropsActions.set_tracker_channel(guild.id, category, channel_id)
             if success:
-                channel = interaction.guild.get_channel(channel_id)
+                channel = guild.get_channel(channel_id)
                 channel_name = channel.name if channel else str(channel_id)
-                result = create_empty_layout(f"**{category}** tracking channel set to **#{channel_name}**.")
                 logger.info(f"Admin {channel_interaction.user} set {category} tracker to {channel_name}")
+                await channel_interaction.edit_original_response(view=await _rebuild())
             else:
-                result = create_empty_layout(f"Failed to save {category} tracking channel.")
-            await channel_interaction.followup.send(view=result, ephemeral=True)
+                await channel_interaction.followup.send(
+                    view=create_empty_layout(f"Failed to save {category} tracking channel."), ephemeral=True
+                )
 
         async def on_remove(remove_interaction: discord.Interaction, category: str):
             await remove_interaction.response.defer(ephemeral=True)
-            success = await DropsActions.remove_tracker_channel(interaction.guild.id, category)
+            success = await DropsActions.remove_tracker_channel(guild.id, category)
             if success:
-                result = create_empty_layout(f"**{category}** tracking channel cleared.")
                 logger.info(f"Admin {remove_interaction.user} cleared {category} tracker channel")
+                await remove_interaction.edit_original_response(view=await _rebuild())
             else:
-                result = create_empty_layout(f"Failed to clear {category} tracking channel.")
-            await remove_interaction.followup.send(view=result, ephemeral=True)
+                await remove_interaction.followup.send(
+                    view=create_empty_layout(f"Failed to clear {category} tracking channel."), ephemeral=True
+                )
 
         async def on_cancel(cancel_interaction: discord.Interaction):
             layout = create_empty_layout("Tracked channels configuration closed.")
             await cancel_interaction.response.edit_message(view=layout)
 
-        layout = build_drops_tracker_view(settings, interaction.guild, on_channel_select, on_remove, on_cancel)
+        layout = build_drops_tracker_view(
+            await DropsActions.get_drops_settings(guild.id), guild, on_channel_select, on_remove, on_cancel
+        )
         await interaction.response.send_message(view=layout, ephemeral=True)
         msg = await interaction.original_response()
         attach_timeout_expiry_msg(layout, msg)
@@ -2116,65 +2131,69 @@ class AdminCog(commands.Cog):
         """Show Drops manager role configuration."""
         from .views.base import create_unique_id, AdminLayoutBuilder
 
-        unique_id = create_unique_id()
-        current_role_id = await DropsActions.get_manager_role(interaction.guild.id)
+        guild = interaction.guild
 
-        if current_role_id:
-            role = interaction.guild.get_role(current_role_id)
-            role_display = role.mention if role else f"Not found ({current_role_id})"
-        else:
-            role_display = "Not configured"
+        def _build_panel(current_role_id: int | None) -> discord.ui.LayoutView:
+            unique_id = create_unique_id()
 
-        builder = AdminLayoutBuilder()
-        builder.add_header("## Drops Manager Role")
-        builder.add_text(
-            f"**Current Role:** {role_display}\n\n"
-            "Select a role below. Members with this role can use management\n"
-            "features in `/drop` (Test Drops, View Unsent)."
-        )
-        builder.add_separator()
+            if current_role_id:
+                role = guild.get_role(current_role_id)
+                role_display = role.mention if role else f"Not found ({current_role_id})"
+            else:
+                role_display = "Not configured"
 
-        role_select = discord.ui.RoleSelect(
-            placeholder="Select manager role...",
-            custom_id=f"drops_mgr_role_{unique_id}",
-        )
+            builder = AdminLayoutBuilder()
+            builder.add_header("## Drops Manager Role")
+            builder.add_text(
+                f"**Current Role:** {role_display}\n\n"
+                "Select a role below. Members with this role can use management\n"
+                "features in `/drop` (Test Drops, View Unsent)."
+            )
+            builder.add_separator()
+
+            role_select = discord.ui.RoleSelect(
+                placeholder="Select manager role...",
+                custom_id=f"drops_mgr_role_{unique_id}",
+            )
+            role_select.callback = role_callback
+
+            select_row = discord.ui.ActionRow()
+            select_row.add_item(role_select)
+            builder.add_item(select_row)
+
+            done_btn = discord.ui.Button(
+                label="Done",
+                style=discord.ButtonStyle.secondary,
+                custom_id=f"drops_mgr_done_{unique_id}",
+            )
+            done_btn.callback = done_callback
+
+            btn_row = discord.ui.ActionRow()
+            btn_row.add_item(done_btn)
+            builder.add_item(btn_row)
+
+            return builder.build()
 
         async def role_callback(role_interaction: discord.Interaction):
             selected_role_id = int(role_interaction.data["values"][0])
             await role_interaction.response.defer(ephemeral=True)
-            success = await DropsActions.set_manager_role(interaction.guild.id, selected_role_id)
+            success = await DropsActions.set_manager_role(guild.id, selected_role_id)
             if success:
-                role = interaction.guild.get_role(selected_role_id)
+                role = guild.get_role(selected_role_id)
                 role_name = role.name if role else str(selected_role_id)
-                result = create_empty_layout(f"Drops manager role set to **@{role_name}**.")
                 logger.info(f"Admin {role_interaction.user} set drops manager role to {role_name}")
+                await role_interaction.edit_original_response(view=_build_panel(selected_role_id))
             else:
-                result = create_empty_layout("Failed to save drops manager role.")
-            await role_interaction.followup.send(view=result, ephemeral=True)
-
-        role_select.callback = role_callback
-
-        select_row = discord.ui.ActionRow()
-        select_row.add_item(role_select)
-        builder.add_item(select_row)
-
-        done_btn = discord.ui.Button(
-            label="Done",
-            style=discord.ButtonStyle.secondary,
-            custom_id=f"drops_mgr_done_{unique_id}",
-        )
+                await role_interaction.followup.send(
+                    view=create_empty_layout("Failed to save drops manager role."), ephemeral=True
+                )
 
         async def done_callback(done_interaction: discord.Interaction):
             layout = create_empty_layout("Manager role configuration closed.")
             await done_interaction.response.edit_message(view=layout)
 
-        done_btn.callback = done_callback
-
-        btn_row = discord.ui.ActionRow()
-        btn_row.add_item(done_btn)
-        builder.add_item(btn_row)
-
-        layout = builder.build()
+        current_role_id = await DropsActions.get_manager_role(guild.id)
+        layout = _build_panel(current_role_id)
         await interaction.response.send_message(view=layout, ephemeral=True)
         msg = await interaction.original_response()
         attach_timeout_expiry_msg(layout, msg)
