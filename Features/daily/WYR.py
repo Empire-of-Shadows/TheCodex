@@ -504,6 +504,21 @@ class WYR(commands.Cog):
         except Exception as e:
             logger.error(f"Error cleaning up old mappings: {e}", exc_info=True)
 
+    async def get_last_post_time(self, guild_id):
+        """Get the timestamp of the most recent scheduled post for a guild from the database."""
+        try:
+            mappings = await db_manager.daily_wyr_mappings.find_many(
+                filter_dict={"guild_id": guild_id},
+                sort=[("created_at", -1)],
+                limit=1
+            )
+            if mappings:
+                return mappings[0].get("created_at")
+            return None
+        except Exception as e:
+            logger.error(f"Error getting last post time for guild {guild_id}: {e}", exc_info=True)
+            return None
+
     @tasks.loop(minutes=1)
     async def wyr_tick(self):
         """Every minute, check if any guild is due for a WYR post."""
@@ -536,11 +551,42 @@ class WYR(commands.Cog):
                     tz = pytz.timezone(tz_name)
                     now = datetime.now(tz)
 
-                    if now.hour == hour and now.minute == minute:
-                        today_key = (guild_id, now.strftime("%Y-%m-%d"))
-                        if today_key not in self._posted_today:
+                    today_key = (guild_id, now.strftime("%Y-%m-%d"))
+
+                    # Fast in-memory check — already handled this guild today
+                    if today_key in self._posted_today:
+                        continue
+
+                    scheduled_now = now.hour == hour and now.minute == minute
+                    scheduled_passed = (now.hour > hour) or (now.hour == hour and now.minute >= minute)
+
+                    if not (scheduled_now or scheduled_passed):
+                        continue
+
+                    # Check DB for the last post time — enforces 20h cooldown
+                    last_post = await self.get_last_post_time(guild_id)
+
+                    if last_post:
+                        hours_since_last = (datetime.now(timezone.utc) - last_post).total_seconds() / 3600
+                        if hours_since_last < 20:
                             self._posted_today.add(today_key)
-                            await self.post_daily_question_for_guild(guild_id, guild_config)
+                            logger.info(
+                                f"Skipping WYR for guild {guild_id}: last post was {hours_since_last:.1f}h ago "
+                                f"(minimum 20h cooldown)"
+                            )
+                            continue
+
+                    self._posted_today.add(today_key)
+
+                    if scheduled_now:
+                        logger.info(f"Posting scheduled WYR for guild {guild_id} at {hour:02d}:{minute:02d}")
+                    else:
+                        logger.info(
+                            f"Catch-up WYR post for guild {guild_id} "
+                            f"(scheduled {hour:02d}:{minute:02d}, now {now.strftime('%H:%M')})"
+                        )
+
+                    await self.post_daily_question_for_guild(guild_id, guild_config)
 
                 except Exception as guild_error:
                     logger.error(f"Error checking WYR schedule for guild {guild_id}: {guild_error}", exc_info=True)
