@@ -11,10 +11,10 @@ import discord
 CHANNEL_PERMISSION_REQUIREMENTS: dict[str, list[str]] = {
     "wyr_channel": ["send_messages", "create_public_threads", "send_messages_in_threads", "embed_links"],
     "nm_welcome_channel": ["send_messages", "embed_links"],
-    "ann_channel": ["create_public_threads", "send_messages_in_threads"],
+    "ann_channel": ["send_messages", "create_public_threads", "send_messages_in_threads", "manage_threads", "embed_links"],
     "sug_channel": ["send_messages", "create_public_threads", "send_messages_in_threads", "embed_links"],
     "guide_channel": ["send_messages"],
-    "drops_channel": ["send_messages"],
+    "drops_channel": ["send_messages", "embed_links"],
     "drops_tracker": ["view_channel", "read_message_history"],
     "boost_tracker_channel": ["send_messages"],
 }
@@ -29,6 +29,7 @@ _PERM_DISPLAY_NAMES: dict[str, str] = {
     "send_messages": "Send Messages",
     "create_public_threads": "Create Public Threads",
     "send_messages_in_threads": "Send Messages in Threads",
+    "manage_threads": "Manage Threads",
     "embed_links": "Embed Links",
     "view_channel": "View Channel",
     "read_message_history": "Read Message History",
