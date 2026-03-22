@@ -5,7 +5,6 @@ Named action system for welcome message component interactions.
 Replaces freeform custom_id strings with a discoverable, multi-guild-safe registry.
 """
 
-import discord
 from utils.logger import get_logger
 
 logger = get_logger("WelcomeActions")
@@ -59,13 +58,14 @@ def decode_custom_id(raw: str) -> tuple[str | None, dict]:
 # Handler Functions
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def _handle_open_guide(interaction: discord.Interaction, params: dict):
+async def _handle_open_guide(interaction, params: dict):
     from Features.Guide.guide import get_help_menu
     layout = await get_help_menu(interaction.user.id, guild_id=interaction.guild.id, interaction=interaction)
     await interaction.response.send_message(view=layout, ephemeral=True)
 
 
-async def _handle_server_info(interaction: discord.Interaction, params: dict):
+async def _handle_server_info(interaction, params: dict):
+    import discord
     guild = interaction.guild
     embed = discord.Embed(
         title=f"{guild.name} Server Information",
@@ -103,7 +103,8 @@ async def _handle_server_info(interaction: discord.Interaction, params: dict):
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
-async def _handle_channel_list(interaction: discord.Interaction, params: dict):
+async def _handle_channel_list(interaction, params: dict):
+    import discord
     guild = interaction.guild
     embed = discord.Embed(
         title=f"{guild.name} - All Channels",
@@ -140,7 +141,8 @@ async def _handle_channel_list(interaction: discord.Interaction, params: dict):
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
-async def _handle_getting_started(interaction: discord.Interaction, params: dict):
+async def _handle_getting_started(interaction, params: dict):
+    import discord
     guild = interaction.guild
     embed = discord.Embed(
         title="Getting Started Guide",
@@ -191,12 +193,12 @@ async def _handle_getting_started(interaction: discord.Interaction, params: dict
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
-async def _handle_suggest(interaction: discord.Interaction, params: dict):
+async def _handle_suggest(interaction, params: dict):
     from Features.suggestion.suggest import SuggestionModal
     await interaction.response.send_modal(SuggestionModal("Bot Feature"))
 
 
-async def _handle_browse_drops(interaction: discord.Interaction, params: dict):
+async def _handle_browse_drops(interaction, params: dict):
     cog = interaction.client.get_cog("PrimeDrops")
     if cog is None:
         await interaction.response.send_message("Drops feature is not currently available.", ephemeral=True)
@@ -218,7 +220,8 @@ async def _handle_browse_drops(interaction: discord.Interaction, params: dict):
     await interaction.response.send_message(embed=embeds[0], ephemeral=True)
 
 
-async def _handle_server_rules(interaction: discord.Interaction, params: dict):
+async def _handle_server_rules(interaction, params: dict):
+    import discord
     guild = interaction.guild
     rules_ch = discord.utils.find(
         lambda c: 'rules' in c.name.lower() and isinstance(c, discord.TextChannel),
@@ -238,7 +241,8 @@ async def _handle_server_rules(interaction: discord.Interaction, params: dict):
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
-async def _handle_role_info(interaction: discord.Interaction, params: dict):
+async def _handle_role_info(interaction, params: dict):
+    import discord
     guild = interaction.guild
     roles = [r for r in guild.roles if r.name != "@everyone" and not r.is_bot_managed()]
     roles.sort(key=lambda r: r.position, reverse=True)
@@ -281,7 +285,7 @@ _HANDLERS = {
 # Dispatcher
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def dispatch_welcome_action(interaction: discord.Interaction) -> bool:
+async def dispatch_welcome_action(interaction) -> bool:
     """Dispatch a component interaction to the matching action handler.
 
     Returns True if handled, False if the custom_id doesn't match our prefix.
