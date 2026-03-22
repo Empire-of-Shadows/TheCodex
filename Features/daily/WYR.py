@@ -567,6 +567,8 @@ class WYR(commands.Cog):
                     last_post = await self.get_last_post_time(guild_id)
 
                     if last_post:
+                        if last_post.tzinfo is None:
+                            last_post = last_post.replace(tzinfo=timezone.utc)
                         hours_since_last = (datetime.now(timezone.utc) - last_post).total_seconds() / 3600
                         if hours_since_last < 20:
                             self._posted_today.add(today_key)

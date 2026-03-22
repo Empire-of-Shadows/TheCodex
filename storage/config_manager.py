@@ -584,6 +584,7 @@ class GuildConfigManager:
     def __init__(self, db_manager):
         self.db_manager = db_manager
         self._cache: Dict[int, GuildConfig] = {}
+        self._cache_time: Dict[int, datetime] = {}
         self._settings_cache: Dict[int, Dict] = {}
         self._collection = None
         self._initialized = False
@@ -609,8 +610,20 @@ class GuildConfigManager:
             await self.initialize()
 
         if use_cache and guild_id in self._cache:
-            logger.debug(f"Cache hit for guild {guild_id}")
-            return self._cache[guild_id]
+            # Check if DB has been updated externally (e.g. by dashboard)
+            cache_ts = self._cache_time.get(guild_id)
+            if cache_ts:
+                doc_meta = await self._collection.find_one(
+                    {"guild_id": guild_id}, projection={"updated_at": 1}
+                )
+                db_updated = doc_meta.get("updated_at") if doc_meta else None
+                if db_updated and isinstance(db_updated, datetime) and db_updated > cache_ts:
+                    logger.debug(f"Config stale for guild {guild_id}, refetching")
+                else:
+                    logger.debug(f"Cache hit for guild {guild_id}")
+                    return self._cache[guild_id]
+            else:
+                return self._cache[guild_id]
 
         try:
             doc = await self._collection.find_one({"guild_id": guild_id})
@@ -630,6 +643,7 @@ class GuildConfigManager:
 
             async with self._cache_lock:
                 self._cache[guild_id] = config
+                self._cache_time[guild_id] = datetime.now(timezone.utc)
 
             return config
 
@@ -670,6 +684,7 @@ class GuildConfigManager:
 
             async with self._cache_lock:
                 self._cache[config.guild_id] = config
+                self._cache_time[config.guild_id] = datetime.now(timezone.utc)
 
             return True
 
@@ -822,9 +837,10 @@ class GuildConfigManager:
         return await self.save_config(config)
 
     async def invalidate_cache(self, guild_id: int) -> None:
-        """Remove a guild from both caches, forcing fresh fetches."""
+        """Remove a guild from all caches, forcing fresh fetches."""
         async with self._cache_lock:
             self._cache.pop(guild_id, None)
+            self._cache_time.pop(guild_id, None)
             self._settings_cache.pop(guild_id, None)
             logger.debug(f"Cache invalidated for guild {guild_id}")
 
@@ -832,6 +848,7 @@ class GuildConfigManager:
         """Clear all cached configs and settings."""
         async with self._cache_lock:
             self._cache.clear()
+            self._cache_time.clear()
             self._settings_cache.clear()
             logger.info("All guild config cache cleared")
 

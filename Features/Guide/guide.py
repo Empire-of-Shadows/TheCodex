@@ -7,7 +7,7 @@ Guide content is stored as a JSON page tree in the guide_content collection.
 
 import re
 from typing import Dict, List, Optional, Tuple, Any, Union
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import discord
 from discord.ext import commands
@@ -229,16 +229,28 @@ class GuideManager:
 			return False
 
 	async def _get_guide(self, guild_id: int) -> Dict[str, Any]:
-		"""Get guide data with caching (30 min TTL)."""
+		"""Get guide data with caching. Checks DB updated_at to detect external changes."""
 		cache_ts = self._cache_time.get(guild_id)
-		if cache_ts and datetime.now() - cache_ts < timedelta(minutes=30):
-			cached = self._guide_cache.get(guild_id)
-			if cached is not None:
-				return cached
+		if cache_ts and self._guide_cache.get(guild_id) is not None:
+			# Lightweight check: has the DB document been updated since we cached?
+			doc = await guide_store._col.find_one(
+				{"guild_id": guild_id}, projection={"updated_at": 1}
+			)
+			db_updated = doc.get("updated_at") if doc else None
+			if db_updated:
+				# updated_at is a datetime stored in UTC
+				if isinstance(db_updated, datetime):
+					if db_updated <= cache_ts:
+						return self._guide_cache[guild_id]
+				# If we can't compare, fall through to refetch
+			else:
+				# No updated_at in DB — trust cache for 30 min
+				if datetime.now(timezone.utc) - cache_ts < timedelta(minutes=30):
+					return self._guide_cache[guild_id]
 
 		data = await guide_store.get_or_create_guide(guild_id)
 		self._guide_cache[guild_id] = data
-		self._cache_time[guild_id] = datetime.now()
+		self._cache_time[guild_id] = datetime.now(timezone.utc)
 		self.search_engine.index_guide(data, guild_id)
 		return data
 
