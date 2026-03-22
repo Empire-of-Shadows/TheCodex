@@ -1,11 +1,8 @@
-import os
 import asyncio
-from typing import List, Dict, Optional, Set
-from datetime import datetime, timezone, timedelta
+from typing import List, Dict, Optional
+from datetime import datetime, timezone
 import discord
 import pendulum
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase, AsyncIOMotorCollection
-import logging
 from pymongo import UpdateOne
 from collections import defaultdict
 
@@ -15,24 +12,15 @@ logger = get_logger("GuildCacheManager")
 
 
 class GuildCacheManager:
-	def __init__(self, mongo_uri: str):
+	def __init__(self, db_manager):
 		"""
-		Initialize the cache manager with direct database connection.
+		Initialize the cache manager using the centralized DatabaseManager.
 
 		Args:
-			mongo_uri: MongoDB connection URI for the cache database
+			db_manager: Initialized DatabaseManager instance providing CollectionManager access
 		"""
-		self.mongo_uri = mongo_uri
-		self._client: Optional[AsyncIOMotorClient] = None
-		self._db: Optional[AsyncIOMotorDatabase] = None
-		self._channels: Optional[AsyncIOMotorCollection] = None
-		self._servers: Optional[AsyncIOMotorCollection] = None
-		self._roles: Optional[AsyncIOMotorCollection] = None
-		self._members: Optional[AsyncIOMotorCollection] = None
-		self._analytics: Optional[AsyncIOMotorCollection] = None  # New analytics collection
-		self._events: Optional[AsyncIOMotorCollection] = None  # New events tracking collection
-		self._cache_locks = {}  # Per-guild locks for thread safety
-		self._initialized = False
+		self.db_manager = db_manager
+		self._cache_locks = {}
 
 		# Enhanced real-time cache for frequently accessed data
 		self._memory_cache = {
@@ -42,101 +30,31 @@ class GuildCacheManager:
 			'recent_events': defaultdict(list)
 		}
 
-	async def initialize(self):
-		"""Initialize the database connection and collections."""
-		if self._initialized:
-			return
-
-		try:
-			self._client = AsyncIOMotorClient(self.mongo_uri)
-			self._db = self._client["ServerData"]
-
-			# Initialize collections
-			self._channels = self._db["Channels"]
-			self._servers = self._db["Guilds"]
-			self._members = self._db["Members"]
-			self._roles = self._db["Roles"]
-			self._analytics = self._db["Analytics"]
-			self._events = self._db["Events"]
-
-			# Test the connection
-			await self._client.admin.command('ping')
-
-			# Create indexes for better performance
-			await self._create_indexes()
-
-			self._initialized = True
-			logger.info("GuildCacheManager database connection initialized successfully")
-
-		except Exception as e:
-			logger.error(f"Failed to initialize GuildCacheManager database connection: {e}")
-			raise
-
-	async def _create_indexes(self):
-		"""Create database indexes for optimal performance"""
-		try:
-			# Guild-based indexes
-			await self._channels.create_index([("guild_id", 1), ("type", 1)])
-			await self._members.create_index([("guild_id", 1), ("bot", 1)])
-			await self._roles.create_index([("guild_id", 1), ("position", 1)])
-			await self._analytics.create_index([("guild_id", 1), ("date", -1)])
-			await self._events.create_index([("guild_id", 1), ("timestamp", -1)])
-
-			# Time-based indexes for analytics
-			await self._analytics.create_index([("date", -1)])
-			await self._events.create_index([("timestamp", -1)])
-
-			logger.debug("Database indexes created successfully")
-		except Exception as e:
-			logger.warning(f"Error creating indexes: {e}")
-
-	async def close(self):
-		"""Close the database connection."""
-		if self._client:
-			self._client.close()
-			self._initialized = False
-			logger.info("GuildCacheManager database connection closed")
-
-	def _ensure_initialized(self):
-		"""Ensure the database connection is initialized."""
-		if not self._initialized:
-			raise RuntimeError("GuildCacheManager not initialized. Call initialize() first.")
+	# --- Internal collection accessors (via db_manager) ---
 
 	@property
-	def channels(self) -> AsyncIOMotorCollection:
-		"""Get the channels collection."""
-		self._ensure_initialized()
-		return self._channels
+	def _guilds(self):
+		return self.db_manager.serverdata_guilds
 
 	@property
-	def servers(self) -> AsyncIOMotorCollection:
-		"""Get the servers collection."""
-		self._ensure_initialized()
-		return self._servers
+	def _channels(self):
+		return self.db_manager.serverdata_channels
 
 	@property
-	def roles(self) -> AsyncIOMotorCollection:
-		"""Get the roles collection."""
-		self._ensure_initialized()
-		return self._roles
+	def _members(self):
+		return self.db_manager.serverdata_members
 
 	@property
-	def members(self) -> AsyncIOMotorCollection:
-		"""Get the members collection."""
-		self._ensure_initialized()
-		return self._members
+	def _roles(self):
+		return self.db_manager.serverdata_roles
 
 	@property
-	def analytics(self) -> AsyncIOMotorCollection:
-		"""Get the analytics collection."""
-		self._ensure_initialized()
-		return self._analytics
+	def _analytics(self):
+		return self.db_manager.serverdata_analytics
 
 	@property
-	def events(self) -> AsyncIOMotorCollection:
-		"""Get the events collection."""
-		self._ensure_initialized()
-		return self._events
+	def _events(self):
+		return self.db_manager.serverdata_events
 
 	def _get_guild_lock(self, guild_id: int) -> asyncio.Lock:
 		"""Get or create a lock for a specific guild to prevent race conditions."""
@@ -146,8 +64,6 @@ class GuildCacheManager:
 
 	async def cache_all(self, guild: discord.Guild, force_refresh: bool = False):
 		"""Cache all guild data with optional force refresh and better error handling."""
-		self._ensure_initialized()
-
 		async with self._get_guild_lock(guild.id):
 			try:
 				logger.info(f"Starting cache operation for guild {guild.name} ({guild.id})")
@@ -176,9 +92,9 @@ class GuildCacheManager:
 	async def _should_refresh_cache(self, guild: discord.Guild) -> bool:
 		"""Check if cache needs refreshing based on last update time."""
 		try:
-			last_cached = await self.servers.find_one(
+			last_cached = await self._guilds.find_one(
 				{"id": guild.id},
-				{"updated_at": 1}
+				projection={"updated_at": 1}
 			)
 
 			if not last_cached or "updated_at" not in last_cached:
@@ -229,8 +145,7 @@ class GuildCacheManager:
 				"premium_subscription_count": guild.premium_subscription_count,
 				"features": features,
 				"created_at": guild.created_at.isoformat(),
-				"updated_at": pendulum.now("America/Chicago").isoformat(),
-				"cache_version": "3.0",  # Updated version
+				"cache_version": "3.0",
 
 				# Enhanced metadata
 				"total_channels": len(guild.channels),
@@ -245,7 +160,7 @@ class GuildCacheManager:
 				"preferred_locale": str(guild.preferred_locale) if guild.preferred_locale else None,
 			}
 
-			await self.servers.update_one(
+			await self._guilds.update_one(
 				{"id": guild.id},
 				{"$set": data},
 				upsert=True
@@ -309,7 +224,6 @@ class GuildCacheManager:
 						"position": channel.position,
 						"permissions": permissions,
 						"created_at": channel.created_at.isoformat(),
-						"updated_at": pendulum.now("America/Chicago").isoformat(),
 					}
 
 					# Add category-specific data
@@ -324,7 +238,7 @@ class GuildCacheManager:
 							"slowmode_delay": channel.slowmode_delay,
 							"nsfw": channel.nsfw,
 							"last_message_id": channel.last_message_id,
-							"message_history_enabled": True,  # Assume enabled unless proven otherwise
+							"message_history_enabled": True,
 						})
 
 						# Cache active threads if any
@@ -381,7 +295,7 @@ class GuildCacheManager:
 					for ch in cached_channels
 				]
 
-				await self.channels.bulk_write(operations, ordered=False)
+				await self._channels.bulk_write(operations, ordered=False)
 				logger.debug(f"Cached {len(cached_channels)} channels for {guild.name}")
 
 		except Exception as e:
@@ -431,7 +345,6 @@ class GuildCacheManager:
 						"has_moderation_permissions": has_moderation_perms,
 						"member_count": len(role.members),
 						"created_at": role.created_at.isoformat(),
-						"updated_at": pendulum.now("America/Chicago").isoformat(),
 
 						# Additional metadata
 						"display_icon": str(role.display_icon) if hasattr(role,
@@ -456,7 +369,7 @@ class GuildCacheManager:
 					for role in cached_roles
 				]
 
-				await self.roles.bulk_write(operations, ordered=False)
+				await self._roles.bulk_write(operations, ordered=False)
 				logger.debug(f"Cached {len(cached_roles)} roles for {guild.name}")
 
 		except Exception as e:
@@ -507,7 +420,6 @@ class GuildCacheManager:
 						"created_at": member.created_at.isoformat(),
 						"account_age_days": account_age,
 						"suspicious_indicators": suspicious_indicators,
-						"updated_at": pendulum.now("America/Chicago").isoformat(),
 
 						# Enhanced metadata
 						"is_owner": member.id == guild.owner_id,
@@ -553,7 +465,7 @@ class GuildCacheManager:
 						for member in chunk
 					]
 
-					await self.members.bulk_write(operations, ordered=False)
+					await self._members.bulk_write(operations, ordered=False)
 
 				logger.debug(f"Cached {len(cached_members)} members for {guild.name}")
 
@@ -631,7 +543,7 @@ class GuildCacheManager:
 				"premium_tier": guild.premium_tier
 			}
 
-			await self.analytics.update_one(
+			await self._analytics.update_one(
 				{"guild_id": guild.id, "date": today},
 				{"$set": analytics_data},
 				upsert=True
@@ -652,7 +564,7 @@ class GuildCacheManager:
 				"data": event_data
 			}
 
-			await self.events.insert_one(event_record)
+			await self._events.create_one(event_record)
 
 			# Keep recent events in memory cache
 			self._memory_cache['recent_events'][guild_id].append(event_record)
@@ -673,15 +585,13 @@ class GuildCacheManager:
 			start_date = end_date.subtract(days=days)
 
 			# Get events in date range
-			events_cursor = self.events.find({
+			events = await self._events.find_many({
 				"guild_id": guild_id,
 				"timestamp": {
 					"$gte": start_date.isoformat(),
 					"$lte": end_date.isoformat()
 				}
 			})
-
-			events = await events_cursor.to_list(length=None)
 
 			# Aggregate event data
 			event_counts = defaultdict(int)
@@ -703,28 +613,26 @@ class GuildCacheManager:
 
 	async def delete_guild(self, guild_id: int):
 		"""Enhanced guild deletion with better logging and cleanup."""
-		self._ensure_initialized()
-
 		async with self._get_guild_lock(guild_id):
 			try:
 				logger.info(f"Starting deletion of cached data for guild {guild_id}")
 
 				# Get counts before deletion for logging
-				server_count = await self.servers.count_documents({"id": guild_id})
-				channel_count = await self.channels.count_documents({"guild_id": guild_id})
-				role_count = await self.roles.count_documents({"guild_id": guild_id})
-				member_count = await self.members.count_documents({"guild_id": guild_id})
-				analytics_count = await self.analytics.count_documents({"guild_id": guild_id})
-				events_count = await self.events.count_documents({"guild_id": guild_id})
+				server_count = await self._guilds.count_documents({"id": guild_id})
+				channel_count = await self._channels.count_documents({"guild_id": guild_id})
+				role_count = await self._roles.count_documents({"guild_id": guild_id})
+				member_count = await self._members.count_documents({"guild_id": guild_id})
+				analytics_count = await self._analytics.count_documents({"guild_id": guild_id})
+				events_count = await self._events.count_documents({"guild_id": guild_id})
 
 				# Perform deletions concurrently
 				results = await asyncio.gather(
-					self.servers.delete_many({"id": guild_id}),
-					self.channels.delete_many({"guild_id": guild_id}),
-					self.roles.delete_many({"guild_id": guild_id}),
-					self.members.delete_many({"guild_id": guild_id}),
-					self.analytics.delete_many({"guild_id": guild_id}),
-					self.events.delete_many({"guild_id": guild_id}),
+					self._guilds.delete_many({"id": guild_id}),
+					self._channels.delete_many({"guild_id": guild_id}),
+					self._roles.delete_many({"guild_id": guild_id}),
+					self._members.delete_many({"guild_id": guild_id}),
+					self._analytics.delete_many({"guild_id": guild_id}),
+					self._events.delete_many({"guild_id": guild_id}),
 					return_exceptions=True
 				)
 
@@ -736,10 +644,8 @@ class GuildCacheManager:
 				)
 
 				# Clean up memory cache
-				if guild_id in self._memory_cache['guild_stats']:
-					del self._memory_cache['guild_stats'][guild_id]
-				if guild_id in self._memory_cache['recent_events']:
-					del self._memory_cache['recent_events'][guild_id]
+				self._memory_cache['guild_stats'].pop(guild_id, None)
+				self._memory_cache['recent_events'].pop(guild_id, None)
 
 				# Clean up the lock
 				if guild_id in self._cache_locks:
@@ -762,7 +668,7 @@ class GuildCacheManager:
 					return memory_data
 
 			# Fallback to database
-			return await self.servers.find_one({"id": guild_id})
+			return await self._guilds.find_one({"id": guild_id})
 		except Exception as e:
 			logger.error(f"Error retrieving cached guild info for {guild_id}: {e}")
 			return None
@@ -774,8 +680,7 @@ class GuildCacheManager:
 			if channel_type:
 				query["type"] = channel_type
 
-			cursor = self.channels.find(query).sort("position", 1)
-			return await cursor.to_list(length=None)
+			return await self._channels.find_many(query, sort=[("position", 1)])
 		except Exception as e:
 			logger.error(f"Error retrieving cached channels for {guild_id}: {e}")
 			return []
@@ -783,7 +688,7 @@ class GuildCacheManager:
 	async def get_cached_member(self, guild_id: int, user_id: int) -> Optional[Dict]:
 		"""Retrieve a specific cached member."""
 		try:
-			return await self.members.find_one({"guild_id": guild_id, "id": user_id})
+			return await self._members.find_one({"guild_id": guild_id, "id": user_id})
 		except Exception as e:
 			logger.error(f"Error retrieving cached member {user_id} for guild {guild_id}: {e}")
 			return None
@@ -792,29 +697,28 @@ class GuildCacheManager:
 		"""Get comprehensive statistics about a cached guild."""
 		try:
 			stats = {
-				"total_channels": await self.channels.count_documents({"guild_id": guild_id}),
-				"total_roles": await self.roles.count_documents({"guild_id": guild_id}),
-				"total_members": await self.members.count_documents({"guild_id": guild_id}),
-				"bot_members": await self.members.count_documents({"guild_id": guild_id, "bot": True}),
-				"human_members": await self.members.count_documents({"guild_id": guild_id, "bot": False}),
-				"suspicious_members": await self.members.count_documents({
+				"total_channels": await self._channels.count_documents({"guild_id": guild_id}),
+				"total_roles": await self._roles.count_documents({"guild_id": guild_id}),
+				"total_members": await self._members.count_documents({"guild_id": guild_id}),
+				"bot_members": await self._members.count_documents({"guild_id": guild_id, "bot": True}),
+				"human_members": await self._members.count_documents({"guild_id": guild_id, "bot": False}),
+				"suspicious_members": await self._members.count_documents({
 					"guild_id": guild_id,
 					"suspicious_indicators": {"$exists": True, "$not": {"$size": 0}}
 				}),
 			}
 
 			# Get channel type breakdown
-			channel_types = await self.channels.aggregate([
+			channel_types = await self._channels.aggregate([
 				{"$match": {"guild_id": guild_id}},
 				{"$group": {"_id": "$type", "count": {"$sum": 1}}}
-			]).to_list(length=None)
+			])
 
 			stats["channel_types"] = {ct["_id"]: ct["count"] for ct in channel_types}
 
 			# Get latest analytics
-			latest_analytics = await self.analytics.find_one(
+			latest_analytics = await self._analytics.find_one(
 				{"guild_id": guild_id},
-				sort=[("timestamp", -1)]
 			)
 
 			if latest_analytics:
@@ -842,7 +746,7 @@ class GuildCacheManager:
 				}}
 			]
 
-			result = await self.members.aggregate(pipeline).to_list(length=1)
+			result = await self._members.aggregate(pipeline)
 
 			if result:
 				insights = result[0]
@@ -862,9 +766,9 @@ class GuildCacheManager:
 			cutoff_iso = cutoff_time.isoformat()
 
 			# Clean up stale guild data
-			stale_guilds = await self.servers.find(
+			stale_guilds = await self._guilds.find_many(
 				{"updated_at": {"$lt": cutoff_iso}}
-			).to_list(length=None)
+			)
 
 			deleted_count = 0
 			for guild_data in stale_guilds:
@@ -873,50 +777,38 @@ class GuildCacheManager:
 
 			# Clean up old events (keep last 30 days)
 			old_events_cutoff = pendulum.now("America/Chicago").subtract(days=30).isoformat()
-			events_deleted = await self.events.delete_many({
+			events_deleted = await self._events.delete_many({
 				"timestamp": {"$lt": old_events_cutoff}
 			})
 
 			# Clean up old analytics (keep last 90 days)
 			old_analytics_cutoff = pendulum.now("America/Chicago").subtract(days=90).format('YYYY-MM-DD')
-			analytics_deleted = await self.analytics.delete_many({
+			analytics_deleted = await self._analytics.delete_many({
 				"date": {"$lt": old_analytics_cutoff}
 			})
 
 			logger.info(f"Cleaned up {deleted_count} stale guild caches, "
-						f"{events_deleted.deleted_count} old events, "
-						f"{analytics_deleted.deleted_count} old analytics")
+						f"{events_deleted} old events, "
+						f"{analytics_deleted} old analytics")
 			return deleted_count
 
 		except Exception as e:
 			logger.error(f"Error during cleanup of stale data: {e}")
 			return 0
 
-	async def __aenter__(self):
-		"""Async context manager entry."""
-		await self.initialize()
-		return self
 
-	async def __aexit__(self, exc_type, exc_val, exc_tb):
-		"""Async context manager exit."""
-		await self.close()
-
-
-# Factory function to create and initialize cache manager
-async def create_cache_manager(mongo_uri: str) -> GuildCacheManager:
+def create_cache_manager(db_manager) -> GuildCacheManager:
 	"""
-	Factory function to create and initialize a GuildCacheManager.
+	Factory function to create a GuildCacheManager backed by the centralized DatabaseManager.
 
 	Args:
-		mongo_uri: MongoDB connection URI for the cache database
+		db_manager: Initialized DatabaseManager instance
 
 	Returns:
-		Initialized GuildCacheManager instance
+		GuildCacheManager instance
 	"""
-	cache_manager = GuildCacheManager(mongo_uri)
-	await cache_manager.initialize()
-	return cache_manager
+	return GuildCacheManager(db_manager)
 
 
-# Global cache manager instance (will be initialized in sync.py)
+# Global cache manager instance (will be set in sync.py)
 cache_manager: Optional[GuildCacheManager] = None

@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 
 import discord
 from discord.ext import commands
-from fuzzywuzzy import fuzz
+from rapidfuzz import fuzz
 
 from utils.bot import bot
 from utils.logger import get_logger, PerformanceLogger

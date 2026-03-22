@@ -178,6 +178,67 @@ class DefineCollections:
             ]
         )
 
+        # Guild Cache collections (channels, members, roles, analytics, events)
+        self._collection_configs['serverdata_guilds'] = CollectionConfig(
+            name='Guilds',
+            database='ServerData',
+            connection='primary',
+            indexes=[
+                IndexModel([('id', 1)], unique=True, name='id_unique'),
+                IndexModel([('updated_at', -1)], name='updated_at_desc'),
+            ]
+        )
+
+        self._collection_configs['serverdata_channels'] = CollectionConfig(
+            name='Channels',
+            database='ServerData',
+            connection='primary',
+            indexes=[
+                IndexModel([('guild_id', 1), ('id', 1)], unique=True, name='guild_channel_unique'),
+                IndexModel([('guild_id', 1), ('type', 1)], name='guild_type'),
+            ]
+        )
+
+        self._collection_configs['serverdata_members'] = CollectionConfig(
+            name='Members',
+            database='ServerData',
+            connection='primary',
+            indexes=[
+                IndexModel([('guild_id', 1), ('id', 1)], unique=True, name='guild_member_unique'),
+                IndexModel([('guild_id', 1), ('bot', 1)], name='guild_bot'),
+            ]
+        )
+
+        self._collection_configs['serverdata_roles'] = CollectionConfig(
+            name='Roles',
+            database='ServerData',
+            connection='primary',
+            indexes=[
+                IndexModel([('guild_id', 1), ('id', 1)], unique=True, name='guild_role_unique'),
+                IndexModel([('guild_id', 1), ('position', 1)], name='guild_position'),
+            ]
+        )
+
+        self._collection_configs['serverdata_analytics'] = CollectionConfig(
+            name='Analytics',
+            database='ServerData',
+            connection='primary',
+            indexes=[
+                IndexModel([('guild_id', 1), ('date', -1)], unique=True, name='guild_date_unique'),
+                IndexModel([('date', -1)], name='date_desc'),
+            ]
+        )
+
+        self._collection_configs['serverdata_events'] = CollectionConfig(
+            name='Events',
+            database='ServerData',
+            connection='primary',
+            indexes=[
+                IndexModel([('guild_id', 1), ('timestamp', -1)], name='guild_timestamp'),
+                IndexModel([('timestamp', -1)], name='timestamp_desc'),
+            ]
+        )
+
         # Whitelist collections
         self._collection_configs['serverdata_whitelist'] = CollectionConfig(
             name='Whitelist',

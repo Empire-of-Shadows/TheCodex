@@ -470,6 +470,15 @@ class CollectionManager:
             index_names = await self.collection.create_indexes(self.config.indexes)
             logger.info(f"Created {len(index_names)} indexes for {self.name}: {index_names}")
             return index_names
+        except OperationFailure as e:
+            if e.code == 85:  # IndexOptionsConflict
+                logger.warning(f"Index conflict in {self.name}, dropping and recreating indexes")
+                await self.collection.drop_indexes()
+                index_names = await self.collection.create_indexes(self.config.indexes)
+                logger.info(f"Recreated {len(index_names)} indexes for {self.name}: {index_names}")
+                return index_names
+            logger.error(f"Error creating indexes for {self.name}: {e}")
+            raise
         except Exception as e:
             logger.error(f"Error creating indexes for {self.name}: {e}")
             raise

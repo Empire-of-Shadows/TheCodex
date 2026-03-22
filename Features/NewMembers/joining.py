@@ -5,7 +5,7 @@ from collections import defaultdict
 import aiohttp
 import discord
 from utils.bot import bot, TOKEN, s
-from utils.cache import cache_manager
+from storage.cache import GuildCacheManager
 from storage.config_manager import get_config, GuildConfig
 from storage.database_manager import db_manager
 from storage.config_manager import get_guild_config_manager
@@ -15,9 +15,8 @@ from utils.logger import get_logger
 class GuildEventHandler:
     """Handles all guild-related events with enhanced caching and rate limiting"""
 
-    def __init__(self, bot, cache_manager):
+    def __init__(self, bot):
         self.bot = bot
-        self.cache_manager = cache_manager
         self.logger = get_logger("GuildEventHandler")
 
         # Enhanced guild-specific rate limiting storage
@@ -64,6 +63,11 @@ class GuildEventHandler:
             'max_dms_per_day': 5,
             'block_duration_hours': 24,
         }
+
+    @property
+    def cache_manager(self) -> 'GuildCacheManager':
+        """Lazily resolve cache_manager from bot (set by sync.py after init)."""
+        return self.bot.cache_manager
 
     async def _count_human_members(self, guild: discord.Guild) -> int:
         """Count only human (non-bot) members in the guild"""
@@ -605,6 +609,16 @@ class GuildEventHandler:
             totals["color_color_sets"] = await col("color_color_sets").delete_many({"guild_id": guild_id})
             totals["color_color_set_assignments"] = await col("color_color_set_assignments").delete_many({"guild_id": guild_id})
 
+            # --- ServerData cache collections ---
+            totals["serverdata_guilds"] = await col("serverdata_guilds").delete_many({"id": guild_id})
+            totals["serverdata_channels"] = await col("serverdata_channels").delete_many({"guild_id": guild_id})
+            totals["serverdata_members"] = await col("serverdata_members").delete_many({"guild_id": guild_id})
+            totals["serverdata_roles"] = await col("serverdata_roles").delete_many({"guild_id": guild_id})
+            totals["serverdata_analytics"] = await col("serverdata_analytics").delete_many({"guild_id": guild_id})
+            totals["serverdata_events"] = await col("serverdata_events").delete_many({"guild_id": guild_id})
+
+            # --- Guide content ---
+            totals["guide_content"] = await col("guide_content").delete_many({"guild_id": guild_id})
 
             deleted_total = sum(totals.values())
             self.logger.info(
@@ -620,7 +634,7 @@ class GuildEventHandler:
 
 
 # Create the guild event handler instance
-guild_handler = GuildEventHandler(bot, cache_manager)
+guild_handler = GuildEventHandler(bot)
 
 
 # Keep your existing event handlers but delegate to the class
@@ -721,6 +735,10 @@ async def on_guild_remove(guild):
         guild_handler.logger.info(f"Cleared memory cache for guild {guild.id}")
     # Remove all guild-scoped data from the database
     await guild_handler._cleanup_guild_data(guild.id, guild.name)
+    # Clean up cache_manager in-memory data
+    if guild_handler.cache_manager and hasattr(guild_handler.cache_manager, '_memory_cache'):
+        guild_handler.cache_manager._memory_cache['guild_stats'].pop(guild.id, None)
+        guild_handler.cache_manager._memory_cache['recent_events'].pop(guild.id, None)
 
 @bot.event
 async def on_guild_update(before, after):

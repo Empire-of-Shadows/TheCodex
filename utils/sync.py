@@ -3,7 +3,6 @@ import os
 from pathlib import Path
 
 from discord.ext import commands
-from motor.motor_asyncio import AsyncIOMotorClient
 from tabulate import tabulate
 from dotenv import load_dotenv
 
@@ -12,7 +11,6 @@ from utils.logger import get_logger
 
 # Load environment variables and logger setup
 load_dotenv()
-MONGO_URI = os.getenv("IMPERIALCODEX")
 logger = get_logger("Sync")
 
 
@@ -74,29 +72,25 @@ async def attach_databases():
 	failed_logs = []
 
 	try:
-
-		# # MongoDB Client 2 - E-commerce Database
-		# mongo_client2 = AsyncIOMotorClient(MONGO_URI2)
-		# bot.db_ecom = mongo_client2["Ecom-Server"]
-        #
-		# result, is_success = await attach_attribute("settings", bot.db_ecom["Settings"])
-		# (success_logs if is_success else failed_logs).append(result)
-		# result, is_success = await attach_attribute("Emembers", bot.db_ecom["Users"])
-		# (success_logs if is_success else failed_logs).append(result)
-		# result, is_success = await attach_attribute("Eboosts", bot.db_ecom["Boosts"])
-		# (success_logs if is_success else failed_logs).append(result)
-		# result, is_success = await attach_attribute("power-ups", bot.db_ecom["power-ups"])
-		# (success_logs if is_success else failed_logs).append(result)
-
-		# Initialize Cache Manager
-		from utils.cache import create_cache_manager
+		# Initialize DatabaseManager first (all other managers depend on it)
+		from storage.database_manager import db_manager
 		try:
-			cache_manager = await create_cache_manager(MONGO_URI)
+			await db_manager.initialize()
+			result, is_success = await attach_attribute("db_manager", db_manager)
+			(success_logs if is_success else failed_logs).append(result)
+		except Exception as db_error:
+			failed_logs.append(f"{s}❌ db_manager → Error: {db_error}\n")
+			raise  # Can't continue without db_manager
+
+		# Initialize Cache Manager (uses db_manager's collections)
+		from storage.cache import create_cache_manager
+		try:
+			cache_manager = create_cache_manager(db_manager)
 			result, is_success = await attach_attribute("cache_manager", cache_manager)
 			(success_logs if is_success else failed_logs).append(result)
 
 			# Update global cache manager reference
-			import utils.cache as cache_module
+			import storage.cache as cache_module
 			cache_module.cache_manager = cache_manager
 
 		except Exception as cache_error:
@@ -104,8 +98,6 @@ async def attach_databases():
 
 		# Initialize unified GuildConfigManager (handles both structured config and flat settings)
 		try:
-			from storage.database_manager import db_manager
-			await db_manager.initialize()
 			from storage.config_manager import get_guild_config_manager
 			guild_config_manager = await get_guild_config_manager(db_manager)
 			result, is_success = await attach_attribute("guild_config_manager", guild_config_manager)

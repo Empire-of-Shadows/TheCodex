@@ -27,3 +27,33 @@ class DatabaseProperties:
         """Get Suggestions Votes collection manager."""
         return self.get_collection_manager('suggestions_votes')
 
+    @property
+    def serverdata_guilds(self) -> CollectionManager:
+        """Get ServerData Guilds collection manager."""
+        return self.get_collection_manager('serverdata_guilds')
+
+    @property
+    def serverdata_channels(self) -> CollectionManager:
+        """Get ServerData Channels collection manager."""
+        return self.get_collection_manager('serverdata_channels')
+
+    @property
+    def serverdata_members(self) -> CollectionManager:
+        """Get ServerData Members collection manager."""
+        return self.get_collection_manager('serverdata_members')
+
+    @property
+    def serverdata_roles(self) -> CollectionManager:
+        """Get ServerData Roles collection manager."""
+        return self.get_collection_manager('serverdata_roles')
+
+    @property
+    def serverdata_analytics(self) -> CollectionManager:
+        """Get ServerData Analytics collection manager."""
+        return self.get_collection_manager('serverdata_analytics')
+
+    @property
+    def serverdata_events(self) -> CollectionManager:
+        """Get ServerData Events collection manager."""
+        return self.get_collection_manager('serverdata_events')
+
