@@ -240,6 +240,8 @@ class GuideManager:
 			if db_updated:
 				# updated_at is a datetime stored in UTC
 				if isinstance(db_updated, datetime):
+					if db_updated.tzinfo is None:
+						db_updated = db_updated.replace(tzinfo=timezone.utc)
 					if db_updated <= cache_ts:
 						return self._guide_cache[guild_id]
 				# If we can't compare, fall through to refetch

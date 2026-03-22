@@ -617,8 +617,14 @@ class GuildConfigManager:
                     {"guild_id": guild_id}, projection={"updated_at": 1}
                 )
                 db_updated = doc_meta.get("updated_at") if doc_meta else None
-                if db_updated and isinstance(db_updated, datetime) and db_updated > cache_ts:
-                    logger.debug(f"Config stale for guild {guild_id}, refetching")
+                if db_updated and isinstance(db_updated, datetime):
+                    if db_updated.tzinfo is None:
+                        db_updated = db_updated.replace(tzinfo=timezone.utc)
+                    if db_updated > cache_ts:
+                        logger.debug(f"Config stale for guild {guild_id}, refetching")
+                    else:
+                        logger.debug(f"Cache hit for guild {guild_id}")
+                        return self._cache[guild_id]
                 else:
                     logger.debug(f"Cache hit for guild {guild_id}")
                     return self._cache[guild_id]

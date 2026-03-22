@@ -88,6 +88,9 @@ async def put_welcome(guild_id: str, body: dict, session: dict = Depends(get_cur
 
     await db.guild_config().update_one(
         {"guild_id": int(guild_id)},
-        {"$set": {"new_members.welcome_components": welcome_data}},
+        {"$set": {
+            "new_members.welcome_components": welcome_data,
+            "updated_at": datetime.now(timezone.utc),
+        }},
     )
     return {"ok": True}
