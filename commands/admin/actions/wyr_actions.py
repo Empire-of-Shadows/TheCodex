@@ -298,6 +298,14 @@ class WYRConfigActions:
         return await gcm.save_config(config)
 
     @staticmethod
+    async def set_skip_initial_post(guild_id: int, skip: bool) -> bool:
+        """Set the skip_initial_post flag so the first catch-up post is suppressed."""
+        gcm = await _get_gcm()
+        config = await gcm.get_config(guild_id)
+        config.wyr["skip_initial_post"] = skip
+        return await gcm.save_config(config)
+
+    @staticmethod
     async def has_channel_configured(guild_id: int) -> bool:
         """Return True if a WYR channel has been saved for this guild."""
         gcm = await _get_gcm()

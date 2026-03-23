@@ -10,6 +10,8 @@ import json
 import os
 from functools import partial
 
+import discord
+
 from .views.panel_engine import PanelNode
 from .views.embed_views import TIER_NAMES, TIER_LABELS, FEATURE_OPTIONS
 from .actions.embed_config_actions import EmbedConfigActions
@@ -83,6 +85,30 @@ def _guide_template_data() -> tuple[bytes, str]:
     return json.dumps(data, indent=2, ensure_ascii=False).encode("utf-8"), "guide_template.json"
 
 
+class _SkipInitialPostView(discord.ui.View):
+    """One-shot view attached to the WYR auto-enable message.
+
+    Lets the admin skip the first catch-up post that would fire immediately
+    when WYR is enabled after the scheduled time has already passed today.
+    """
+
+    def __init__(self, guild_id: int):
+        super().__init__(timeout=120)
+        self.guild_id = guild_id
+
+    @discord.ui.button(label="Skip First Post", style=discord.ButtonStyle.secondary)
+    async def skip_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await WYRConfigActions.set_skip_initial_post(self.guild_id, True)
+        button.disabled = True
+        button.label = "First Post Skipped"
+        await interaction.response.edit_message(view=self)
+        await interaction.followup.send(
+            "The first WYR post has been skipped. Posts will begin at the next scheduled time.",
+            ephemeral=True,
+        )
+        self.stop()
+
+
 _FEATURE_AUTO_ENABLE = {
     "embed": {
         "get_enabled": EmbedConfigActions.get_enabled,
@@ -102,9 +128,12 @@ _FEATURE_AUTO_ENABLE = {
         "invalidate":  setup_gatekeeper.invalidate_wyr,
         "message": (
             "✅ **WYR is now enabled.** Questions will post daily at the configured time. "
+            "If the scheduled time has already passed today, a post will be sent shortly. "
+            "Use the button below to skip that first post if you'd prefer to wait.\n\n"
             "Use **WYR Schedule** to set the posting time and **WYR Thread Settings** to "
             "customize how discussions are created."
         ),
+        "view_factory": lambda guild_id: _SkipInitialPostView(guild_id),
     },
     "new_members": {
         "get_enabled": NewMemberActions.get_enabled,
@@ -141,7 +170,9 @@ async def _auto_enable_feature_if_ready(
 
     cfg["invalidate"](guild_id)
 
-    await interaction.followup.send(cfg["message"], ephemeral=True)
+    view_factory = cfg.get("view_factory")
+    view = view_factory(guild_id) if view_factory else None
+    await interaction.followup.send(cfg["message"], view=view, ephemeral=True)
 
 
 async def _warn_unconfigured_feature_tiers(interaction, guild_id: int, selected_tiers: list) -> None:

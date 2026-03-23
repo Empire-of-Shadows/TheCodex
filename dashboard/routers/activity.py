@@ -23,7 +23,7 @@ router = APIRouter(tags=["activity"])
 async def _get_wyr_activity(user_id: int, guild_ids: list[int]) -> dict:
     """Aggregate WYR voting stats for the user."""
     pipeline = [
-        {"$match": {"user_id": user_id}},
+        {"$match": {"user_id": str(user_id)}},
         {"$group": {
             "_id": None,
             "total_votes": {"$sum": {"$ifNull": ["$total_votes", 0]}},

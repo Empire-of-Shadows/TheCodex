@@ -563,20 +563,28 @@ class WYR(commands.Cog):
                     if not (scheduled_now or scheduled_passed):
                         continue
 
-                    # Check DB for the last post time — enforces 20h cooldown
+                    # Check DB for the last post time — skip if already posted today
                     last_post = await self.get_last_post_time(guild_id)
 
                     if last_post:
                         if last_post.tzinfo is None:
                             last_post = last_post.replace(tzinfo=timezone.utc)
-                        hours_since_last = (datetime.now(timezone.utc) - last_post).total_seconds() / 3600
-                        if hours_since_last < 20:
+                        last_post_local = last_post.astimezone(tz)
+                        if last_post_local.date() == now.date():
                             self._posted_today.add(today_key)
                             logger.info(
-                                f"Skipping WYR for guild {guild_id}: last post was {hours_since_last:.1f}h ago "
-                                f"(minimum 20h cooldown)"
+                                f"Skipping WYR for guild {guild_id}: already posted today "
+                                f"({last_post_local.strftime('%Y-%m-%d %H:%M')} {tz_name})"
                             )
                             continue
+
+                    # First-time setup: allow admin to skip the initial catch-up post
+                    if not last_post and guild_config.wyr.get("skip_initial_post", False):
+                        self._posted_today.add(today_key)
+                        guild_config.wyr["skip_initial_post"] = False
+                        await config_mgr.save_config(guild_config)
+                        logger.info(f"Skipping initial WYR post for guild {guild_id} (skip_initial_post flag)")
+                        continue
 
                     self._posted_today.add(today_key)
 
