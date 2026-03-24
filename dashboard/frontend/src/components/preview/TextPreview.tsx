@@ -1,10 +1,11 @@
 import ReactMarkdown from "react-markdown";
+import remarkBreaks from "remark-breaks";
 
 export default function TextPreview({ content }: { content: string }) {
   if (!content) {
     return (
       <div className="dc-text">
-        <ReactMarkdown breaks>{"*Empty text*"}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[remarkBreaks]}>{"*Empty text*"}</ReactMarkdown>
       </div>
     );
   }
@@ -38,10 +39,10 @@ export default function TextPreview({ content }: { content: string }) {
       {segments.map((seg, i) =>
         seg.type === "subtext" ? (
           <div key={i} className="dc-subtext">
-            <ReactMarkdown breaks>{seg.text}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkBreaks]}>{seg.text}</ReactMarkdown>
           </div>
         ) : (
-          <ReactMarkdown key={i} breaks>{seg.text}</ReactMarkdown>
+          <ReactMarkdown key={i} remarkPlugins={[remarkBreaks]}>{seg.text}</ReactMarkdown>
         )
       )}
     </div>
