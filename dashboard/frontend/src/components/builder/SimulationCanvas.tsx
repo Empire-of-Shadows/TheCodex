@@ -6,6 +6,7 @@ import type {
 } from "../../api/types";
 import DiscordPreview from "../preview/DiscordPreview";
 import SelectPreview from "../preview/SelectPreview";
+import MessageChrome from "../preview/MessageChrome";
 import { GuideRootMenu, GuideBreadcrumb, GuideNavRow } from "../preview/GuideChrome";
 
 interface Props {
@@ -52,36 +53,40 @@ export default function SimulationCanvas({
 }: Props) {
   if (mode === "guide") {
     return (
-      <div className="discord-preview">
-        <div className="canvas-drop-zone">
-          {simulationPageId === null ? (
-            <GuideRootMenu pages={pages} accentColor={accentColor} onInteract={onInteract} />
-          ) : (
-            <GuidePageView
-              pages={pages}
-              pageId={simulationPageId}
-              accentColor={accentColor}
-              onInteract={onInteract}
-            />
-          )}
+      <MessageChrome>
+        <div className="discord-preview">
+          <div className="canvas-drop-zone">
+            {simulationPageId === null ? (
+              <GuideRootMenu pages={pages} accentColor={accentColor} onInteract={onInteract} />
+            ) : (
+              <GuidePageView
+                pages={pages}
+                pageId={simulationPageId}
+                accentColor={accentColor}
+                onInteract={onInteract}
+              />
+            )}
+          </div>
         </div>
-      </div>
+      </MessageChrome>
     );
   }
 
   // Welcome mode
   return (
-    <div className="discord-preview">
-      <div className="canvas-drop-zone">
-        {components.length === 0 ? (
-          <div className="canvas-empty">No components to preview</div>
-        ) : (
-          components.map((comp, i) => (
-            <DiscordPreview key={comp._id || i} component={comp} onInteract={onInteract} />
-          ))
-        )}
+    <MessageChrome>
+      <div className="discord-preview">
+        <div className="canvas-drop-zone">
+          {components.length === 0 ? (
+            <div className="canvas-empty">No components to preview</div>
+          ) : (
+            components.map((comp, i) => (
+              <DiscordPreview key={comp._id || i} component={comp} onInteract={onInteract} />
+            ))
+          )}
+        </div>
       </div>
-    </div>
+    </MessageChrome>
   );
 }
 

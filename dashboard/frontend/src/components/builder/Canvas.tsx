@@ -2,6 +2,7 @@ import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import type { ComponentDef } from "../../api/types";
 import ComponentWrapper from "./ComponentWrapper";
+import MessageChrome from "../preview/MessageChrome";
 
 interface Props {
   components: ComponentDef[];
@@ -15,24 +16,26 @@ export default function Canvas({ components, selectedId, onSelect, onDelete, emp
   const { setNodeRef } = useDroppable({ id: "canvas" });
 
   return (
-    <div className="discord-preview" onClick={() => onSelect(null)}>
-      <div ref={setNodeRef} className="canvas-drop-zone">
-        {components.length === 0 ? (
-          <div className="canvas-empty">{emptyMessage || "Drop components here"}</div>
-        ) : (
-          <SortableContext items={components.map((c) => c._id)} strategy={verticalListSortingStrategy}>
-            {components.map((comp) => (
-              <ComponentWrapper
-                key={comp._id}
-                component={comp}
-                isSelected={selectedId === comp._id}
-                onSelect={() => onSelect(comp._id)}
-                onDelete={() => onDelete(comp._id)}
-              />
-            ))}
-          </SortableContext>
-        )}
+    <MessageChrome>
+      <div className="discord-preview" onClick={() => onSelect(null)}>
+        <div ref={setNodeRef} className="canvas-drop-zone">
+          {components.length === 0 ? (
+            <div className="canvas-empty">{emptyMessage || "Drop components here"}</div>
+          ) : (
+            <SortableContext items={components.map((c) => c._id)} strategy={verticalListSortingStrategy}>
+              {components.map((comp) => (
+                <ComponentWrapper
+                  key={comp._id}
+                  component={comp}
+                  isSelected={selectedId === comp._id}
+                  onSelect={() => onSelect(comp._id)}
+                  onDelete={() => onDelete(comp._id)}
+                />
+              ))}
+            </SortableContext>
+          )}
+        </div>
       </div>
-    </div>
+    </MessageChrome>
   );
 }

@@ -225,6 +225,7 @@ export default function BuilderPage() {
   const [simBreadcrumbs, setSimBreadcrumbs] = useState<string[]>([]);
   const [showDocs, setShowDocs] = useState(false);
   const [panelWidth, setPanelWidth] = useState(320);
+  const [canvasWidth, setCanvasWidth] = useState(520);
   const [guild, setGuild] = useState<Guild | null>(null);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -262,6 +263,33 @@ export default function BuilderPage() {
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
   }, [panelWidth]);
+
+  // ── Canvas preview resize ──────────────────────────────────────────────
+  const canvasResizing = useRef(false);
+
+  const onCanvasResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    canvasResizing.current = true;
+    const startX = e.clientX;
+    const startW = canvasWidth;
+
+    const onMove = (ev: MouseEvent) => {
+      if (!canvasResizing.current) return;
+      const delta = ev.clientX - startX;
+      setCanvasWidth(Math.min(800, Math.max(360, startW + delta)));
+    };
+    const onUp = () => {
+      canvasResizing.current = false;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }, [canvasWidth]);
 
   // ── Load data (one DB call on mount) ───────────────────────────────────
 
@@ -818,25 +846,31 @@ export default function BuilderPage() {
                 </span>
               )}
             </div>
-            <div className="builder-canvas">
-              {simulating ? (
-                <SimulationCanvas
-                  mode={mode}
-                  pages={latestPages}
-                  simulationPageId={simPageId}
-                  accentColor={accentColor || "#5865f2"}
-                  components={components}
-                  onInteract={handleSimInteraction}
-                />
-              ) : (
-                <Canvas
-                  components={components}
-                  selectedId={selectedId}
-                  onSelect={setSelectedId}
-                  onDelete={deleteComponent}
-                  emptyMessage={mode === "guide" && pages.length === 0 ? "Create a page first using the left sidebar" : undefined}
-                />
-              )}
+            <div
+              className="builder-canvas"
+              style={{ "--canvas-preview-width": `${canvasWidth}px` } as React.CSSProperties}
+            >
+              <div className="canvas-preview-container">
+                {simulating ? (
+                  <SimulationCanvas
+                    mode={mode}
+                    pages={latestPages}
+                    simulationPageId={simPageId}
+                    accentColor={accentColor || "#5865f2"}
+                    components={components}
+                    onInteract={handleSimInteraction}
+                  />
+                ) : (
+                  <Canvas
+                    components={components}
+                    selectedId={selectedId}
+                    onSelect={setSelectedId}
+                    onDelete={deleteComponent}
+                    emptyMessage={mode === "guide" && pages.length === 0 ? "Create a page first using the left sidebar" : undefined}
+                  />
+                )}
+                <div className="canvas-resize-handle" onMouseDown={onCanvasResizeStart} />
+              </div>
             </div>
           </div>
 
