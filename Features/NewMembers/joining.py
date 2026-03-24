@@ -490,7 +490,7 @@ class GuildEventHandler:
             layout_view = WelcomeRenderer.render(
                 welcome_components, member, member_number, analytics=analytics
             )
-            await channel.send(view=layout_view, silent=True)
+            await channel.send(view=layout_view)
 
             self.logger.info(f"\n{s}[WELCOME] Successfully sent welcome message for {member}\n")
 

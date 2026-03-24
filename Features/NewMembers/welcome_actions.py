@@ -253,7 +253,7 @@ async def _handle_role_info(interaction, params: dict):
 
     # Cap at 20 to avoid embed limits
     displayed = roles[:20]
-    role_lines = [f"{r.mention} — {r.member_count} member{'s' if r.member_count != 1 else ''}" for r in displayed]
+    role_lines = [f"{r.mention} — {len(r.members)} member{'s' if len(r.members) != 1 else ''}" for r in displayed]
 
     embed = discord.Embed(
         title=f"{guild.name} — Roles Overview",
