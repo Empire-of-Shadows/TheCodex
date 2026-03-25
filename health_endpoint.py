@@ -14,6 +14,12 @@ import json
 
 logger = logging.getLogger(__name__)
 
+_health_server = None
+
+
+class ReusableTCPServer(socketserver.TCPServer):
+    allow_reuse_address = True
+
 
 class HealthCheckHandler(http.server.BaseHTTPRequestHandler):
     """HTTP handler for health check requests"""
@@ -68,25 +74,14 @@ class HealthCheckHandler(http.server.BaseHTTPRequestHandler):
         pass
 
 
-def start_health_server(port=50001, bot=None, db_manager=None):
-    """
-    Start the health check HTTP server
-
-    Args:
-        port (int): Port to listen on (default: 50001)
-        bot: Discord bot instance (optional)
-        db_manager: Database manager instance (optional)
-    """
-    try:
-        # Store bot and db_manager references in the handler class
-        HealthCheckHandler.bot_instance = bot
-        HealthCheckHandler.db_manager = db_manager
-
-        with socketserver.TCPServer(("0.0.0.0", port), HealthCheckHandler) as httpd:
-            logger.info(f"Health check server running on port {port}")
-            httpd.serve_forever()
-    except Exception as e:
-        logger.error(f"Failed to start health server on port {port}: {e}")
+def stop_health_server():
+    """Shut down the health check server if running."""
+    global _health_server
+    if _health_server:
+        _health_server.shutdown()
+        _health_server.server_close()
+        _health_server = None
+        logger.info("Health check server stopped")
 
 
 def initialize_health_server(port=50001, bot=None, db_manager=None):
@@ -101,13 +96,18 @@ def initialize_health_server(port=50001, bot=None, db_manager=None):
     Returns:
         threading.Thread: The health server thread
     """
+    global _health_server
 
-    def delayed_start():
-        """Wait briefly for bot initialization before starting server"""
-        time.sleep(2)  # Give bot time to initialize
-        start_health_server(port, bot, db_manager)
+    HealthCheckHandler.bot_instance = bot
+    HealthCheckHandler.db_manager = db_manager
 
-    health_thread = threading.Thread(target=delayed_start, daemon=True, name="HealthCheckServer")
+    try:
+        _health_server = ReusableTCPServer(("0.0.0.0", port), HealthCheckHandler)
+    except Exception as e:
+        logger.error(f"Failed to start health server on port {port}: {e}")
+        return None
+
+    health_thread = threading.Thread(target=_health_server.serve_forever, daemon=True, name="HealthCheckServer")
     health_thread.start()
-    logger.info(f"Health check server initialization started (port {port})")
+    logger.info(f"Health check server running on port {port}")
     return health_thread

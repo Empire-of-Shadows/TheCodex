@@ -42,7 +42,7 @@ class AnnouncementThreadCog(commands.Cog):
         if message.channel.id != config.announcement["channel_id"]:
             return
 
-        logger.info(f"Processing message in announcement channel for guild {message.guild.id}: {message.content[:50]}...")
+        logger.info(f"Processing message in announcement channel for guild {message.guild.id}, message {message.id}")
 
         # Check if auto-create is enabled
         if not config.announcement["thread_auto_create"]:
@@ -75,6 +75,12 @@ class AnnouncementThreadCog(commands.Cog):
         logger.info("No existing thread found - creating new thread")
 
         try:
+            # Re-fetch message via REST to get full content (gateway may strip it without Message Content intent)
+            try:
+                message = await message.channel.fetch_message(message.id)
+            except discord.HTTPException:
+                logger.warning(f"Could not re-fetch message {message.id}, using gateway data")
+
             # Format thread name
             thread_name = self.format_thread_name(message, config.announcement["thread_name_format"])
             logger.info(f"Creating thread with name: {thread_name}")

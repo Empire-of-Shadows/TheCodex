@@ -14,7 +14,7 @@ from utils.bot import bot, TOKEN, s
 from utils.logger import get_logger, setup_application_logging
 from utils.sync import load_cogs, attach_databases
 from IdleStatus.idle import rotate_status
-from health_endpoint import initialize_health_server
+from health_endpoint import initialize_health_server, stop_health_server
 
 # Initialize application-wide logging
 APPLICATION_NAME = "discord-bot-codex"
@@ -166,6 +166,12 @@ async def shutdown_handler():
 			logger.debug("Status rotation task was not running")
 	except Exception as e:
 		logger.error(f"Error stopping status rotation: {e}", exc_info=True)
+
+	# Stop health check server
+	try:
+		stop_health_server()
+	except Exception as e:
+		logger.error(f"Error stopping health server: {e}", exc_info=True)
 
 	# Close bot connection
 	try:

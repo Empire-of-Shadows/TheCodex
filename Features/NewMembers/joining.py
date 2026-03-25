@@ -99,21 +99,9 @@ class GuildEventHandler:
                             role_dist[role.name] += 1
             cache_data['role_distribution'] = dict(role_dist)
 
-            # Channel activity estimation (simplified)
-            channel_activity = {}
-            for channel in guild.text_channels:
-                try:
-                    # Get recent message count (last 24 hours)
-                    recent_count = 0
-                    async for message in channel.history(after=datetime.now(timezone.utc) - timedelta(hours=24),
-                                                         limit=100):
-                        recent_count += 1
-                    channel_activity[channel.name] = recent_count
-                except (discord.Forbidden, discord.HTTPException):
-                    channel_activity[channel.name] = 0
-
-            cache_data['popular_channels'] = dict(sorted(channel_activity.items(),
-                                                         key=lambda x: x[1], reverse=True)[:5])
+            # Channel activity — scanned in background to avoid blocking init
+            cache_data['popular_channels'] = {}
+            asyncio.create_task(self._scan_channel_activity(guild, cache_data))
 
             # Initialize today's counters
             cache_data['new_member_joins_today'] = 0
@@ -131,6 +119,50 @@ class GuildEventHandler:
 
         except Exception as e:
             self.logger.error(f"Error initializing guild cache for {guild.name}: {e}")
+
+    async def _scan_channel_activity(self, guild: discord.Guild, cache_data: dict):
+        """Scan channel message history in the background with throttling. Populates popular_channels."""
+        try:
+            channel_activity = {}
+            # Cap at 15 channels sorted by position (most visible first)
+            channels_to_scan = sorted(guild.text_channels, key=lambda c: c.position)[:15]
+
+            for channel in channels_to_scan:
+                try:
+                    recent_count = 0
+                    async for _msg in channel.history(
+                        after=datetime.now(timezone.utc) - timedelta(hours=24), limit=100
+                    ):
+                        recent_count += 1
+                    channel_activity[channel.name] = recent_count
+                except discord.Forbidden:
+                    channel_activity[channel.name] = 0
+                except discord.HTTPException as e:
+                    if e.status == 429:
+                        retry_after = getattr(e, 'retry_after', 5.0)
+                        self.logger.warning(f"Rate limited scanning {channel.name}, retrying in {retry_after}s")
+                        await asyncio.sleep(retry_after)
+                        try:
+                            recent_count = 0
+                            async for _msg in channel.history(
+                                after=datetime.now(timezone.utc) - timedelta(hours=24), limit=100
+                            ):
+                                recent_count += 1
+                            channel_activity[channel.name] = recent_count
+                        except Exception:
+                            channel_activity[channel.name] = 0
+                    else:
+                        channel_activity[channel.name] = 0
+
+                await asyncio.sleep(1.5)
+
+            cache_data['popular_channels'] = dict(
+                sorted(channel_activity.items(), key=lambda x: x[1], reverse=True)[:5]
+            )
+            self.logger.info(f"Channel activity scan complete for {guild.name}: {len(channel_activity)} channels scanned")
+
+        except Exception as e:
+            self.logger.error(f"Error scanning channel activity for {guild.name}: {e}")
 
     async def update_guild_metrics(self, guild: discord.Guild, event_type: str, **kwargs):
         """Update guild metrics based on events with human member tracking"""
