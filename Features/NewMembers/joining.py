@@ -33,7 +33,6 @@ class GuildEventHandler:
             'member_count': 0,
             'bot_count': 0,
             'human_count': 0,  # NEW: Track human members separately
-            'online_count': 0,
             'new_member_joins_today': 0,
             'kicks_today': 0,
             'last_activity': None,
@@ -84,8 +83,6 @@ class GuildEventHandler:
             cache_data['member_count'] = guild.member_count
             cache_data['bot_count'] = sum(1 for member in guild.members if member.bot)
             cache_data['human_count'] = await self._count_human_members(guild)  # NEW: Track humans separately
-            cache_data['online_count'] = sum(1 for member in guild.members
-                                             if hasattr(member, 'status') and member.status != discord.Status.offline)
 
             # Voice channel activity
             cache_data['voice_channels_active'] = sum(1 for vc in guild.voice_channels if vc.members)
@@ -114,8 +111,7 @@ class GuildEventHandler:
             cache_data['security_metrics']['rapid_joins'] = 0
 
             self.logger.info(f"Guild cache initialized: {guild.member_count} members, "
-                             f"{cache_data['bot_count']} bots, {cache_data['human_count']} humans, "
-                             f"{cache_data['online_count']} online")
+                             f"{cache_data['bot_count']} bots, {cache_data['human_count']} humans")
 
         except Exception as e:
             self.logger.error(f"Error initializing guild cache for {guild.name}: {e}")
@@ -228,8 +224,7 @@ class GuildEventHandler:
             'basic_stats': {
                 'total_members': cache_data.get('member_count', 0),
                 'bot_count': cache_data.get('bot_count', 0),
-                'human_members': cache_data.get('human_count', 0),  # Use pre-calculated human count
-                'online_members': cache_data.get('online_count', 0)
+                'human_members': cache_data.get('human_count', 0)
             },
             'activity_stats': {
                 'joins_today': cache_data.get('new_member_joins_today', 0),
@@ -689,50 +684,6 @@ async def on_member_join(member):
 async def on_member_remove(member: discord.Member):
     await guild_handler.handle_member_remove(member)
 
-@bot.event
-async def on_member_update(before, after):
-    #ToDO
-    guild_handler.logger.info(f"Event: on_member_update - {before.id} in {getattr(before, 'guild', 'N/A')}")
-    pass
-
-@bot.event
-async def on_member_ban(guild, user):
-    #ToDO
-    guild_handler.logger.info(f"Event: on_member_ban - {user} in {guild.name} ({guild.id})")
-    pass
-
-@bot.event
-async def on_member_unban(guild, user):
-    #ToDO
-    guild_handler.logger.info(f"Event: on_member_unban - {user} in {guild.name} ({guild.id})")
-    pass
-
-# Section: Connection / Lifecycle
-# Missing in this section:
-# - on_ready
-# - on_shard_connect
-# - on_shard_disconnect
-# - on_shard_ready
-# - on_shard_resumed
-
-@bot.event
-async def on_connect():
-    #ToDO
-    guild_handler.logger.info("Event: on_connect - connected to gateway")
-    pass
-
-@bot.event
-async def on_disconnect():
-    #ToDO
-    guild_handler.logger.info("Event: on_disconnect - disconnected from gateway")
-    pass
-
-@bot.event
-async def on_resumed():
-    #ToDO
-    guild_handler.logger.info("Event: on_resumed - session resumed")
-    pass
-
 # Section: Guild lifecycle and cache
 # Missing in this section:
 # - on_guild_integrations_update
@@ -772,24 +723,6 @@ async def on_guild_remove(guild):
         guild_handler.cache_manager._memory_cache['guild_stats'].pop(guild.id, None)
         guild_handler.cache_manager._memory_cache['recent_events'].pop(guild.id, None)
 
-@bot.event
-async def on_guild_update(before, after):
-    #ToDO
-    guild_handler.logger.info(f"Event: on_guild_update - {after.name} ({after.id})")
-    pass
-
-@bot.event
-async def on_guild_available(guild):
-    #ToDO
-    guild_handler.logger.info(f"Event: on_guild_available - {guild.name} ({guild.id})")
-    pass
-
-@bot.event
-async def on_guild_unavailable(guild):
-    #ToDO
-    guild_handler.logger.info(f"Event: on_guild_unavailable - {guild.name} ({guild.id})")
-    pass
-
 # Section: Roles
 # Missing in this section:
 # - (None)
@@ -812,187 +745,4 @@ async def on_guild_role_delete(role):
         await guild_handler.cache_manager.cache_roles(role.guild)
     except Exception as e:
         guild_handler.logger.error(f"Error updating roles cache after delete: {e}")
-    pass
-
-# Section: Emojis and Stickers
-# Missing in this section:
-# - on_guild_stickers_update
-@bot.event
-async def on_guild_emojis_update(guild, before, after):
-    #ToDO
-    guild_handler.logger.info(f"Event: on_guild_emojis_update - {guild.name} ({guild.id})")
-    pass
-
-# Section: Webhooks and Integrations
-# Missing in this section:
-# - on_integration_create
-# - on_integration_update
-@bot.event
-async def on_webhooks_update(channel):
-    #ToDO
-    guild_handler.logger.info(f"Event: on_webhooks_update - channel {getattr(channel, 'name', channel.id)}")
-    pass
-
-# Section: Channels
-# Missing in this section:
-# - on_guild_channel_pins_update
-# - on_private_channel_create
-# - on_private_channel_delete
-# - on_private_channel_update
-# - on_private_channel_pins_update
-@bot.event
-async def on_channel_create(channel):
-    #ToDO
-    guild_handler.logger.info(f"Event: on_channel_create - {getattr(channel, 'name', channel.id)} in {getattr(channel, 'guild', 'DM')}")
-    pass
-
-@bot.event
-async def on_channel_delete(channel):
-    #ToDO
-    guild_handler.logger.info(f"Event: on_channel_delete - {getattr(channel, 'name', channel.id)}")
-    pass
-
-# Section: Threads
-# Missing in this section:
-# - on_thread_member_join
-# - on_thread_member_remove
-@bot.event
-async def on_thread_create(thread):
-    #ToDO
-    guild_handler.logger.info(f"Event: on_thread_create - {thread.name} ({thread.id})")
-    pass
-
-@bot.event
-async def on_thread_update(before, after):
-    #ToDO
-    guild_handler.logger.info(f"Event: on_thread_update - {after.name} ({after.id})")
-    pass
-
-@bot.event
-async def on_thread_delete(thread):
-    #ToDO
-    guild_handler.logger.info(f"Event: on_thread_delete - {thread.name} ({thread.id})")
-    pass
-
-# Section: Voice and Presence
-# Missing in this section:
-# - (None)
-@bot.event
-async def on_voice_state_update(member, before, after):
-    guild_handler.logger.info(f"Event: on_voice_state_update - {member} in {member.guild.name}")
-    # update voice channel counts in cache if present
-    try:
-        await guild_handler.update_guild_metrics(member.guild, "voice_state_change", member=member)
-    except Exception:
-        pass
-    pass
-
-@bot.event
-async def on_presence_update(before, after):
-    #ToDO
-    guild_handler.logger.info(f"Event: on_presence_update - {getattr(after, 'id', 'N/A')}")
-    pass
-
-# Section: Users and Typing
-# Missing in this section:
-# - (None)
-@bot.event
-async def on_user_update(before, after):
-    #ToDO
-    guild_handler.logger.info(f"Event: on_user_update - {after.id}")
-    pass
-
-@bot.event
-async def on_typing(channel, user, when):
-    #ToDO
-    guild_handler.logger.info(f"Event: on_typing - {user} in {getattr(channel, 'name', channel.id)} at {when}")
-    pass
-
-# Section: Messages
-# Missing in this section:
-# - on_bulk_message_delete
-# - on_raw_message_edit
-# - on_raw_bulk_message_delete
-@bot.event
-async def on_message(message):
-    #ToDO
-    # Ignore bot messages
-    if message.author.bot:
-        return
-    guild_handler.logger.info(f"Event: on_message - {message.author} in {getattr(message.guild, 'name', 'DM')}")
-    # Keep default processing intact (commands, etc.)
-    await bot.process_commands(message)
-
-@bot.event
-async def on_message_edit(before, after):
-    #ToDO
-    guild_handler.logger.info(f"Event: on_message_edit - message {before.id}")
-    pass
-
-@bot.event
-async def on_message_delete(message):
-    #ToDO
-    guild_handler.logger.info(f"Event: on_message_delete - message {getattr(message, 'id', 'raw')}")
-    pass
-
-@bot.event
-async def on_raw_message_delete(payload):
-    #ToDO
-    guild_handler.logger.info(f"Event: on_raw_message_delete - id {payload.message_id}")
-    pass
-
-@bot.event
-async def on_message_delete_bulk(messages):
-    #ToDO
-    guild_handler.logger.info(f"Event: on_message_delete_bulk - {len(messages)} messages")
-    pass
-
-# Section: Reactions
-# Missing in this section:
-# - on_reaction_clear_emoji
-# - on_raw_reaction_clear
-# - on_raw_reaction_clear_emoji
-@bot.event
-async def on_reaction_add(reaction, user):
-    #ToDO
-    guild_handler.logger.info(f"Event: on_reaction_add - {user} reacted in {getattr(reaction.message, 'id', 'N/A')}")
-    pass
-
-@bot.event
-async def on_reaction_remove(reaction, user):
-    #ToDO
-    guild_handler.logger.info(f"Event: on_reaction_remove - {user} removed reaction")
-    pass
-
-@bot.event
-async def on_reaction_clear(message, reactions):
-    #ToDO
-    guild_handler.logger.info(f"Event: on_reaction_clear - cleared on message {getattr(message, 'id', 'N/A')}")
-    pass
-
-@bot.event
-async def on_raw_reaction_add(payload):
-    #ToDO
-    guild_handler.logger.info(f"Event: on_raw_reaction_add - {payload}")
-    pass
-
-@bot.event
-async def on_raw_reaction_remove(payload):
-    #ToDO
-    guild_handler.logger.info(f"Event: on_raw_reaction_remove - {payload}")
-    pass
-
-# Section: Invites
-# Missing in this section:
-# - (None)
-@bot.event
-async def on_invite_create(invite):
-    #ToDO
-    guild_handler.logger.info(f"Event: on_invite_create - {invite.code} to {invite.guild}")
-    pass
-
-@bot.event
-async def on_invite_delete(invite):
-    #ToDO
-    guild_handler.logger.info(f"Event: on_invite_delete - invite deleted")
     pass
