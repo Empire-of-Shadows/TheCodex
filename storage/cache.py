@@ -22,11 +22,8 @@ class GuildCacheManager:
 		self.db_manager = db_manager
 		self._cache_locks = {}
 
-		# Enhanced real-time cache for frequently accessed data
 		self._memory_cache = {
 			'guild_stats': {},
-			'member_counts': {},
-			'active_channels': {},
 			'recent_events': defaultdict(list)
 		}
 
@@ -116,11 +113,7 @@ class GuildCacheManager:
 
 			# Calculate enhanced metrics
 			bot_count = sum(1 for member in guild.members if member.bot)
-			online_count = sum(1 for member in guild.members
-							   if hasattr(member, 'status') and member.status != discord.Status.offline)
 			voice_channels_active = sum(1 for vc in guild.voice_channels if vc.members)
-
-			# Get premium subscriber count
 			premium_members = sum(1 for member in guild.members if member.premium_since)
 
 			data = {
@@ -133,7 +126,6 @@ class GuildCacheManager:
 				"member_count": guild.member_count,
 				"bot_count": bot_count,
 				"human_count": guild.member_count - bot_count,
-				"online_count": online_count,
 				"premium_members": premium_members,
 				"voice_channels_active": voice_channels_active,
 				"max_members": guild.max_members,
@@ -170,7 +162,6 @@ class GuildCacheManager:
 			self._memory_cache['guild_stats'][guild.id] = {
 				'member_count': guild.member_count,
 				'bot_count': bot_count,
-				'online_count': online_count,
 				'voice_active': voice_channels_active,
 				'last_update': datetime.now(timezone.utc)
 			}
@@ -413,10 +404,6 @@ class GuildCacheManager:
 						"top_role_position": member.top_role.position if member.top_role else 0,
 						"permissions": member.guild_permissions.value,
 						"avatar_url": str(member.display_avatar.url),
-						"status": str(member.status) if hasattr(member, 'status') else None,
-						"mobile_status": str(member.mobile_status) if hasattr(member, 'mobile_status') else None,
-						"desktop_status": str(member.desktop_status) if hasattr(member, 'desktop_status') else None,
-						"web_status": str(member.web_status) if hasattr(member, 'web_status') else None,
 						"created_at": member.created_at.isoformat(),
 						"account_age_days": account_age,
 						"suspicious_indicators": suspicious_indicators,
@@ -426,24 +413,6 @@ class GuildCacheManager:
 						"guild_permissions_value": member.guild_permissions.value,
 						"voice_channel_id": member.voice.channel.id if member.voice else None,
 					}
-
-					# Add activity information if available
-					if hasattr(member, 'activities') and member.activities:
-						activities = []
-						for activity in member.activities:
-							activity_data = {
-								"name": activity.name,
-								"type": str(activity.type),
-							}
-							if hasattr(activity, 'state') and activity.state:
-								activity_data["state"] = activity.state
-							if hasattr(activity, 'details') and activity.details:
-								activity_data["details"] = activity.details
-							if hasattr(activity, 'start') and activity.start:
-								activity_data["start"] = activity.start.isoformat()
-							activities.append(activity_data)
-						member_data["activities"] = activities
-						member_data["activity_count"] = len(activities)
 
 					cached_members.append(member_data)
 
@@ -479,11 +448,8 @@ class GuildCacheManager:
 			now = pendulum.now("America/Chicago")
 			today = now.format('YYYY-MM-DD')
 
-			# Calculate various metrics
 			bot_count = sum(1 for member in guild.members if member.bot)
 			human_count = guild.member_count - bot_count
-			online_count = sum(1 for member in guild.members
-							   if hasattr(member, 'status') and member.status != discord.Status.offline)
 
 			# Role distribution
 			role_distribution = defaultdict(int)
@@ -520,7 +486,6 @@ class GuildCacheManager:
 					"total": guild.member_count,
 					"humans": human_count,
 					"bots": bot_count,
-					"online": online_count,
 					"premium": sum(1 for member in guild.members if member.premium_since)
 				},
 				"channel_stats": {
