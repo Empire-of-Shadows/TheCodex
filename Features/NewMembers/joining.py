@@ -525,12 +525,23 @@ class GuildEventHandler:
             self.logger.error(f"Error sending Components v2 welcome message: {e}", exc_info=True)
 
     async def handle_interaction(self, interaction: discord.Interaction):
-        """Handle welcome message component interactions via the action dispatcher."""
-        if interaction.type == discord.InteractionType.component:
-            from Features.NewMembers.welcome_actions import dispatch_welcome_action
-            handled = await dispatch_welcome_action(interaction)
-            if not handled:
-                self.logger.debug(f"Unhandled component interaction: {interaction.data.get('custom_id')}")
+        """Handle component interactions — routes to welcome or guide dispatchers."""
+        if interaction.type != discord.InteractionType.component:
+            return
+
+        custom_id = interaction.data.get("custom_id", "")
+
+        # Route guide interactions (g: prefix) to the guide dispatcher
+        if custom_id.startswith("g:"):
+            from Features.Guide.guide import dispatch_guide_interaction
+            await dispatch_guide_interaction(interaction)
+            return
+
+        # Route welcome interactions (w: prefix)
+        from Features.NewMembers.welcome_actions import dispatch_welcome_action
+        handled = await dispatch_welcome_action(interaction)
+        if not handled:
+            self.logger.debug(f"Unhandled component interaction: {custom_id}")
 
     async def handle_member_remove(self, member: discord.Member):
         """Handle member removal with enhanced tracking and cache cleanup"""

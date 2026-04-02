@@ -567,99 +567,102 @@ async def _handle_role_action(interaction: discord.Interaction, role_id: str):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Interaction Dispatch — Cog listener
+# Interaction Dispatch
 # ─────────────────────────────────────────────────────────────────────────────
+
+async def _dispatch_action(
+	interaction: discord.Interaction, action: str, target: str | None,
+	guild_id: int, user_id: int,
+):
+	"""Route a decoded action to the appropriate handler."""
+	if action == "nav":
+		layout = await guide_manager.get_page_view(guild_id, user_id, target, interaction=interaction)
+		await interaction.response.edit_message(view=layout)
+
+	elif action == "back":
+		layout = await guide_manager.handle_back(guild_id, user_id, interaction=interaction)
+		await interaction.response.edit_message(view=layout)
+
+	elif action == "home":
+		layout = await guide_manager.get_root_menu(guild_id, user_id, interaction=interaction)
+		await interaction.response.edit_message(view=layout)
+
+	elif action == "search":
+		modal = GuideSearchModal(guild_id)
+		await interaction.response.send_modal(modal)
+
+	elif action == "channel":
+		await _handle_channel_action(interaction, target)
+
+	elif action == "role":
+		await _handle_role_action(interaction, target)
+
+
+async def dispatch_guide_interaction(interaction: discord.Interaction) -> bool:
+	"""Dispatch a g:-prefixed component interaction.
+
+	Returns True if handled, False if the custom_id doesn't match our prefix.
+	Called by the central interaction router in joining.py.
+	"""
+	if interaction.type != discord.InteractionType.component:
+		return False
+	if not interaction.guild:
+		return False
+
+	custom_id = interaction.data.get("custom_id", "")
+	if not custom_id.startswith("g:"):
+		return False
+
+	component_type = interaction.data.get("component_type")
+	guild_id = interaction.guild.id
+	user_id = interaction.user.id
+
+	try:
+		# Handle select menus
+		if component_type == 3:  # String select
+			# Auto-generated children/search select — value is a page_id
+			if custom_id == "g:_select":
+				values = interaction.data.get("values", [])
+				if not values:
+					return True
+				page_id = values[0]
+				layout = await guide_manager.get_page_view(guild_id, user_id, page_id, interaction=interaction)
+				await interaction.response.edit_message(view=layout)
+				return True
+
+			# User-defined select — value encodes action:target
+			if custom_id == "g:_uselect":
+				values = interaction.data.get("values", [])
+				if not values:
+					return True
+				action, target = decode_select_value(values[0])
+				await _dispatch_action(interaction, action, target, guild_id, user_id)
+				return True
+
+			return False
+
+		# Handle buttons
+		action, target = decode_custom_id(custom_id)
+		if action is None:
+			return False
+
+		await _dispatch_action(interaction, action, target, guild_id, user_id)
+		return True
+
+	except Exception as e:
+		logger.error(f"Error handling guide interaction '{custom_id}': {e}", exc_info=True)
+		if not interaction.response.is_done():
+			await interaction.response.send_message(
+				"Something went wrong. Please try again.", ephemeral=True,
+			)
+		return True
+
 
 class GuideCog(commands.Cog):
 	"""Handles guide interactions and commands."""
 
 	def __init__(self, bot_instance):
 		self.bot = bot_instance
-
-	@commands.Cog.listener()
-	async def on_interaction(self, interaction: discord.Interaction):
-		"""Dispatch g:-prefixed component interactions."""
-		if interaction.type != discord.InteractionType.component:
-			return
-		if not interaction.guild:
-			return
-
-		component_type = interaction.data.get("component_type")
-		guild_id = interaction.guild.id
-		user_id = interaction.user.id
-
-		# Handle select menus
-		if component_type == 3:  # String select
-			custom_id = interaction.data.get("custom_id", "")
-
-			# Auto-generated children/search select — value is a page_id
-			if custom_id == "g:_select":
-				values = interaction.data.get("values", [])
-				if not values:
-					return
-				page_id = values[0]
-				try:
-					layout = await guide_manager.get_page_view(guild_id, user_id, page_id, interaction=interaction)
-					await interaction.response.edit_message(view=layout)
-				except Exception as e:
-					logger.error(f"Error navigating to page {page_id}: {e}", exc_info=True)
-				return
-
-			# User-defined select — value encodes action:target
-			if custom_id == "g:_uselect":
-				values = interaction.data.get("values", [])
-				if not values:
-					return
-				action, target = decode_select_value(values[0])
-				try:
-					await self._dispatch_action(interaction, action, target, guild_id, user_id)
-				except Exception as e:
-					logger.error(f"Error handling uselect action '{action}': {e}", exc_info=True)
-				return
-
-			return
-
-		# Handle buttons
-		raw_id = interaction.data.get("custom_id", "")
-		action, target = decode_custom_id(raw_id)
-		if action is None:
-			return
-
-		try:
-			await self._dispatch_action(interaction, action, target, guild_id, user_id)
-		except Exception as e:
-			logger.error(f"Error handling guide action '{action}': {e}", exc_info=True)
-			if not interaction.response.is_done():
-				await interaction.response.send_message(
-					"Something went wrong. Please try again.", ephemeral=True
-				)
-
-	async def _dispatch_action(
-		self, interaction: discord.Interaction, action: str, target: str | None,
-		guild_id: int, user_id: int,
-	):
-		"""Route a decoded action to the appropriate handler."""
-		if action == "nav":
-			layout = await guide_manager.get_page_view(guild_id, user_id, target, interaction=interaction)
-			await interaction.response.edit_message(view=layout)
-
-		elif action == "back":
-			layout = await guide_manager.handle_back(guild_id, user_id, interaction=interaction)
-			await interaction.response.edit_message(view=layout)
-
-		elif action == "home":
-			layout = await guide_manager.get_root_menu(guild_id, user_id, interaction=interaction)
-			await interaction.response.edit_message(view=layout)
-
-		elif action == "search":
-			modal = GuideSearchModal(guild_id)
-			await interaction.response.send_modal(modal)
-
-		elif action == "channel":
-			await _handle_channel_action(interaction, target)
-
-		elif action == "role":
-			await _handle_role_action(interaction, target)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
