@@ -29,6 +29,7 @@ class DropsActions:
         return {
             "drops_channel_id": config.drops["channel_id"],
             "drops_tracker_channels": config.drops["tracker_channels"],
+            "drops_enabled": config.drops.get("enabled", False),
         }
 
     # -- Setters ------------------------------------------------------------

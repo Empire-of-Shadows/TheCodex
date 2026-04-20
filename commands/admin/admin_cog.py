@@ -2050,7 +2050,7 @@ class AdminCog(commands.Cog):
 
         async def _rebuild() -> discord.ui.LayoutView:
             fresh = await DropsActions.get_drops_settings(guild.id)
-            return build_drops_channel_view(fresh, guild, on_channel_select, on_cancel)
+            return build_drops_channel_view(fresh, guild, on_channel_select, on_cancel, on_toggle)
 
         async def on_channel_select(channel_interaction: discord.Interaction, channel_id: int):
             await channel_interaction.response.defer(ephemeral=True)
@@ -2063,10 +2063,29 @@ class AdminCog(commands.Cog):
                 channel = guild.get_channel(channel_id)
                 channel_name = channel.name if channel else str(channel_id)
                 logger.info(f"Admin {channel_interaction.user} set drops channel to {channel_name}")
+
+                # Auto-enable on first channel set
+                if not await DropsActions.get_enabled(guild.id):
+                    await DropsActions.set_enabled(guild.id, True)
+                    logger.info(f"Drops auto-enabled for guild {guild.id} after channel set")
+
                 await channel_interaction.edit_original_response(view=await _rebuild())
             else:
                 await channel_interaction.followup.send(
                     view=create_empty_layout("Failed to save drops channel."), ephemeral=True
+                )
+
+        async def on_toggle(toggle_interaction: discord.Interaction):
+            await toggle_interaction.response.defer(ephemeral=True)
+            current = await DropsActions.get_enabled(guild.id)
+            success = await DropsActions.set_enabled(guild.id, not current)
+            if success:
+                new_state = "disabled" if current else "enabled"
+                logger.info(f"Admin {toggle_interaction.user} {new_state} drops for guild {guild.id}")
+                await toggle_interaction.edit_original_response(view=await _rebuild())
+            else:
+                await toggle_interaction.followup.send(
+                    view=create_empty_layout("Failed to toggle drops state."), ephemeral=True
                 )
 
         async def on_cancel(cancel_interaction: discord.Interaction):
@@ -2074,7 +2093,11 @@ class AdminCog(commands.Cog):
             await cancel_interaction.response.edit_message(view=layout)
 
         layout = build_drops_channel_view(
-            await DropsActions.get_drops_settings(guild.id), guild, on_channel_select, on_cancel
+            await DropsActions.get_drops_settings(guild.id),
+            guild,
+            on_channel_select,
+            on_cancel,
+            on_toggle,
         )
         await interaction.response.send_message(view=layout, ephemeral=True)
         msg = await interaction.original_response()

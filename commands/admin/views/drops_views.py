@@ -21,12 +21,14 @@ def build_drops_channel_view(
     guild: discord.Guild,
     on_channel_select: Callable[[discord.Interaction, int], Awaitable[None]],
     on_cancel: Callable[[discord.Interaction], Awaitable[None]],
+    on_toggle: Callable[[discord.Interaction], Awaitable[None]] | None = None,
 ) -> discord.ui.LayoutView:
     """Build the Drops posting channel configuration view."""
     unique_id = create_unique_id()
     builder = AdminLayoutBuilder()
 
     channel_id = settings.get("drops_channel_id")
+    enabled = settings.get("drops_enabled", False)
 
     if channel_id:
         channel = guild.get_channel(channel_id)
@@ -34,9 +36,12 @@ def build_drops_channel_view(
     else:
         channel_display = "Not configured"
 
+    status_display = "✅ Enabled" if enabled else "❌ Disabled"
+
     builder.add_header("## Drops Channel")
     builder.add_text(
-        f"**Current Channel:** {channel_display}\n\n"
+        f"**Current Channel:** {channel_display}\n"
+        f"**Status:** {status_display}\n\n"
         "Select a channel below for daily Prime Gaming drops posts."
     )
     builder.add_separator()
@@ -58,16 +63,26 @@ def build_drops_channel_view(
     select_row.add_item(channel_select)
     builder.add_item(select_row)
 
-    # Done button
+    # Toggle + Done buttons
+    btn_row = discord.ui.ActionRow()
+
+    if channel_id and on_toggle is not None:
+        toggle_btn = discord.ui.Button(
+            label="Disable" if enabled else "Enable",
+            style=discord.ButtonStyle.danger if enabled else discord.ButtonStyle.success,
+            custom_id=f"drops_ch_toggle_{unique_id}",
+        )
+        toggle_btn.callback = on_toggle
+        btn_row.add_item(toggle_btn)
+
     done_btn = discord.ui.Button(
         label="Done",
         style=discord.ButtonStyle.secondary,
         custom_id=f"drops_ch_done_{unique_id}",
     )
     done_btn.callback = on_cancel
-
-    btn_row = discord.ui.ActionRow()
     btn_row.add_item(done_btn)
+
     builder.add_item(btn_row)
 
     return builder.build()
@@ -154,6 +169,8 @@ def build_drops_status_view(
     else:
         drops_display = "Not configured"
 
+    enabled_display = "✅ Enabled" if overview.get("drops_enabled", False) else "❌ Disabled"
+
     # Tracked channels
     tracker_channels = overview.get("drops_tracker_channels", {})
     tracker_lines = []
@@ -181,7 +198,8 @@ def build_drops_status_view(
     builder.add_separator()
 
     builder.add_text(
-        f"**Drops Posting Channel:** {drops_display}"
+        f"**Drops Posting Channel:** {drops_display}\n"
+        f"**Status:** {enabled_display}"
     )
     builder.add_separator()
 
