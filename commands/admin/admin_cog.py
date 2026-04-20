@@ -76,6 +76,7 @@ from .panel_configs import (
     NM_WELCOME_TEXT_CONFIG,
     ANN_CHANNEL_CONFIG, ANN_SETTINGS_CONFIG, SUG_CHANNEL_CONFIG,
     GUIDE_CHANNEL_CONFIG, GUIDE_UPLOAD_CONFIG, GUIDE_ENABLED_CONFIG,
+    DROPS_SCHEDULE_CONFIG,
     _auto_enable_feature_if_ready,
 )
 from storage.setup_gatekeeper import setup_gatekeeper
@@ -216,6 +217,7 @@ class AdminCog(commands.Cog):
                 "boost_tracker": self._show_boost_tracker_menu,
                 "tracker_status": self._show_tracker_status,
                 "drops_channel": self._show_drops_channel_menu,
+                "drops_schedule": self._show_drops_schedule_menu,
                 "drops_tracker": self._show_drops_tracker_menu,
                 "drops_manager_role": self._show_drops_manager_role_menu,
                 "drops_status": self._show_drops_status,
@@ -2102,6 +2104,12 @@ class AdminCog(commands.Cog):
         await interaction.response.send_message(view=layout, ephemeral=True)
         msg = await interaction.original_response()
         attach_timeout_expiry_msg(layout, msg)
+
+    # ==================== Drops Schedule ====================
+
+    async def _show_drops_schedule_menu(self, interaction: discord.Interaction):
+        """Show Drops schedule configuration."""
+        await self._navigate_to(interaction, DROPS_SCHEDULE_CONFIG, interaction.guild)
 
     # ==================== Drops Tracked Channels ====================
 

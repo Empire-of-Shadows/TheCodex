@@ -1,136 +1,50 @@
 import asyncio
-from datetime import datetime, timezone, time, timedelta
-from typing import List, Dict, Any
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional
 
 import discord
-from discord.ext import commands, tasks
 import pytz
+from discord.ext import commands, tasks
 
 from storage.database_manager import db_manager
+from storage.config_manager import get_guild_config_manager
 from utils.logger import get_logger
-from storage.config_manager import get_config, get_guild_config_manager
 
 logger = get_logger("PrimeDrops")
 
-# Configuration
-CHICAGO_TZ = pytz.timezone('America/Chicago')
-CHICAGO_TIME = time(6, 30)
-UTC_TIME = datetime.combine(datetime.today(), CHICAGO_TIME)
-UTC_TIME = CHICAGO_TZ.localize(UTC_TIME).astimezone(pytz.UTC).time()
-SEND_TIME = UTC_TIME
-GRACE_PERIOD_MINUTES = 20
+
+def _sent_key(guild_id: int) -> str:
+    """Mongo dotted-path field used to track when a drop was posted to a guild."""
+    return f"sent_by_guild.{guild_id}"
 
 
 class PrimeDrops(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.collection_manager = None
-
+        self._posted_today: set[tuple[int, str]] = set()
 
     async def cog_load(self):
-        """Initialize database when cog loads"""
         logger.info("Loading PrimeDrops cog...")
         await self.initialize_drops_database()
-
-        # Start the daily task
-        self.daily_drops_check.start()
-
-        # Check if we missed today's scheduled run but are still within the grace window
-        self.bot.loop.create_task(self.check_missed_drops_run())
-
+        self.drops_tick.start()
         logger.info("PrimeDrops cog loaded successfully")
 
     async def cog_unload(self):
-        """Cleanup when cog unloads"""
         logger.info("Unloading PrimeDrops cog...")
-        self.daily_drops_check.cancel()
+        self.drops_tick.cancel()
         logger.info("PrimeDrops cog unloaded")
 
     async def initialize_drops_database(self):
-        """Initialize the drops database connection"""
         try:
-            # Ensure database manager is initialized
             await db_manager.initialize()
-
-            # Get the prime drops collection manager
             self.collection_manager = db_manager.get_collection_manager('prime_drops')
-
             logger.info("Prime drops database initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize prime drops database: {e}", exc_info=True)
             raise
 
-    async def check_missed_drops_run(self):
-        """
-        On startup/reconnect, if we're within GRACE_PERIOD_MINUTES after today's scheduled send time
-        and no recent bot message is found in any drops channel, run the drops check once.
-        """
-        try:
-            await self.bot.wait_until_ready()
-
-            now_utc = datetime.now(timezone.utc)
-
-            # Today's scheduled send datetime in UTC
-            today_send_dt = datetime.combine(now_utc.date(), SEND_TIME).replace(tzinfo=pytz.UTC)
-            grace_end = today_send_dt + timedelta(minutes=GRACE_PERIOD_MINUTES)
-
-            # Only act if we are within the grace window
-            if not (today_send_dt <= now_utc <= grace_end):
-                logger.info("Not within grace window for missed drops run; skipping catch-up check.")
-                return
-
-            if not self.bot.user:
-                logger.warning("Bot user not available yet; skipping missed-run check")
-                return
-
-            # Get all configured guilds and check their drops channels
-            config_manager = await get_guild_config_manager()
-            configured_guilds = await config_manager.get_all_configured_guilds()
-
-            found_recent_message = False
-            for guild_id in configured_guilds:
-                guild_config = await config_manager.get_config(guild_id)
-
-                if not guild_config.drops.get("enabled", False):
-                    continue
-
-                if not guild_config.drops["channel_id"]:
-                    continue
-
-                channel = self.bot.get_channel(guild_config.drops["channel_id"])
-                if not channel:
-                    continue
-
-                # Look for a recent message from this bot in the channel after today's scheduled time
-                async for message in channel.history(limit=50):
-                    if message.author.id != self.bot.user.id:
-                        continue
-
-                    message_time = message.created_at.replace(tzinfo=timezone.utc)
-                    if message_time >= today_send_dt:
-                        found_recent_message = True
-                        break
-
-                if found_recent_message:
-                    break
-
-            if found_recent_message:
-                logger.info(
-                    "Recent drops message from bot found within today's window; "
-                    "skipping missed-run catch-up."
-                )
-                return
-
-            logger.info(
-                "Within grace window and no recent drops message found; "
-                "running missed daily_drops_check now."
-            )
-            await self.daily_drops_check()
-        except Exception as e:
-            logger.error(f"Error during missed drops run check: {e}", exc_info=True)
-
     def _create_drop_embed(self, drop: Dict[str, Any]) -> discord.Embed:
-        """Create an embed for a single drop (used by daily_drops_check to post to channels)."""
         embed = discord.Embed(
             title=drop.get('label', 'Unknown Game'),
             description=drop.get('description', 'No description available'),
@@ -162,95 +76,166 @@ class PrimeDrops(commands.Cog):
             embed.add_field(name="Claim Here", value=f"[Get Free Game]({short_href})", inline=True)
 
         embed.set_footer(text="Amazon Prime Gaming Drops")
-
         return embed
 
-    @tasks.loop(time=SEND_TIME)
-    async def daily_drops_check(self):
-        """Daily task to check and send unsent drops to all configured guilds"""
-        try:
-            logger.info("Running daily drops check...")
+    def _create_drop_embeds(
+        self, drops: list[Dict[str, Any]], title: Optional[str] = None
+    ) -> list[discord.Embed]:
+        """Build a summary embed listing multiple drops. Used by the welcome browse flow."""
+        if not drops:
+            return []
 
-            if not self.collection_manager:
-                logger.warning("Collection manager not initialized, skipping drops check")
-                return
+        lines: list[str] = []
+        for drop in drops:
+            label = drop.get('label', 'Unknown Game')
+            short_href = drop.get('short_href')
+            expires = drop.get('expires')
+            expires_str = ""
+            if isinstance(expires, str) and expires:
+                expires_str = f" · expires {expires}"
+            elif isinstance(expires, datetime):
+                expires_str = f" · expires {expires.strftime('%Y-%m-%d')}"
+            if short_href:
+                lines.append(f"- [{label}]({short_href}){expires_str}")
+            else:
+                lines.append(f"- **{label}**{expires_str}")
 
-            unsent_drops = await self.collection_manager.find_many(
-                {"sent": {"$ne": True}},
-                sort=[("expires", 1)]
+        description = "\n".join(lines[:25])  # cap to keep embed under 4096 chars
+
+        embed = discord.Embed(
+            title=title or "Free Gaming Drops",
+            description=description or "No drops available right now.",
+            color=discord.Color.blue(),
+            timestamp=datetime.now(timezone.utc),
+        )
+        embed.set_footer(text="Amazon Prime Gaming Drops")
+        return [embed]
+
+    async def _fetch_unsent_for_guild(self, guild_id: int) -> list[Dict[str, Any]]:
+        if not self.collection_manager:
+            return []
+        return await self.collection_manager.find_many(
+            {_sent_key(guild_id): {"$exists": False}},
+            sort=[("expires", 1)],
+        )
+
+    async def _mark_sent_for_guild(
+        self, guild_id: int, drops: list[Dict[str, Any]]
+    ) -> None:
+        now = datetime.now(timezone.utc)
+        field = _sent_key(guild_id)
+        for drop in drops:
+            await self.collection_manager.update_one(
+                {"_id": drop["_id"]},
+                {"$set": {field: now}},
             )
 
-            if not unsent_drops:
-                logger.info("No unsent drops found")
-                return
+    async def _post_drops_to_guild(
+        self, guild_id: int, channel_id: int, drops: list[Dict[str, Any]]
+    ) -> list[Dict[str, Any]]:
+        channel = self.bot.get_channel(channel_id)
+        if not channel:
+            logger.warning(f"Drops channel {channel_id} not found for guild {guild_id}")
+            return []
 
-            logger.info(f"Found {len(unsent_drops)} unsent drops")
+        posted: list[Dict[str, Any]] = []
+        for drop in drops:
+            try:
+                embed = self._create_drop_embed(drop)
+                await channel.send(embed=embed)
+                posted.append(drop)
+                logger.info(f"Sent drop '{drop.get('label', 'Unknown')}' to guild {guild_id}")
+                if len(posted) < len(drops):
+                    await asyncio.sleep(1)
+            except Exception as e:
+                logger.error(
+                    f"Failed to send drop '{drop.get('label', 'Unknown')}' to guild {guild_id}: {e}"
+                )
+        return posted
 
-            # Get guild config manager to iterate through all configured guilds
-            config_manager = await get_guild_config_manager()
-            configured_guilds = await config_manager.get_all_configured_guilds()
+    async def send_drops_for_guild(self, guild_id: int, guild_config) -> int:
+        """Post drops this guild has not yet received, and mark them sent to this guild."""
+        if not self.collection_manager:
+            logger.warning("Collection manager not initialized, skipping drops send")
+            return 0
 
-            guilds_posted = 0
-            for guild_id in configured_guilds:
+        channel_id = guild_config.drops.get("channel_id")
+        if not channel_id:
+            return 0
+
+        drops = await self._fetch_unsent_for_guild(guild_id)
+        if not drops:
+            logger.info(f"No unsent drops for guild {guild_id}")
+            return 0
+
+        logger.info(f"Posting {len(drops)} drops to guild {guild_id}")
+        posted = await self._post_drops_to_guild(guild_id, channel_id, drops)
+
+        if posted:
+            await self._mark_sent_for_guild(guild_id, posted)
+            logger.info(f"Marked {len(posted)} drops as sent for guild {guild_id}")
+
+        return len(posted)
+
+    @tasks.loop(minutes=1)
+    async def drops_tick(self):
+        """Every minute, check if any guild is due for its scheduled drops post."""
+        try:
+            config_mgr = await get_guild_config_manager()
+            guilds = await config_mgr.get_all_configured_guilds()
+
+            today_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            self._posted_today = {
+                k for k in self._posted_today if k[1] >= today_utc
+            }
+
+            for guild_id in guilds:
                 try:
-                    guild_config = await config_manager.get_config(guild_id)
+                    guild_config = await config_mgr.get_config(guild_id)
+                    drops_cfg = guild_config.drops
 
-                    if not guild_config.drops.get("enabled", False):
-                        logger.debug(f"Drops disabled for guild {guild_id}, skipping")
+                    if not drops_cfg.get("enabled", False):
+                        continue
+                    if not drops_cfg.get("channel_id"):
                         continue
 
-                    # Skip if no drops channel configured
-                    if not guild_config.drops["channel_id"]:
-                        logger.debug(f"No drops channel configured for guild {guild_id}, skipping")
+                    hour = drops_cfg.get("post_hour", 6)
+                    minute = drops_cfg.get("post_minute", 30)
+                    tz_name = drops_cfg.get("timezone", "America/Chicago")
+
+                    try:
+                        tz = pytz.timezone(tz_name)
+                    except pytz.UnknownTimeZoneError:
+                        logger.warning(f"Unknown timezone '{tz_name}' for guild {guild_id}; skipping")
                         continue
 
-                    channel = self.bot.get_channel(guild_config.drops["channel_id"])
-                    if not channel:
-                        logger.warning(f"Drops channel {guild_config.drops['channel_id']} not found for guild {guild_id}")
+                    now_local = datetime.now(tz)
+                    today_key = (guild_id, now_local.strftime("%Y-%m-%d"))
+
+                    if today_key in self._posted_today:
                         continue
 
-                    sent_count = 0
-                    for drop in unsent_drops:
-                        try:
-                            embed = self._create_drop_embed(drop)
-                            await channel.send(embed=embed)
-                            sent_count += 1
-                            logger.info(f"Sent drop '{drop.get('label', 'Unknown')}' to guild {guild_id}")
+                    if now_local.hour != hour or now_local.minute != minute:
+                        continue
 
-                            # Rate limiting - wait 1 second between sends
-                            if sent_count < len(unsent_drops):
-                                await asyncio.sleep(1)
-
-                        except Exception as e:
-                            logger.error(f"Failed to send drop '{drop.get('label', 'Unknown')}' to guild {guild_id}: {e}")
-                            continue
-
-                    guilds_posted += 1
-
-                except Exception as guild_error:
-                    logger.error(f"Error posting drops to guild {guild_id}: {guild_error}", exc_info=True)
-                    continue
-
-            # Mark drops as sent only if we posted to at least one guild
-            if guilds_posted > 0:
-                for drop in unsent_drops:
-                    await self.collection_manager.update_one(
-                        {"_id": drop["_id"]},
-                        {"$set": {"sent": True, "sent_at": datetime.now(timezone.utc)}}
+                    self._posted_today.add(today_key)
+                    logger.info(
+                        f"Scheduled drops post for guild {guild_id} "
+                        f"({hour:02d}:{minute:02d} {tz_name})"
                     )
+                    await self.send_drops_for_guild(guild_id, guild_config)
 
-                logger.info(f"Daily drops check completed. Sent {len(unsent_drops)} drops to {guilds_posted} guild(s).")
-            else:
-                logger.warning("No guilds have drops channels configured - drops not sent")
-
+                except Exception as e:
+                    logger.error(
+                        f"Error processing drops for guild {guild_id}: {e}", exc_info=True
+                    )
         except Exception as e:
-            logger.error(f"Error in daily drops check: {e}", exc_info=True)
+            logger.error(f"Error in drops_tick: {e}", exc_info=True)
 
-    @daily_drops_check.before_loop
-    async def before_daily_drops_check(self):
-        """Wait for bot to be ready before starting daily task"""
+    @drops_tick.before_loop
+    async def before_drops_tick(self):
         await self.bot.wait_until_ready()
-        logger.info(f"Daily drops check scheduled for 6:00 AM Chicago time (UTC: {SEND_TIME})")
+        logger.info("Drops tick loop started (checks per-guild schedule every minute)")
 
 
 async def setup(bot: commands.Bot):

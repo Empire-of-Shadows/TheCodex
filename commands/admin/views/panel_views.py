@@ -55,6 +55,7 @@ PANEL_SUBCATEGORIES = {
     ],
     "updates_drops": [
         ("drops_channel", "Drops Channel", "Set the channel for daily Prime Gaming drops"),
+        ("drops_schedule", "Drops Schedule", "Set the daily post time and timezone"),
         ("drops_tracker", "Tracked Channels", "Configure which channels to track for stats"),
         ("drops_manager_role", "Manager Role", "Set role that can manage drops via /drop"),
         ("drops_status", "View Status", "View drops configuration and stats"),

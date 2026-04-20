@@ -13,6 +13,7 @@ from discord.ext import commands
 
 from commands.admin.actions.drops_actions import DropsActions
 from commands.admin.views.panel_views import attach_timeout_expiry_msg
+from storage.config_manager import get_config
 from storage.database_manager import db_manager
 from utils.logger import get_logger
 
@@ -35,6 +36,8 @@ class DropCog(commands.Cog):
 
         is_manager = await DropsActions.has_drops_management(interaction.user)
         collection = db_manager.get_collection_manager("prime_drops")
+        guild_id = interaction.guild.id
+        sent_field = f"sent_by_guild.{guild_id}"
 
         # State tracked via mutable list for closure access
         browse_page = [0]
@@ -42,12 +45,14 @@ class DropCog(commands.Cog):
 
         async def _fetch_sent():
             return await collection.find_many(
-                {"sent": True}, sort=[("sent_at", -1)]
+                {sent_field: {"$exists": True}},
+                sort=[(sent_field, -1)],
             )
 
         async def _fetch_unsent():
             return await collection.find_many(
-                {"sent": {"$ne": True}}, sort=[("expires", 1)]
+                {sent_field: {"$exists": False}},
+                sort=[("expires", 1)],
             )
 
         async def _show_browse(target_interaction: discord.Interaction | None = None):
@@ -87,15 +92,28 @@ class DropCog(commands.Cog):
         async def on_test(btn_interaction: discord.Interaction):
             await btn_interaction.response.defer(ephemeral=True)
             prime_cog = self.bot.get_cog("PrimeDrops")
-            if prime_cog:
-                await prime_cog.daily_drops_check()
+            if not prime_cog:
                 await btn_interaction.followup.send(
-                    "Drops check completed. Check the drops channel for results.",
+                    "PrimeDrops cog is not loaded.", ephemeral=True
+                )
+                return
+
+            guild_config = await get_config(guild_id)
+            if not guild_config.drops.get("channel_id"):
+                await btn_interaction.followup.send(
+                    "No drops channel configured for this server.", ephemeral=True
+                )
+                return
+
+            sent_count = await prime_cog.send_drops_for_guild(guild_id, guild_config)
+            if sent_count:
+                await btn_interaction.followup.send(
+                    f"Posted {sent_count} drop(s) to the drops channel.",
                     ephemeral=True,
                 )
             else:
                 await btn_interaction.followup.send(
-                    "PrimeDrops cog is not loaded.", ephemeral=True
+                    "No unsent drops for this server.", ephemeral=True
                 )
 
         async def on_show_unsent(btn_interaction: discord.Interaction):

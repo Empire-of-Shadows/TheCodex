@@ -197,9 +197,16 @@ def build_drops_status_view(
     builder.add_text(f"**Server:** {guild.name}")
     builder.add_separator()
 
+    schedule = overview.get("schedule", {}) or {}
+    sched_hour = schedule.get("hour", 6)
+    sched_min = schedule.get("minute", 30)
+    sched_tz = schedule.get("timezone", "America/Chicago")
+    schedule_display = f"{sched_hour:02d}:{sched_min:02d} {sched_tz}"
+
     builder.add_text(
         f"**Drops Posting Channel:** {drops_display}\n"
-        f"**Status:** {enabled_display}"
+        f"**Status:** {enabled_display}\n"
+        f"**Daily Post Time:** {schedule_display}"
     )
     builder.add_separator()
 

@@ -16,6 +16,12 @@ logger = get_logger("DropsActions")
 
 TRACKER_CATEGORIES = ("Updates", "Free", "Prime")
 
+_SCHEDULE_DEFAULTS = {
+    "post_hour": 6,
+    "post_minute": 30,
+    "timezone": "America/Chicago",
+}
+
 
 class DropsActions:
     """Static async methods for managing drops configuration."""
@@ -97,9 +103,11 @@ class DropsActions:
         """Get combined settings + stats for status view."""
         settings = await DropsActions.get_drops_settings(guild_id)
         stats = await DropsActions.get_drops_stats(guild_id)
+        schedule = await DropsActions.get_schedule(guild_id)
         return {
             **settings,
             "stats": stats,
+            "schedule": schedule,
         }
 
     # -- Manager Role -------------------------------------------------------
@@ -158,3 +166,52 @@ class DropsActions:
         config = await manager.get_config(guild_id)
         config.drops["enabled"] = enabled
         return await manager.save_config(config)
+
+    # -- Schedule -----------------------------------------------------------
+
+    @staticmethod
+    async def get_schedule(guild_id: int) -> Dict[str, Any]:
+        """Get drops post schedule (hour, minute, timezone) for a guild."""
+        config = await get_config(guild_id)
+        return {
+            "hour": config.drops.get("post_hour", _SCHEDULE_DEFAULTS["post_hour"]),
+            "minute": config.drops.get("post_minute", _SCHEDULE_DEFAULTS["post_minute"]),
+            "timezone": config.drops.get("timezone", _SCHEDULE_DEFAULTS["timezone"]),
+        }
+
+    @staticmethod
+    async def set_schedule(guild_id: int, hour: int, minute: int, tz_name: str) -> bool:
+        """Set the drops post schedule for a guild."""
+        manager = await get_guild_config_manager()
+        config = await manager.get_config(guild_id)
+        config.drops["post_hour"] = hour
+        config.drops["post_minute"] = minute
+        config.drops["timezone"] = tz_name
+        return await manager.save_config(config)
+
+    @staticmethod
+    async def get_schedule_hour(guild_id: int) -> list:
+        return [str((await DropsActions.get_schedule(guild_id))["hour"])]
+
+    @staticmethod
+    async def set_schedule_hour(guild_id: int, values: list) -> bool:
+        s = await DropsActions.get_schedule(guild_id)
+        return await DropsActions.set_schedule(guild_id, int(values[0]), s["minute"], s["timezone"])
+
+    @staticmethod
+    async def get_schedule_minute(guild_id: int) -> list:
+        return [str((await DropsActions.get_schedule(guild_id))["minute"])]
+
+    @staticmethod
+    async def set_schedule_minute(guild_id: int, values: list) -> bool:
+        s = await DropsActions.get_schedule(guild_id)
+        return await DropsActions.set_schedule(guild_id, s["hour"], int(values[0]), s["timezone"])
+
+    @staticmethod
+    async def get_schedule_timezone(guild_id: int) -> list:
+        return [(await DropsActions.get_schedule(guild_id))["timezone"]]
+
+    @staticmethod
+    async def set_schedule_timezone(guild_id: int, values: list) -> bool:
+        s = await DropsActions.get_schedule(guild_id)
+        return await DropsActions.set_schedule(guild_id, s["hour"], s["minute"], values[0])

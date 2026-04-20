@@ -127,6 +127,9 @@ def _default_drops() -> Dict[str, Any]:
         "channel_id": None,
         "tracker_channels": {"Updates": None, "Free": None, "Prime": None},
         "manager_role_id": None,
+        "post_hour": 6,
+        "post_minute": 30,
+        "timezone": "America/Chicago",
     }
 
 
@@ -432,6 +435,7 @@ class GuildConfig:
             }
 
         # ── drops ──────────────────────────────────────────────────────
+        _drops_defaults = _default_drops()
         if "drops" in data and isinstance(data["drops"], dict):
             stored = data["drops"]
             if "channel_id" in stored:
@@ -443,6 +447,10 @@ class GuildConfig:
             drops = {
                 "channel_id": drops_channel,
                 "tracker_channels": stored.get("tracker_channels", {"Updates": None, "Free": None, "Prime": None}),
+                "manager_role_id": stored.get("manager_role_id"),
+                "post_hour": stored.get("post_hour", _drops_defaults["post_hour"]),
+                "post_minute": stored.get("post_minute", _drops_defaults["post_minute"]),
+                "timezone": stored.get("timezone", _drops_defaults["timezone"]),
             }
             if "enabled" in stored:
                 drops["enabled"] = stored["enabled"]
@@ -453,6 +461,10 @@ class GuildConfig:
             drops = {
                 "channel_id": channels_g2.get("drops"),
                 "tracker_channels": data.get("drops_tracker_channels", {"Updates": None, "Free": None, "Prime": None}),
+                "manager_role_id": None,
+                "post_hour": _drops_defaults["post_hour"],
+                "post_minute": _drops_defaults["post_minute"],
+                "timezone": _drops_defaults["timezone"],
             }
             _any_ch = drops.get("channel_id") or any(drops["tracker_channels"].values())
             drops["enabled"] = bool(_any_ch)
@@ -460,6 +472,10 @@ class GuildConfig:
             drops = {
                 "channel_id": data.get("drops_channel_id"),
                 "tracker_channels": {"Updates": None, "Free": None, "Prime": None},
+                "manager_role_id": None,
+                "post_hour": _drops_defaults["post_hour"],
+                "post_minute": _drops_defaults["post_minute"],
+                "timezone": _drops_defaults["timezone"],
             }
             drops["enabled"] = bool(drops.get("channel_id"))
 

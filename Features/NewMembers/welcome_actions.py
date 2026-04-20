@@ -199,15 +199,21 @@ async def _handle_suggest(interaction, params: dict):
 
 
 async def _handle_browse_drops(interaction, params: dict):
+    from datetime import datetime, timezone
+
     cog = interaction.client.get_cog("PrimeDrops")
-    if cog is None:
+    if cog is None or cog.collection_manager is None:
         await interaction.response.send_message("Drops feature is not currently available.", ephemeral=True)
         return
 
     try:
+        now = datetime.now(timezone.utc)
         drops = await cog.collection_manager.find_many(
-            {"sent": {"$ne": True}},
-            sort=[("expires", 1)],
+            {"$or": [
+                {"expires_at": {"$gte": now}},
+                {"expires_at": {"$exists": False}},
+            ]},
+            sort=[("expires_at", 1)],
         )
     except Exception:
         drops = []
@@ -216,7 +222,7 @@ async def _handle_browse_drops(interaction, params: dict):
         await interaction.response.send_message("No free gaming drops available right now. Check back later!", ephemeral=True)
         return
 
-    embeds = cog._create_drops_embeds(drops, "Free Gaming Drops")
+    embeds = cog._create_drop_embeds(drops, "Free Gaming Drops")
     await interaction.response.send_message(embed=embeds[0], ephemeral=True)
 
 

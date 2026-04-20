@@ -20,6 +20,7 @@ from .actions.new_member_actions import NewMemberActions
 from .actions.announcement_actions import AnnouncementActions
 from .actions.suggestion_actions import SuggestionActions
 from .actions.guide_actions import GuideActions
+from .actions.drops_actions import DropsActions
 from storage.setup_gatekeeper import setup_gatekeeper
 from Features.NewMembers.welcome_schema import validate_welcome_schema
 from Features.Guide.guide_schema import validate_guide_schema
@@ -551,6 +552,51 @@ WYR_CLEANUP_CONFIG = PanelNode(
     set_values=lambda gid, vals: WYRConfigActions.set_cleanup_days(gid, int(vals[0])),
     min_values=1,
     max_values=1,
+)
+
+
+# ── Drops PanelNode configs ──────────────────────────────────────────────────
+
+DROPS_SCHEDULE_CONFIG = PanelNode(
+    key="drops_schedule",
+    label="Drops Schedule",
+    kind="menu",
+    description="Configure when daily Prime Gaming drops post. Each field autosaves independently.",
+    children={
+        "drops_hour": PanelNode(
+            key="drops_hour",
+            label="Post Hour",
+            kind="option_select",
+            description="Hour of day for drops posts (24-hour clock, in selected timezone).",
+            options=[(str(h), f"{h:02d}:00") for h in range(24)],
+            get_values=DropsActions.get_schedule_hour,
+            set_values=DropsActions.set_schedule_hour,
+            min_values=1,
+            max_values=1,
+        ),
+        "drops_minute": PanelNode(
+            key="drops_minute",
+            label="Post Minute",
+            kind="option_select",
+            description="Minute offset for drops posts.",
+            options=[("0", ":00"), ("15", ":15"), ("30", ":30"), ("45", ":45")],
+            get_values=DropsActions.get_schedule_minute,
+            set_values=DropsActions.set_schedule_minute,
+            min_values=1,
+            max_values=1,
+        ),
+        "drops_timezone": PanelNode(
+            key="drops_timezone",
+            label="Timezone",
+            kind="option_select",
+            description="Timezone used when interpreting the post hour/minute.",
+            options=_WYR_TIMEZONE_OPTIONS,
+            get_values=DropsActions.get_schedule_timezone,
+            set_values=DropsActions.set_schedule_timezone,
+            min_values=1,
+            max_values=1,
+        ),
+    },
 )
 
 
