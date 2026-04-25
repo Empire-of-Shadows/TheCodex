@@ -39,9 +39,9 @@ services:
     container_name: codex-dashboard
     image: codex-dashboard
     ports:
-      - "54006:54006"
+      - "54001:54001"
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:54006/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:54001/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
