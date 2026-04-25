@@ -8,12 +8,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # Configuration
-BOT_CONTAINER="codex"
-DASH_CONTAINER="codex-dashboard"
-BOT_IMAGE="codex"
-DASH_IMAGE="codex-dashboard"
-BACKUP_TAG_BOT="codex:backup"
-BACKUP_TAG_DASH="codex-dashboard:backup"
+BOT_CONTAINER="TheCodex"
+DASH_CONTAINER="TheCodex-Dashboard"
+BOT_IMAGE="the-codex"
+DASH_IMAGE="the-codex-dashboard"
+BACKUP_TAG_BOT="the-codex:backup"
+BACKUP_TAG_DASH="the-codex-dashboard:backup"
 HEALTH_CHECK_TIMEOUT=120  # seconds to wait for health check
 
 echo "==== Starting ImperialCodex Deployment ===="

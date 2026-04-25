@@ -7,8 +7,8 @@ services:
       - .env
     environment:
       - HEALTHCHECK_DEBUG=true  # Enable debug mode
-    container_name: codex
-    image: codex
+    container_name: TheCodex
+    image: the-codex
     ports:
       - "50002:50002"  # Health check HTTP endpoint
     healthcheck:
@@ -28,7 +28,7 @@ services:
         reservations:
           memory: 256M
     networks:
-      - imperial_network
+      - obsidian_grid
 
   dashboard:
     build:
@@ -36,8 +36,8 @@ services:
       dockerfile: Dockerfile.dashboard
     env_file:
       - .env
-    container_name: codex-dashboard
-    image: codex-dashboard
+    container_name: TheCodex-Dashboard
+    image: the-codex-dashboard
     ports:
       - "54002:54002"
     healthcheck:
@@ -56,8 +56,8 @@ services:
         reservations:
           memory: 128M
     networks:
-      - imperial_network
+      - obsidian_grid
 
 networks:
-  imperial_network:
+  obsidian_grid:
     external: true

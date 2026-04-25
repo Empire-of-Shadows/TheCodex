@@ -14,8 +14,8 @@ BOT_TOKEN = os.getenv("DISCORD_TOKEN", "")
 REDIRECT_URI = os.getenv("DASHBOARD_REDIRECT_URI", "http://localhost:54002/auth/discord/callback")
 DISCORD_API_BASE = "https://discord.com/api/v10"
 
-# MongoDB — reuses the bot's primary connection (IMPERIALCODEX)
-MONGO_URI = os.getenv("IMPERIALCODEX", "")
+    # MongoDB — reuses the bot's primary connection (THE_CODEX)
+MONGO_URI = os.getenv("THE_CODEX", "")
 
 # Session
 SECRET_KEY = os.getenv("DASHBOARD_SECRET_KEY", "")

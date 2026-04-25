@@ -17,7 +17,7 @@ from storage.define_collections import DefineCollections
 
 # Load environment variables
 load_dotenv()
-primary = os.getenv("IMPERIALCODEX")
+primary = os.getenv("THE_CODEX")
 logger = logging.getLogger("DatabaseManager")
 
 
