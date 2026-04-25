@@ -1,6 +1,7 @@
 """FastAPI application for the ImperialCodex web dashboard."""
 
 import os
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -19,6 +20,7 @@ from dashboard.routers.docs import router as docs_router
 
 _frontend_dist = os.path.join(os.path.dirname(__file__), "frontend", "dist")
 _index_html = os.path.join(_frontend_dist, "index.html")
+_START_TIME = time.time()
 
 
 @asynccontextmanager
@@ -49,7 +51,22 @@ app.include_router(docs_router, prefix="/api")
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    response = {
+        "status": "healthy",
+        "timestamp": time.time(),
+        "service": "ImperialCodex Dashboard",
+        "component": "web-ui",
+        "uptime_seconds": round(time.time() - _START_TIME, 2),
+        "frontend_built": os.path.isfile(_index_html),
+    }
+    try:
+        client = db._get_client()
+        await client.admin.command("ping")
+        response["database_connected"] = True
+    except Exception:
+        response["database_connected"] = False
+        response["status"] = "degraded"
+    return response
 
 
 # Serve static assets (JS, CSS, images) from Vite build
