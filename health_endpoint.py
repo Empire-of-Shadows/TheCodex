@@ -29,45 +29,56 @@ class HealthCheckHandler(http.server.BaseHTTPRequestHandler):
     db_manager = None
 
     def do_GET(self):
-        if self.path == '/health':
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-
-            # Build health response with bot-specific details
-            response = {
-                "status": "healthy",
-                "timestamp": time.time(),
-                "bot": "TheCodex",
-                "service": "Discord Guide & FAQ Bot"
-            }
-
-            # Add Discord connection status if bot is available
-            if self.bot_instance:
-                try:
-                    response["discord_connected"] = self.bot_instance.is_ready()
-                    response["guilds"] = len(self.bot_instance.guilds) if hasattr(self.bot_instance, 'guilds') else 0
-                    response["latency_ms"] = round(self.bot_instance.latency * 1000, 2) if hasattr(self.bot_instance, 'latency') else None
-                except Exception as e:
-                    logger.warning(f"Failed to get bot status: {e}")
-                    response["discord_connected"] = False
-
-            # Add database connection status if available
-            if self.db_manager:
-                try:
-                    # Check if db_manager has a connection check method
-                    if hasattr(self.db_manager, 'is_connected'):
-                        response["database_connected"] = self.db_manager.is_connected()
-                    else:
-                        response["database_connected"] = True  # Assume connected if manager exists
-                except Exception as e:
-                    logger.warning(f"Failed to get database status: {e}")
-                    response["database_connected"] = False
-
-            self.wfile.write(json.dumps(response).encode())
-        else:
+        if self.path != '/health':
             self.send_response(404)
             self.end_headers()
+            return
+
+        status = "healthy"
+        response = {
+            "timestamp": time.time(),
+            "bot": "TheCodex",
+            "service": "Discord Guide & FAQ Bot",
+        }
+
+        if self.bot_instance:
+            try:
+                connected = self.bot_instance.is_ready()
+                response["discord_connected"] = connected
+                response["guilds"] = len(self.bot_instance.guilds) if hasattr(self.bot_instance, 'guilds') else 0
+                response["latency_ms"] = round(self.bot_instance.latency * 1000, 2) if hasattr(self.bot_instance, 'latency') else None
+                if not connected:
+                    status = "degraded"
+            except Exception as e:
+                logger.warning(f"Failed to get bot status: {e}")
+                response["discord_connected"] = False
+                status = "degraded"
+        else:
+            response["discord_connected"] = False
+            status = "degraded"
+
+        if self.db_manager:
+            try:
+                attr = getattr(self.db_manager, "is_connected", None)
+                db_ok = bool(attr() if callable(attr) else attr)
+                response["database_connected"] = db_ok
+                if not db_ok:
+                    status = "degraded"
+            except Exception as e:
+                logger.warning(f"Failed to get database status: {e}")
+                response["database_connected"] = False
+                status = "degraded"
+        else:
+            response["database_connected"] = False
+            status = "degraded"
+
+        response["status"] = status
+        code = 200 if status == "healthy" else 503
+
+        self.send_response(code)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps(response).encode())
 
     def log_message(self, format, *args):
         """Disable default logging to reduce noise"""

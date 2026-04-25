@@ -15,6 +15,7 @@ from utils.logger import get_logger, setup_application_logging
 from utils.sync import load_cogs, attach_databases
 from IdleStatus.idle import rotate_status
 from health_endpoint import initialize_health_server, stop_health_server
+from storage.database_manager import db_manager
 
 # Initialize application-wide logging
 APPLICATION_NAME = "discord-bot-codex"
@@ -210,9 +211,17 @@ async def start_services():
 		logger.debug(f"Working directory: {os.getcwd()}")
 		logger.debug(f"Log directory: log/")
 
+		# Initialize database before health server so /health reflects real DB state
+		logger.info("Initializing DatabaseManager...")
+		try:
+			await db_manager.initialize()
+			logger.info("DatabaseManager initialized successfully")
+		except Exception as db_err:
+			logger.error(f"DatabaseManager initialization failed: {db_err}", exc_info=True)
+
 		# Start health check server
 		logger.info("Initializing health check endpoint on port 50002...")
-		health_thread = initialize_health_server(port=50002, bot=bot)
+		health_thread = initialize_health_server(port=50002, bot=bot, db_manager=db_manager)
 		logger.info("Health check endpoint initialized successfully")
 
 		# Start the bot
