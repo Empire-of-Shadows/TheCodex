@@ -37,6 +37,6 @@ COPY --from=frontend /repo/dashboard/frontend/dist /app/dashboard/frontend/dist/
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 
-EXPOSE 54001
+EXPOSE 54002
 
 CMD ["python", "-m", "dashboard.app"]
