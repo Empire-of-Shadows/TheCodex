@@ -13,7 +13,7 @@ RUN apt-get update && \
 WORKDIR /app
 
 # Clone your GitHub repo directly
-RUN git clone https://github.com/Empire-of-Shadows/ImperialCodex.git .
+RUN git clone https://github.com/Empire-of-Shadows/TheCodex.git .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \

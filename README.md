@@ -1,6 +1,6 @@
 <div align="center">
 
-# ImperialCodex
+# TheCodex
 
 **The guide and community management bot for Empire of Shadows**
 

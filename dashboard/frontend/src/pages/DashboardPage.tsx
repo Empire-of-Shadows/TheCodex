@@ -197,7 +197,7 @@ export default function DashboardPage() {
   return (
     <div className="app-layout">
       <header className="app-header">
-        <h1>ImperialCodex Dashboard</h1>
+        <h1>TheCodex Dashboard</h1>
         <div className="user-info">
           {avatarUrl && <img src={avatarUrl} alt="" />}
           <span>{user?.global_name || user?.username}</span>

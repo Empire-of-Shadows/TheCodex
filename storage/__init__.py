@@ -1,5 +1,5 @@
 """
-Storage module for ImperialCodex Bot
+Storage module for TheCodex Bot
 
 Provides MongoDB-backed database management, configuration, and collection access.
 """

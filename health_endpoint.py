@@ -1,5 +1,5 @@
 """
-Health Endpoint Module for ImperialCodex Bot
+Health Endpoint Module for TheCodex Bot
 Provides HTTP endpoint for centralized health monitoring
 
 Port: 50002 (as defined in HealthCheck/README.md)

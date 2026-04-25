@@ -1,4 +1,4 @@
-# ImperialCodex Multi-Guild Testing Plan
+# TheCodex Multi-Guild Testing Plan
 
 ## Pre-Release Audit Summary
 

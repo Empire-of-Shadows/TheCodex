@@ -1,4 +1,4 @@
-"""FastAPI application for the ImperialCodex web dashboard."""
+"""FastAPI application for the TheCodex web dashboard."""
 
 import os
 import time
@@ -30,7 +30,7 @@ async def lifespan(app: FastAPI):
     await db.close()
 
 
-app = FastAPI(title="ImperialCodex Dashboard", lifespan=lifespan)
+app = FastAPI(title="TheCodex Dashboard", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -54,7 +54,7 @@ async def health():
     response = {
         "status": "healthy",
         "timestamp": time.time(),
-        "service": "ImperialCodex Dashboard",
+        "service": "TheCodex Dashboard",
         "component": "web-ui",
         "uptime_seconds": round(time.time() - _START_TIME, 2),
         "frontend_built": os.path.isfile(_index_html),

@@ -1,5 +1,5 @@
 """
-Unified Guild Configuration Manager for ImperialCodex Bot
+Unified Guild Configuration Manager for TheCodex Bot
 
 Feature-centric schema: each feature owns its channel ID, role ID, and
 settings in one place.  Cross-feature identifiers (admin/moderator roles,

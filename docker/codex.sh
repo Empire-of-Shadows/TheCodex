@@ -16,7 +16,7 @@ BACKUP_TAG_BOT="the-codex:backup"
 BACKUP_TAG_DASH="the-codex-dashboard:backup"
 HEALTH_CHECK_TIMEOUT=120  # seconds to wait for health check
 
-echo "==== Starting ImperialCodex Deployment ===="
+echo "==== Starting TheCodex Deployment ===="
 echo "Timestamp: $(date)"
 
 # Function to check container health
