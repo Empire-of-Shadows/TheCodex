@@ -38,7 +38,7 @@ class HealthCheckHandler(http.server.BaseHTTPRequestHandler):
             response = {
                 "status": "healthy",
                 "timestamp": time.time(),
-                "bot": "codex",
+                "bot": "TheCodex",
                 "service": "Discord Guide & FAQ Bot"
             }
 
