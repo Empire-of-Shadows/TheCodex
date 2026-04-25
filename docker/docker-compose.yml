@@ -10,9 +10,9 @@ services:
     container_name: codex
     image: codex
     ports:
-      - "50001:50001"  # Health check HTTP endpoint
+      - "50002:50002"  # Health check HTTP endpoint
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:50001/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:50002/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

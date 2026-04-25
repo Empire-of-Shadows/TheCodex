@@ -211,8 +211,8 @@ async def start_services():
 		logger.debug(f"Log directory: log/")
 
 		# Start health check server
-		logger.info("Initializing health check endpoint on port 50001...")
-		health_thread = initialize_health_server(port=50001, bot=bot)
+		logger.info("Initializing health check endpoint on port 50002...")
+		health_thread = initialize_health_server(port=50002, bot=bot)
 		logger.info("Health check endpoint initialized successfully")
 
 		# Start the bot
