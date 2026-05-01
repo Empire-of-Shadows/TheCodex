@@ -36,6 +36,8 @@ function PageItem({
   currentPageId,
   activeDragId,
   hoverState,
+  collapsedIds,
+  onToggleCollapse,
   onSelectPage,
   onRequestAddPage,
   onDeletePage,
@@ -50,6 +52,8 @@ function PageItem({
   currentPageId: string | null;
   activeDragId: string | null;
   hoverState: { id: string; pos: HoverPos } | null;
+  collapsedIds: Set<string>;
+  onToggleCollapse: (id: string) => void;
   onSelectPage: (id: string) => void;
   onRequestAddPage: (parentId: string | null) => void;
   onDeletePage: (id: string) => void;
@@ -65,6 +69,8 @@ function PageItem({
   const isFirst = index === 0;
   const isLast = index === siblingCount - 1;
   const isDragging = activeDragId === page.id;
+  const hasChildren = !!page.children?.length;
+  const isCollapsed = collapsedIds.has(page.id);
 
   const draggable = useDraggable({ id: `page:${page.id}`, data: { pageId: page.id } });
   const droppable = useDroppable({ id: `pagedrop:${page.id}`, data: { pageId: page.id } });
@@ -116,6 +122,19 @@ function PageItem({
         {Array.from({ length: depth }).map((_, i) => (
           <span key={i} className="indent" />
         ))}
+        {hasChildren ? (
+          <button
+            type="button"
+            className="page-tree-chevron"
+            title={isCollapsed ? "Expand" : "Collapse"}
+            onClick={(e) => { e.stopPropagation(); onToggleCollapse(page.id); }}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            {isCollapsed ? "▶" : "▼"}
+          </button>
+        ) : (
+          <span className="page-tree-chevron-spacer" />
+        )}
         <span className="page-drag-handle" title="Drag to move">⋮⋮</span>
         {page.icon && <span style={{ flexShrink: 0 }}>{page.icon}</span>}
 
@@ -221,7 +240,7 @@ function PageItem({
         </div>
       )}
 
-      {page.children?.map((child, i) => (
+      {!isCollapsed && page.children?.map((child, i) => (
         <PageItem
           key={child.id}
           page={child}
@@ -231,6 +250,8 @@ function PageItem({
           currentPageId={currentPageId}
           activeDragId={activeDragId}
           hoverState={hoverState}
+          collapsedIds={collapsedIds}
+          onToggleCollapse={onToggleCollapse}
           onSelectPage={onSelectPage}
           onRequestAddPage={onRequestAddPage}
           onDeletePage={onDeletePage}
@@ -336,6 +357,16 @@ function RootDropZone({ active }: { active: boolean }) {
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
+function collectParentIds(pages: GuidePage[], out: string[] = []): string[] {
+  for (const p of pages) {
+    if (p.children?.length) {
+      out.push(p.id);
+      collectParentIds(p.children, out);
+    }
+  }
+  return out;
+}
+
 function findPageFlat(pages: GuidePage[], id: string): GuidePage | null {
   for (const p of pages) {
     if (p.id === id) return p;
@@ -363,6 +394,23 @@ export default function PageTreeEditor({
   const [createDialog, setCreateDialog] = useState<{ parentId: string | null } | null>(null);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [hoverState, setHoverState] = useState<{ id: string; pos: HoverPos } | null>(null);
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
+
+  const toggleCollapse = (id: string) => {
+    setCollapsedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const allParentIds = collectParentIds(pages);
+  const allCollapsed = allParentIds.length > 0 && allParentIds.every(id => collapsedIds.has(id));
+
+  const onExpandCollapseAll = () => {
+    setCollapsedIds(allCollapsed ? new Set() : new Set(allParentIds));
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
@@ -441,7 +489,19 @@ export default function PageTreeEditor({
 
   return (
     <div className="palette-section">
-      <h3>Page Tree</h3>
+      <div className="page-tree-header">
+        <h3>Page Tree</h3>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          style={{ fontSize: 11, padding: "2px 8px" }}
+          onClick={onExpandCollapseAll}
+          disabled={allParentIds.length === 0}
+          title={allCollapsed ? "Expand all" : "Collapse all"}
+        >
+          {allCollapsed ? "Expand all" : "Collapse all"}
+        </button>
+      </div>
       <DndContext
         sensors={sensors}
         onDragStart={onDragStart}
@@ -460,6 +520,8 @@ export default function PageTreeEditor({
               currentPageId={currentPageId}
               activeDragId={activeDragId}
               hoverState={hoverState}
+              collapsedIds={collapsedIds}
+              onToggleCollapse={toggleCollapse}
               onSelectPage={onSelectPage}
               onRequestAddPage={(parentId) => setCreateDialog({ parentId })}
               onDeletePage={onDeletePage}

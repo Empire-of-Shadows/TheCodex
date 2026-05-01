@@ -662,6 +662,37 @@ body::before {
 
 /* ── Page tree (guide mode) ─────────────────────────────────────────── */
 
+.page-tree-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.page-tree-chevron,
+.page-tree-chevron-spacer {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.page-tree-chevron {
+  background: transparent;
+  border: none;
+  color: var(--text-3, var(--text-2));
+  cursor: pointer;
+  font-size: 9px;
+  padding: 0;
+  line-height: 1;
+}
+
+.page-tree-chevron:hover {
+  color: var(--text-1);
+}
+
 .page-tree {
   display: flex;
   flex-direction: column;
