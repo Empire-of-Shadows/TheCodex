@@ -179,6 +179,55 @@ function movePageInTree(pages: GuidePage[], id: string, dir: -1 | 1): GuidePage[
   );
 }
 
+function clonePageWithNewIds(page: GuidePage, existingIds: Set<string>): GuidePage {
+  function uniqueSlug(base: string): string {
+    let slug = `${base}-copy`;
+    if (!existingIds.has(slug)) {
+      existingIds.add(slug);
+      return slug;
+    }
+    let i = 2;
+    while (existingIds.has(`${base}-copy-${i}`)) i++;
+    const out = `${base}-copy-${i}`;
+    existingIds.add(out);
+    return out;
+  }
+  const newId = uniqueSlug(page.id);
+  return {
+    ...page,
+    id: newId,
+    order: undefined,
+    content: page.content ? { components: addIds(page.content.components) } : undefined,
+    children: page.children?.map((c) => clonePageWithNewIds(c, existingIds)),
+  };
+}
+
+function collectAllIds(pages: GuidePage[], out: Set<string> = new Set()): Set<string> {
+  for (const p of pages) {
+    out.add(p.id);
+    if (p.children) collectAllIds(p.children, out);
+  }
+  return out;
+}
+
+function insertAfterPage(pages: GuidePage[], targetId: string, node: GuidePage): GuidePage[] {
+  const out: GuidePage[] = [];
+  let inserted = false;
+  for (const p of pages) {
+    if (p.id === targetId) {
+      out.push(p, node);
+      inserted = true;
+    } else if (p.children) {
+      const childResult = insertAfterPage(p.children, targetId, node);
+      if (childResult !== p.children) inserted = true;
+      out.push({ ...p, children: childResult });
+    } else {
+      out.push(p);
+    }
+  }
+  return inserted ? out : pages;
+}
+
 function addChildPage(pages: GuidePage[], parentId: string | null, child: GuidePage): GuidePage[] {
   if (parentId === null) return [...pages, child];
   return pages.map((p) => {
@@ -320,7 +369,8 @@ export default function BuilderPage() {
   const [accentColor, setAccentColor] = useState<string | undefined>();
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" | "info" } | null>(null);
+  const [toasts, setToasts] = useState<{ id: number; msg: string; type: "success" | "error" | "info" }[]>([]);
+  const [savedSigs, setSavedSigs] = useState<{ guide: string; welcome: string }>({ guide: "", welcome: "" });
   const [loading, setLoading] = useState(true);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [simulating, setSimulating] = useState(false);
@@ -339,6 +389,12 @@ export default function BuilderPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  const pushToast = useCallback((msg: string, type: "success" | "error" | "info" = "info", duration = 3000) => {
+    const id = Date.now() + Math.random();
+    setToasts((prev) => [...prev, { id, msg, type }]);
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), duration);
+  }, []);
 
   // ── Panel resize ──────────────────────────────────────────────────────
   const resizing = useRef(false);
@@ -433,6 +489,12 @@ export default function BuilderPage() {
           const firstPage = findPage(gc.pages, gc.currentPageId);
           setComponents(firstPage?.content?.components ? [...firstPage.content.components] : []);
         }
+        // Seed saved signatures from loaded data so initial state is "clean"
+        const wc = welcomeCacheRef.current;
+        setSavedSigs({
+          guide: JSON.stringify(buildGuideData(gc.pages, gc.accentColor)),
+          welcome: JSON.stringify(buildWelcomeData(wc.components, wc.accentColor)),
+        });
       })
       .catch(() => navigate("/dashboard"))
       .finally(() => setLoading(false));
@@ -567,6 +629,34 @@ export default function BuilderPage() {
     []
   );
 
+  const duplicatePage = useCallback(
+    (pageId: string) => {
+      setPages((prev) => {
+        // Snapshot active page components into tree so duplicate captures latest edits
+        let working = prev;
+        if (currentPageId) {
+          working = updatePageInTree(prev, currentPageId, (p) => ({
+            ...p,
+            content: { components: [...components] },
+          }));
+        }
+        const original = findPage(working, pageId);
+        if (!original) return prev;
+        const subDepth = subtreeDepth(original);
+        const ownDepth = depthOfId(working, pageId) ?? 0;
+        if (ownDepth + subDepth > MAX_PAGE_DEPTH) {
+          pushToast(`Cannot duplicate — exceeds max depth of ${MAX_PAGE_DEPTH}`, "error");
+          return prev;
+        }
+        const existingIds = collectAllIds(working);
+        const clone = clonePageWithNewIds(original, existingIds);
+        clone.label = `${original.label} (copy)`;
+        return insertAfterPage(working, pageId, clone);
+      });
+    },
+    [currentPageId, components, pushToast]
+  );
+
   const movePage = useCallback(
     (pageId: string, dir: -1 | 1) => {
       setPages((prev) => movePageInTree(prev, pageId, dir));
@@ -675,6 +765,18 @@ export default function BuilderPage() {
     setSelectedId((prev) => (prev === id ? null : prev));
   }, []);
 
+  const duplicateComponent = useCallback((id: string) => {
+    setComponents((prev) => {
+      const idx = prev.findIndex((c) => c._id === id);
+      if (idx === -1) return prev;
+      const clone = addIds([prev[idx]])[0];
+      const copy = [...prev];
+      copy.splice(idx + 1, 0, clone);
+      setSelectedId(clone._id);
+      return copy;
+    });
+  }, []);
+
   const selectedComponent = useMemo(
     () => components.find((c) => c._id === selectedId) || null,
     [components, selectedId]
@@ -718,30 +820,26 @@ export default function BuilderPage() {
           setSimBreadcrumbs([]);
           break;
         case "search":
-          setToast({ msg: "Search requires the bot backend", type: "info" as any });
-          setTimeout(() => setToast(null), 3000);
+          pushToast("Search requires the bot backend", "info");
           break;
         case "welcome_action": {
           const desc = VALID_ACTIONS[action.action!]?.description || action.action;
-          setToast({ msg: `Action: ${desc}`, type: "info" as any });
-          setTimeout(() => setToast(null), 3000);
+          pushToast(`Action: ${desc}`, "info");
           break;
         }
         case "channel": {
           const ch = channels.find((c) => c.id === action.target);
-          setToast({ msg: `Would link to channel #${ch?.name || action.target}`, type: "info" as any });
-          setTimeout(() => setToast(null), 3000);
+          pushToast(`Would link to channel #${ch?.name || action.target}`, "info");
           break;
         }
         case "role": {
           const r = roles.find((rl) => rl.id === action.target);
-          setToast({ msg: `Would give/remove role @${r?.name || action.target}`, type: "info" as any });
-          setTimeout(() => setToast(null), 3000);
+          pushToast(`Would give/remove role @${r?.name || action.target}`, "info");
           break;
         }
       }
     },
-    [simPageId, simBreadcrumbs, channels, roles]
+    [simPageId, simBreadcrumbs, channels, roles, pushToast]
   );
 
   // ── Import JSON ────────────────────────────────────────────────────────
@@ -769,29 +867,75 @@ export default function BuilderPage() {
                 setComponents([]);
               }
               setSelectedId(null);
-              setToast({ msg: `Imported ${imported.length} pages`, type: "success" });
+              pushToast(`Imported ${imported.length} pages`, "success");
             } else {
-              setToast({ msg: "Invalid guide JSON — expected { pages: [...] }", type: "error" });
+              pushToast("Invalid guide JSON — expected { pages: [...] }", "error");
             }
           } else {
             if (data.components && Array.isArray(data.components)) {
               setComponents(addIds(data.components));
               if (data.accent_color) setAccentColor(data.accent_color as string);
               setSelectedId(null);
-              setToast({ msg: `Imported ${data.components.length} components`, type: "success" });
+              pushToast(`Imported ${data.components.length} components`, "success");
             } else {
-              setToast({ msg: "Invalid welcome JSON — expected { components: [...] }", type: "error" });
+              pushToast("Invalid welcome JSON — expected { components: [...] }", "error");
             }
           }
         } catch {
-          setToast({ msg: "Failed to parse JSON file", type: "error" });
+          pushToast("Failed to parse JSON file", "error");
         }
         if (fileInputRef.current) fileInputRef.current.value = "";
-        setTimeout(() => setToast(null), 3000);
       };
       reader.readAsText(file);
     },
-    [mode]
+    [mode, pushToast]
+  );
+
+  // ── Dirty tracking ─────────────────────────────────────────────────────
+
+  const currentGuideSig = useMemo(() => {
+    if (loading) return savedSigs.guide;
+    if (mode === "guide") {
+      let p = pages;
+      if (currentPageId) {
+        p = updatePageInTree(pages, currentPageId, (pg) => ({
+          ...pg,
+          content: { components: [...components] },
+        }));
+      }
+      return JSON.stringify(buildGuideData(p, accentColor));
+    }
+    const gc = guideCacheRef.current;
+    return JSON.stringify(buildGuideData(gc.pages, gc.accentColor));
+  }, [loading, mode, pages, currentPageId, components, accentColor, savedSigs.guide]);
+
+  const currentWelcomeSig = useMemo(() => {
+    if (loading) return savedSigs.welcome;
+    if (mode === "welcome") {
+      return JSON.stringify(buildWelcomeData(components, accentColor));
+    }
+    const wc = welcomeCacheRef.current;
+    return JSON.stringify(buildWelcomeData(wc.components, wc.accentColor));
+  }, [loading, mode, components, accentColor, savedSigs.welcome]);
+
+  const dirty = !loading && (currentGuideSig !== savedSigs.guide || currentWelcomeSig !== savedSigs.welcome);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
+
+  const navigateAway = useCallback(
+    (path: string) => {
+      if (dirty && !window.confirm("You have unsaved changes. Leave anyway?")) return;
+      navigate(path);
+    },
+    [dirty, navigate]
   );
 
   // ── Save (DB write + update cache) ─────────────────────────────────────
@@ -824,22 +968,69 @@ export default function BuilderPage() {
             setComponents(page?.content?.components ? [...page.content.components] : []);
           }
         }
-        setToast({ msg: "Guide saved!", type: "success" });
+        setSavedSigs((prev) => ({ ...prev, guide: currentGuideSig }));
+        pushToast("Guide saved!", "success");
       } else {
-        const data: WelcomeData = { components: stripIds(components) as any };
-        if (accentColor) data.accent_color = accentColor;
+        const data = buildWelcomeData(components, accentColor);
         await api.putWelcome(guildId, data);
         // Update welcome cache with current state
         welcomeCacheRef.current = { components: [...components], accentColor };
-        setToast({ msg: "Welcome saved!", type: "success" });
+        setSavedSigs((prev) => ({ ...prev, welcome: currentWelcomeSig }));
+        pushToast("Welcome saved!", "success");
       }
     } catch (err: any) {
-      setToast({ msg: err.message || "Save failed", type: "error" });
+      pushToast(err.message || "Save failed", "error");
     } finally {
       setSaving(false);
-      setTimeout(() => setToast(null), 3000);
     }
   };
+
+  // ── Keyboard shortcuts ─────────────────────────────────────────────────
+
+  useEffect(() => {
+    const isEditableTarget = (el: EventTarget | null): boolean => {
+      if (!(el instanceof HTMLElement)) return false;
+      const tag = el.tagName;
+      return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+    };
+
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      // Ctrl/Cmd+S — save (always intercept)
+      if (mod && (e.key === "s" || e.key === "S")) {
+        e.preventDefault();
+        if (!saving && errors.length === 0 && dirty) save();
+        return;
+      }
+      // Skip remaining shortcuts when typing in form fields
+      if (isEditableTarget(e.target)) return;
+      if (simulating) return;
+
+      if (mod && (e.key === "d" || e.key === "D")) {
+        if (selectedId) {
+          e.preventDefault();
+          duplicateComponent(selectedId);
+        }
+        return;
+      }
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (selectedId) {
+          e.preventDefault();
+          deleteComponent(selectedId);
+        }
+        return;
+      }
+      if (e.key === "Escape") {
+        if (selectedId) {
+          e.preventDefault();
+          setSelectedId(null);
+        }
+      }
+    };
+
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [saving, errors.length, dirty, selectedId, simulating, duplicateComponent, deleteComponent]);
 
   // ── Render ─────────────────────────────────────────────────────────────
 
@@ -849,7 +1040,7 @@ export default function BuilderPage() {
     <div className="app-layout app-layout--builder">
       <header className="app-header">
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <button className="btn btn-secondary" onClick={() => navigate("/dashboard")} style={{ fontSize: 12 }}>
+          <button className="btn btn-secondary" onClick={() => navigateAway("/dashboard")} style={{ fontSize: 12 }}>
             ← Back
           </button>
           {guild && (
@@ -894,8 +1085,8 @@ export default function BuilderPage() {
           <button className="btn btn-secondary" onClick={() => fileInputRef.current?.click()} style={{ fontSize: 12 }}>
             Import JSON
           </button>
-          <button className="btn btn-success" onClick={save} disabled={saving || errors.length > 0}>
-            {saving ? "Saving..." : "Save"}
+          <button className="btn btn-success" onClick={save} disabled={saving || errors.length > 0 || !dirty}>
+            {saving ? "Saving..." : dirty ? "Save •" : "Saved"}
           </button>
         </div>
       </header>
@@ -913,9 +1104,11 @@ export default function BuilderPage() {
                 <PageTreeEditor
                   pages={pages}
                   currentPageId={currentPageId}
+                  storageKey={guildId ? `pageTree:collapsed:${guildId}` : undefined}
                   onSelectPage={selectPage}
                   onAddPage={addPage}
                   onDeletePage={deletePage}
+                  onDuplicatePage={duplicatePage}
                   onRenamePage={renamePage}
                   onMovePage={movePage}
                   onMovePageTo={movePageTo}
@@ -1025,7 +1218,13 @@ export default function BuilderPage() {
         </DragOverlay>
       </DndContext>
 
-      {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
+      {toasts.length > 0 && (
+        <div className="toast-stack">
+          {toasts.map((t) => (
+            <div key={t.id} className={`toast ${t.type}`}>{t.msg}</div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1047,6 +1246,12 @@ function buildGuideData(pages: GuidePage[], accentColor?: string): GuideData {
   const result: GuideData = { pages: pages.map(cleanPage) };
   if (accentColor) result.accent_color = accentColor;
   return result;
+}
+
+function buildWelcomeData(components: ComponentDef[], accentColor?: string): WelcomeData {
+  const data: WelcomeData = { components: stripIds(components) as any };
+  if (accentColor) data.accent_color = accentColor;
+  return data;
 }
 
 function stripIds(components: ComponentDef[]): any[] {

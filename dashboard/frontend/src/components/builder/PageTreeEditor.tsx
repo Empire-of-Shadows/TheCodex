@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -17,9 +17,11 @@ import type { PageDropPos } from "../../pages/BuilderPage";
 interface Props {
   pages: GuidePage[];
   currentPageId: string | null;
+  storageKey?: string;
   onSelectPage: (pageId: string) => void;
   onAddPage: (parentId: string | null, label: string, icon?: string, description?: string) => void;
   onDeletePage: (pageId: string) => void;
+  onDuplicatePage: (pageId: string) => void;
   onRenamePage: (pageId: string, label: string) => void;
   onMovePage: (pageId: string, dir: -1 | 1) => void;
   onMovePageTo: (pageId: string, targetId: string | null, pos: PageDropPos) => void;
@@ -37,10 +39,12 @@ function PageItem({
   activeDragId,
   hoverState,
   collapsedIds,
+  visibleIds,
   onToggleCollapse,
   onSelectPage,
   onRequestAddPage,
   onDeletePage,
+  onDuplicatePage,
   onRenamePage,
   onMovePage,
   onUpdatePageMeta,
@@ -53,10 +57,12 @@ function PageItem({
   activeDragId: string | null;
   hoverState: { id: string; pos: HoverPos } | null;
   collapsedIds: Set<string>;
+  visibleIds: Set<string> | null;
   onToggleCollapse: (id: string) => void;
   onSelectPage: (id: string) => void;
   onRequestAddPage: (parentId: string | null) => void;
   onDeletePage: (id: string) => void;
+  onDuplicatePage: (id: string) => void;
   onRenamePage: (id: string, label: string) => void;
   onMovePage: (id: string, dir: -1 | 1) => void;
   onUpdatePageMeta: (id: string, field: "description" | "icon", value: string) => void;
@@ -70,7 +76,9 @@ function PageItem({
   const isLast = index === siblingCount - 1;
   const isDragging = activeDragId === page.id;
   const hasChildren = !!page.children?.length;
-  const isCollapsed = collapsedIds.has(page.id);
+  // When filtering, force-expand so matching descendants render
+  const isCollapsed = visibleIds ? false : collapsedIds.has(page.id);
+  if (visibleIds && !visibleIds.has(page.id)) return null;
 
   const draggable = useDraggable({ id: `page:${page.id}`, data: { pageId: page.id } });
   const droppable = useDroppable({ id: `pagedrop:${page.id}`, data: { pageId: page.id } });
@@ -206,6 +214,12 @@ function PageItem({
             </button>
           )}
           <button
+            title="Duplicate page (with children)"
+            onClick={(e) => { e.stopPropagation(); onDuplicatePage(page.id); }}
+          >
+            ⎘
+          </button>
+          <button
             title="Delete page"
             onClick={(e) => { e.stopPropagation(); onDeletePage(page.id); }}
           >
@@ -251,10 +265,12 @@ function PageItem({
           activeDragId={activeDragId}
           hoverState={hoverState}
           collapsedIds={collapsedIds}
+          visibleIds={visibleIds}
           onToggleCollapse={onToggleCollapse}
           onSelectPage={onSelectPage}
           onRequestAddPage={onRequestAddPage}
           onDeletePage={onDeletePage}
+          onDuplicatePage={onDuplicatePage}
           onRenamePage={onRenamePage}
           onMovePage={onMovePage}
           onUpdatePageMeta={onUpdatePageMeta}
@@ -357,6 +373,36 @@ function RootDropZone({ active }: { active: boolean }) {
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
+function computeVisibleIds(pages: GuidePage[], filter: string): Set<string> | null {
+  const q = filter.trim().toLowerCase();
+  if (!q) return null;
+  const visible = new Set<string>();
+  function walk(list: GuidePage[], ancestors: string[]): boolean {
+    let anyMatched = false;
+    for (const p of list) {
+      const selfMatch = p.label.toLowerCase().includes(q);
+      const childMatch = p.children?.length ? walk(p.children, [...ancestors, p.id]) : false;
+      if (selfMatch || childMatch) {
+        ancestors.forEach((a) => visible.add(a));
+        visible.add(p.id);
+        if (selfMatch && p.children) {
+          // include all descendants when this node itself matches
+          const stack = [...p.children];
+          while (stack.length) {
+            const n = stack.pop()!;
+            visible.add(n.id);
+            if (n.children) stack.push(...n.children);
+          }
+        }
+        anyMatched = true;
+      }
+    }
+    return anyMatched;
+  }
+  walk(pages, []);
+  return visible;
+}
+
 function collectParentIds(pages: GuidePage[], out: string[] = []): string[] {
   for (const p of pages) {
     if (p.children?.length) {
@@ -383,9 +429,11 @@ function findPageFlat(pages: GuidePage[], id: string): GuidePage | null {
 export default function PageTreeEditor({
   pages,
   currentPageId,
+  storageKey,
   onSelectPage,
   onAddPage,
   onDeletePage,
+  onDuplicatePage,
   onRenamePage,
   onMovePage,
   onMovePageTo,
@@ -394,7 +442,22 @@ export default function PageTreeEditor({
   const [createDialog, setCreateDialog] = useState<{ parentId: string | null } | null>(null);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [hoverState, setHoverState] = useState<{ id: string; pos: HoverPos } | null>(null);
-  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
+  const [filter, setFilter] = useState("");
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => {
+    if (!storageKey) return new Set();
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) return new Set(JSON.parse(raw) as string[]);
+    } catch {}
+    return new Set();
+  });
+
+  useEffect(() => {
+    if (!storageKey) return;
+    try {
+      localStorage.setItem(storageKey, JSON.stringify([...collapsedIds]));
+    } catch {}
+  }, [collapsedIds, storageKey]);
 
   const toggleCollapse = (id: string) => {
     setCollapsedIds(prev => {
@@ -411,6 +474,8 @@ export default function PageTreeEditor({
   const onExpandCollapseAll = () => {
     setCollapsedIds(allCollapsed ? new Set() : new Set(allParentIds));
   };
+
+  const visibleIds = useMemo(() => computeVisibleIds(pages, filter), [pages, filter]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
@@ -502,6 +567,17 @@ export default function PageTreeEditor({
           {allCollapsed ? "Expand all" : "Collapse all"}
         </button>
       </div>
+      <div className="page-tree-filter">
+        <input
+          type="text"
+          placeholder="Filter pages…"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+        />
+        {filter && (
+          <button type="button" onClick={() => setFilter("")} title="Clear filter">×</button>
+        )}
+      </div>
       <DndContext
         sensors={sensors}
         onDragStart={onDragStart}
@@ -521,15 +597,22 @@ export default function PageTreeEditor({
               activeDragId={activeDragId}
               hoverState={hoverState}
               collapsedIds={collapsedIds}
+              visibleIds={visibleIds}
               onToggleCollapse={toggleCollapse}
               onSelectPage={onSelectPage}
               onRequestAddPage={(parentId) => setCreateDialog({ parentId })}
               onDeletePage={onDeletePage}
+              onDuplicatePage={onDuplicatePage}
               onRenamePage={onRenamePage}
               onMovePage={onMovePage}
               onUpdatePageMeta={onUpdatePageMeta}
             />
           ))}
+          {visibleIds && visibleIds.size === 0 && (
+            <div style={{ padding: "8px 12px", fontSize: 12, color: "var(--text-3, var(--text-2))" }}>
+              No pages match "{filter}"
+            </div>
+          )}
         </div>
         <RootDropZone active={activeDragId !== null} />
 

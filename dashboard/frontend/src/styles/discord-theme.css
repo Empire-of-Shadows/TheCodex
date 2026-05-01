@@ -669,6 +669,40 @@ body::before {
   gap: 8px;
 }
 
+.page-tree-filter {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 6px 0;
+}
+
+.page-tree-filter input {
+  flex: 1;
+  background: var(--bg-1);
+  border: 1px solid var(--border, transparent);
+  color: var(--text-1);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  font-size: 12px;
+  outline: none;
+}
+
+.page-tree-filter input:focus {
+  border-color: var(--dc-blurple, #5865f2);
+}
+
+.page-tree-filter button {
+  background: transparent;
+  border: none;
+  color: var(--text-2);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.page-tree-filter button:hover { color: var(--text-1); }
+
 .page-tree-chevron,
 .page-tree-chevron-spacer {
   width: 16px;
@@ -1221,18 +1255,27 @@ body::before {
 
 /* ── Toast ──────────────────────────────────────────────────────────── */
 
-.toast {
+.toast-stack {
   position: fixed;
   bottom: 24px;
   right: 24px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+  pointer-events: none;
+}
+
+.toast {
   padding: 12px 20px;
   border-radius: var(--radius-sm);
   color: white;
   font-size: 14px;
   font-weight: 500;
-  z-index: 1000;
   animation: toast-in 0.2s ease-out;
   box-shadow: var(--shadow);
+  pointer-events: auto;
 }
 
 .toast.success { background: var(--success); color: #0f0f12; }
