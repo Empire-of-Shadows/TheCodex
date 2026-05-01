@@ -1,5 +1,18 @@
 import { useState, useRef, useEffect } from "react";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+  type DragStartEvent,
+  type DragEndEvent,
+  type DragMoveEvent,
+} from "@dnd-kit/core";
 import type { GuidePage } from "../../api/types";
+import type { PageDropPos } from "../../pages/BuilderPage";
 
 interface Props {
   pages: GuidePage[];
@@ -9,8 +22,11 @@ interface Props {
   onDeletePage: (pageId: string) => void;
   onRenamePage: (pageId: string, label: string) => void;
   onMovePage: (pageId: string, dir: -1 | 1) => void;
+  onMovePageTo: (pageId: string, targetId: string | null, pos: PageDropPos) => void;
   onUpdatePageMeta: (pageId: string, field: "description" | "icon", value: string) => void;
 }
+
+type HoverPos = "before" | "after" | "child";
 
 function PageItem({
   page,
@@ -18,6 +34,8 @@ function PageItem({
   index,
   siblingCount,
   currentPageId,
+  activeDragId,
+  hoverState,
   onSelectPage,
   onRequestAddPage,
   onDeletePage,
@@ -30,6 +48,8 @@ function PageItem({
   index: number;
   siblingCount: number;
   currentPageId: string | null;
+  activeDragId: string | null;
+  hoverState: { id: string; pos: HoverPos } | null;
   onSelectPage: (id: string) => void;
   onRequestAddPage: (parentId: string | null) => void;
   onDeletePage: (id: string) => void;
@@ -44,6 +64,10 @@ function PageItem({
   const isActive = currentPageId === page.id;
   const isFirst = index === 0;
   const isLast = index === siblingCount - 1;
+  const isDragging = activeDragId === page.id;
+
+  const draggable = useDraggable({ id: `page:${page.id}`, data: { pageId: page.id } });
+  const droppable = useDroppable({ id: `pagedrop:${page.id}`, data: { pageId: page.id } });
 
   useEffect(() => {
     if (editing && inputRef.current) {
@@ -62,15 +86,37 @@ function PageItem({
     setEditing(false);
   };
 
+  const showBefore = hoverState?.id === page.id && hoverState.pos === "before";
+  const showAfter = hoverState?.id === page.id && hoverState.pos === "after";
+  const showChild = hoverState?.id === page.id && hoverState.pos === "child";
+
+  const setRowRef = (el: HTMLDivElement | null) => {
+    draggable.setNodeRef(el);
+    droppable.setNodeRef(el);
+  };
+
+  const classes = [
+    "page-tree-item",
+    isActive ? "active" : "",
+    isDragging ? "dragging" : "",
+    showChild ? "drop-target-child" : "",
+  ].filter(Boolean).join(" ");
+
   return (
     <>
+      {showBefore && <div className="page-drop-line" style={{ marginLeft: depth * 16 }} />}
       <div
-        className={`page-tree-item ${isActive ? "active" : ""}`}
+        ref={setRowRef}
+        className={classes}
         onClick={() => onSelectPage(page.id)}
+        {...draggable.listeners}
+        {...draggable.attributes}
+        style={{ touchAction: "none" }}
       >
         {Array.from({ length: depth }).map((_, i) => (
           <span key={i} className="indent" />
         ))}
+        <span className="page-drag-handle" title="Drag to move">⋮⋮</span>
         {page.icon && <span style={{ flexShrink: 0 }}>{page.icon}</span>}
 
         {editing ? (
@@ -88,6 +134,7 @@ function PageItem({
               }
             }}
             onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
             maxLength={100}
           />
         ) : (
@@ -104,7 +151,10 @@ function PageItem({
           </span>
         )}
 
-        <div className="page-tree-actions">
+        <div
+          className="page-tree-actions"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
           <button
             title="Move up"
             disabled={isFirst}
@@ -144,6 +194,7 @@ function PageItem({
           </button>
         </div>
       </div>
+      {showAfter && <div className="page-drop-line" style={{ marginLeft: depth * 16 }} />}
 
       {expanded && (
         <div className="page-meta-editor" style={{ paddingLeft: depth * 16 + 8 }}>
@@ -178,6 +229,8 @@ function PageItem({
           index={i}
           siblingCount={page.children!.length}
           currentPageId={currentPageId}
+          activeDragId={activeDragId}
+          hoverState={hoverState}
           onSelectPage={onSelectPage}
           onRequestAddPage={onRequestAddPage}
           onDeletePage={onDeletePage}
@@ -267,6 +320,33 @@ function CreatePageDialog({
   );
 }
 
+// ── Root drop zone ──────────────────────────────────────────────────────
+
+function RootDropZone({ active }: { active: boolean }) {
+  const { setNodeRef, isOver } = useDroppable({ id: "pagedrop:__root__", data: { pageId: null } });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`page-root-dropzone${active ? " active" : ""}${isOver ? " over" : ""}`}
+    >
+      Drop here to make root page
+    </div>
+  );
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────
+
+function findPageFlat(pages: GuidePage[], id: string): GuidePage | null {
+  for (const p of pages) {
+    if (p.id === id) return p;
+    if (p.children) {
+      const r = findPageFlat(p.children, id);
+      if (r) return r;
+    }
+  }
+  return null;
+}
+
 // ── Main Component ──────────────────────────────────────────────────────
 
 export default function PageTreeEditor({
@@ -277,36 +357,132 @@ export default function PageTreeEditor({
   onDeletePage,
   onRenamePage,
   onMovePage,
+  onMovePageTo,
   onUpdatePageMeta,
 }: Props) {
   const [createDialog, setCreateDialog] = useState<{ parentId: string | null } | null>(null);
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [hoverState, setHoverState] = useState<{ id: string; pos: HoverPos } | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
+  );
 
   const handleConfirm = (parentId: string | null, label: string, icon?: string, description?: string) => {
     onAddPage(parentId, label, icon, description);
     setCreateDialog(null);
   };
 
+  const onDragStart = (e: DragStartEvent) => {
+    const id = String(e.active.id);
+    if (id.startsWith("page:")) {
+      setActiveDragId(id.slice(5));
+    }
+  };
+
+  const onDragMove = (e: DragMoveEvent) => {
+    const over = e.over;
+    if (!over || !activeDragId) {
+      setHoverState(null);
+      return;
+    }
+    const overData = over.data.current as { pageId: string | null } | undefined;
+    const overPageId = overData?.pageId ?? null;
+    if (overPageId === null) {
+      setHoverState(null);
+      return;
+    }
+    if (overPageId === activeDragId) {
+      setHoverState(null);
+      return;
+    }
+
+    // Compute pointer Y relative to over rect
+    const rect = over.rect;
+    const activeRect = e.active.rect.current.translated;
+    const pointerY = activeRect ? activeRect.top + activeRect.height / 2 : rect.top + rect.height / 2;
+    const rel = (pointerY - rect.top) / rect.height;
+
+    let pos: HoverPos;
+    if (rel < 0.25) pos = "before";
+    else if (rel > 0.75) pos = "after";
+    else pos = "child";
+
+    setHoverState({ id: overPageId, pos });
+  };
+
+  const onDragEnd = (e: DragEndEvent) => {
+    const draggedId = activeDragId;
+    const finalHover = hoverState;
+    setActiveDragId(null);
+    setHoverState(null);
+
+    if (!draggedId) return;
+    const over = e.over;
+    if (!over) return;
+    const overData = over.data.current as { pageId: string | null } | undefined;
+    const overPageId = overData?.pageId ?? null;
+
+    if (overPageId === null) {
+      onMovePageTo(draggedId, null, "root-end");
+      return;
+    }
+    if (overPageId === draggedId) return;
+    if (!finalHover) return;
+    onMovePageTo(draggedId, finalHover.id, finalHover.pos);
+  };
+
+  const onDragCancel = () => {
+    setActiveDragId(null);
+    setHoverState(null);
+  };
+
+  const draggedPage = activeDragId ? findPageFlat(pages, activeDragId) : null;
+
   return (
     <div className="palette-section">
       <h3>Page Tree</h3>
-      <div className="page-tree">
-        {pages.map((page, i) => (
-          <PageItem
-            key={page.id}
-            page={page}
-            depth={0}
-            index={i}
-            siblingCount={pages.length}
-            currentPageId={currentPageId}
-            onSelectPage={onSelectPage}
-            onRequestAddPage={(parentId) => setCreateDialog({ parentId })}
-            onDeletePage={onDeletePage}
-            onRenamePage={onRenamePage}
-            onMovePage={onMovePage}
-            onUpdatePageMeta={onUpdatePageMeta}
-          />
-        ))}
-      </div>
+      <DndContext
+        sensors={sensors}
+        onDragStart={onDragStart}
+        onDragMove={onDragMove}
+        onDragEnd={onDragEnd}
+        onDragCancel={onDragCancel}
+      >
+        <div className="page-tree">
+          {pages.map((page, i) => (
+            <PageItem
+              key={page.id}
+              page={page}
+              depth={0}
+              index={i}
+              siblingCount={pages.length}
+              currentPageId={currentPageId}
+              activeDragId={activeDragId}
+              hoverState={hoverState}
+              onSelectPage={onSelectPage}
+              onRequestAddPage={(parentId) => setCreateDialog({ parentId })}
+              onDeletePage={onDeletePage}
+              onRenamePage={onRenamePage}
+              onMovePage={onMovePage}
+              onUpdatePageMeta={onUpdatePageMeta}
+            />
+          ))}
+        </div>
+        <RootDropZone active={activeDragId !== null} />
+
+        <DragOverlay dropAnimation={null}>
+          {draggedPage ? (
+            <div className="page-tree-item drag-overlay wiggling">
+              <span className="page-drag-handle">⋮⋮</span>
+              {draggedPage.icon && <span style={{ flexShrink: 0 }}>{draggedPage.icon}</span>}
+              <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {draggedPage.label}
+              </span>
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
       <button
         className="btn btn-secondary"
         style={{ marginTop: 8, width: "100%", fontSize: 12 }}

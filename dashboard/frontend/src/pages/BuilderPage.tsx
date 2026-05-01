@@ -190,6 +190,109 @@ function addChildPage(pages: GuidePage[], parentId: string | null, child: GuideP
   });
 }
 
+// ── DnD reparenting helpers ──────────────────────────────────────────────
+
+export type PageDropPos = "before" | "after" | "child" | "root-end";
+
+function removePageFromTree(
+  pages: GuidePage[],
+  id: string
+): { pages: GuidePage[]; removed: GuidePage | null } {
+  let removed: GuidePage | null = null;
+  const out: GuidePage[] = [];
+  for (const p of pages) {
+    if (p.id === id) {
+      removed = p;
+      continue;
+    }
+    if (p.children && p.children.length) {
+      const r = removePageFromTree(p.children, id);
+      if (r.removed) removed = r.removed;
+      out.push({ ...p, children: r.pages });
+    } else {
+      out.push(p);
+    }
+  }
+  return { pages: out, removed };
+}
+
+function insertPageRelative(
+  pages: GuidePage[],
+  targetId: string,
+  pos: "before" | "after" | "child",
+  node: GuidePage
+): GuidePage[] {
+  const out: GuidePage[] = [];
+  for (const p of pages) {
+    if (p.id === targetId) {
+      if (pos === "before") {
+        out.push(node, p);
+      } else if (pos === "after") {
+        out.push(p, node);
+      } else {
+        out.push({ ...p, children: [...(p.children || []), node] });
+      }
+    } else if (p.children && p.children.length) {
+      out.push({ ...p, children: insertPageRelative(p.children, targetId, pos, node) });
+    } else {
+      out.push(p);
+    }
+  }
+  return out;
+}
+
+function subtreeDepth(node: GuidePage): number {
+  if (!node.children || node.children.length === 0) return 1;
+  return 1 + Math.max(...node.children.map(subtreeDepth));
+}
+
+function depthOfId(pages: GuidePage[], id: string, d = 0): number | null {
+  for (const p of pages) {
+    if (p.id === id) return d;
+    if (p.children) {
+      const r = depthOfId(p.children, id, d + 1);
+      if (r !== null) return r;
+    }
+  }
+  return null;
+}
+
+const MAX_PAGE_DEPTH = 4;
+
+function movePageInTreeTo(
+  pages: GuidePage[],
+  pageId: string,
+  targetId: string | null,
+  pos: PageDropPos
+): GuidePage[] {
+  if (pageId === targetId) return pages;
+
+  // Block dropping into own subtree
+  const node = findPage(pages, pageId);
+  if (!node) return pages;
+  if (targetId && findPage([node], targetId)) return pages;
+
+  // Validate depth
+  const nodeDepth = subtreeDepth(node);
+  if (pos === "root-end" || targetId === null) {
+    if (nodeDepth > MAX_PAGE_DEPTH) return pages;
+  } else {
+    const targetDepth = depthOfId(pages, targetId);
+    if (targetDepth === null) return pages;
+    const newRootDepth =
+      pos === "child" ? targetDepth + 1 : targetDepth;
+    if (newRootDepth + nodeDepth > MAX_PAGE_DEPTH) return pages;
+  }
+
+  const { pages: removedTree, removed } = removePageFromTree(pages, pageId);
+  if (!removed) return pages;
+
+  if (pos === "root-end" || targetId === null) {
+    return [...removedTree, removed];
+  }
+  return insertPageRelative(removedTree, targetId, pos, removed);
+}
+
 // ── Local cache types ────────────────────────────────────────────────────
 
 interface GuideCache {
@@ -467,6 +570,13 @@ export default function BuilderPage() {
   const movePage = useCallback(
     (pageId: string, dir: -1 | 1) => {
       setPages((prev) => movePageInTree(prev, pageId, dir));
+    },
+    []
+  );
+
+  const movePageTo = useCallback(
+    (pageId: string, targetId: string | null, pos: PageDropPos) => {
+      setPages((prev) => movePageInTreeTo(prev, pageId, targetId, pos));
     },
     []
   );
@@ -808,6 +918,7 @@ export default function BuilderPage() {
                   onDeletePage={deletePage}
                   onRenamePage={renamePage}
                   onMovePage={movePage}
+                  onMovePageTo={movePageTo}
                   onUpdatePageMeta={updatePageMeta}
                 />
               )}

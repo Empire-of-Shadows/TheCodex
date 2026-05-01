@@ -730,6 +730,81 @@ body::before {
   outline: none;
 }
 
+/* ── Page Tree DnD ─────────────────────────────────────────────────── */
+
+.page-drag-handle {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: -2px;
+  cursor: grab;
+  user-select: none;
+}
+
+.page-tree-item.dragging {
+  opacity: 0.4;
+}
+
+.page-tree-item.drop-target-child {
+  background: rgba(88, 101, 242, 0.18);
+  outline: 1px dashed var(--brand-light, #5865f2);
+}
+
+.page-drop-line {
+  height: 2px;
+  background: var(--brand-light, #5865f2);
+  margin: 0 8px;
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+.page-root-dropzone {
+  margin-top: 6px;
+  padding: 8px;
+  border: 1px dashed transparent;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.12s, background 0.12s, border-color 0.12s;
+  pointer-events: none;
+}
+
+.page-root-dropzone.active {
+  opacity: 1;
+  pointer-events: auto;
+  border-color: var(--text-muted);
+}
+
+.page-root-dropzone.over {
+  background: rgba(88, 101, 242, 0.18);
+  border-color: var(--brand-light, #5865f2);
+  color: var(--text-2);
+}
+
+@keyframes page-wiggle {
+  0%, 100% { transform: rotate(-1.2deg); }
+  50%      { transform: rotate(1.2deg); }
+}
+
+.page-tree-item.drag-overlay {
+  background: var(--bg-1);
+  border: 1px solid var(--brand-light, #5865f2);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  cursor: grabbing;
+}
+
+.page-tree-item.wiggling {
+  animation: page-wiggle 200ms ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-tree-item.wiggling {
+    animation: none;
+  }
+}
+
 .page-meta-editor {
   display: flex;
   flex-direction: column;

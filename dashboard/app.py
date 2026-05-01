@@ -55,7 +55,7 @@ async def health():
         "status": "healthy",
         "timestamp": time.time(),
         "service": "TheCodex Dashboard",
-        "component": "web-ui",
+        "component": "TheCodex Dashboard - WebUI",
         "uptime_seconds": round(time.time() - _START_TIME, 2),
         "frontend_built": os.path.isfile(_index_html),
     }
