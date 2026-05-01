@@ -16,8 +16,32 @@ BACKUP_TAG_BOT="the-codex:backup"
 BACKUP_TAG_DASH="the-codex-dashboard:backup"
 HEALTH_CHECK_TIMEOUT=120  # seconds to wait for health check
 
+NO_CACHE=0
+for arg in "$@"; do
+    case "$arg" in
+        -n|--no-cache)
+            NO_CACHE=1
+            ;;
+        -h|--help)
+            echo "Usage: $0 [-n|--no-cache]"
+            echo "  -n, --no-cache   Build images from scratch (skip Docker layer cache)"
+            exit 0
+            ;;
+        *)
+            echo "Unknown argument: $arg"
+            echo "Usage: $0 [-n|--no-cache]"
+            exit 1
+            ;;
+    esac
+done
+
 echo "==== Starting TheCodex Deployment ===="
 echo "Timestamp: $(date)"
+if [ "$NO_CACHE" = "1" ]; then
+    echo "Mode: no-cache build"
+else
+    echo "Mode: cached build"
+fi
 
 # Function to check container health
 check_container_health() {
@@ -136,7 +160,15 @@ docker rmi -f "$DASH_IMAGE" 2>/dev/null || echo "  No old $DASH_IMAGE to remove"
 echo ""
 echo "--- Building and starting containers ---"
 
-if docker compose up --build -d; then
+if [ "$NO_CACHE" = "1" ]; then
+    echo "Building (no cache)..."
+    docker compose build --no-cache
+    BUILD_CMD="docker compose up -d"
+else
+    BUILD_CMD="docker compose up --build -d"
+fi
+
+if $BUILD_CMD; then
     echo ""
     echo "--- Waiting for health checks ---"
 
