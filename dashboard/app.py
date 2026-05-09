@@ -10,6 +10,11 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from dashboard import db
+from dashboard.auth.csrf import csrf_endpoint, csrf_middleware
+from dashboard.auth.session import (
+    ensure_oauth_state_ttl_index,
+    ensure_session_ttl_index,
+)
 from dashboard.config import CORS_ORIGINS
 from dashboard.auth.oauth import router as auth_router
 from dashboard.routers.dashboard import router as dashboard_router
@@ -26,6 +31,9 @@ _START_TIME = time.time()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await db.connect()
+    # Codex owns the canonical session Mongo - ensure TTL indexes exist.
+    await ensure_oauth_state_ttl_index()
+    await ensure_session_ttl_index()
     yield
     await db.close()
 
@@ -40,6 +48,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.middleware("http")(csrf_middleware)
+
+app.add_api_route("/auth/csrf", csrf_endpoint, methods=["GET"])
 # API and auth routes (registered first so they take priority)
 app.include_router(auth_router, prefix="/auth")
 app.include_router(dashboard_router, prefix="/api")

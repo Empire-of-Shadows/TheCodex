@@ -3,6 +3,7 @@
 from fastapi import Cookie, HTTPException
 
 from dashboard.auth.session import get_session
+from dashboard.auth.signing import unsign_token
 from dashboard.config import SESSION_COOKIE_NAME, MANAGE_GUILD_PERMISSION
 
 
@@ -12,7 +13,11 @@ async def get_current_user(
     """Dependency that returns the current authenticated user or raises 401."""
     if not codex_session:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    session = await get_session(codex_session)
+    raw_token = unsign_token(codex_session)
+    if raw_token is None:
+        # Tampered or expired signature - reject without hitting Mongo.
+        raise HTTPException(status_code=401, detail="Invalid session signature")
+    session = await get_session(raw_token)
     if session is None:
         raise HTTPException(status_code=401, detail="Session expired")
     return session

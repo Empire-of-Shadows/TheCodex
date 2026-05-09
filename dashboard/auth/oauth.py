@@ -8,7 +8,13 @@ import httpx
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import RedirectResponse
 
-from dashboard.auth.session import create_session, delete_session
+from dashboard.auth.session import (
+    consume_oauth_state,
+    create_session,
+    delete_session,
+    store_oauth_state,
+)
+from dashboard.auth.signing import sign_token, unsign_token
 from dashboard.config import (
     COOKIE_DOMAIN,
     DASHBOARD_CLIENT_ID,
@@ -26,9 +32,6 @@ _SCOPES = "identify guilds"
 _AUTHORIZE_URL = "https://discord.com/oauth2/authorize"
 _TOKEN_URL = f"{DISCORD_API_BASE}/oauth2/token"
 
-# In-memory storage for OAuth states (short-lived)
-_oauth_states: dict[str, str] = {}
-
 _ALLOWED_REDIRECT_PATTERN = re.compile(
     r"^https?://(localhost(:\d+)?|([a-z0-9-]+\.)?empireofshadows\.club)(/.*)?"
 )
@@ -45,7 +48,7 @@ def _validate_redirect(url: str | None) -> str:
 async def discord_login(redirect_to: str | None = None):
     """Redirect to Discord OAuth2 authorization page."""
     state = secrets.token_urlsafe(16)
-    _oauth_states[state] = _validate_redirect(redirect_to)
+    await store_oauth_state(state, _validate_redirect(redirect_to))
 
     params = {
         "client_id": DASHBOARD_CLIENT_ID,
@@ -60,11 +63,11 @@ async def discord_login(redirect_to: str | None = None):
 @router.get("/discord/callback")
 async def discord_callback(code: str, state: str | None = None, response: Response = None):
     """Exchange authorization code for tokens, fetch user info, create session."""
-    # Validate state
-    redirect_url = "/dashboard"
-    if state and state in _oauth_states:
-        redirect_url = _oauth_states.pop(state)
-    elif state is not None:
+    if not state:
+        return RedirectResponse(url="/login", status_code=302)
+    redirect_url = await consume_oauth_state(state)
+    if redirect_url is None:
+        # Invalid, expired, or already-used state - reject (CSRF protection).
         return RedirectResponse(url="/login", status_code=302)
 
     async with httpx.AsyncClient() as client:
@@ -103,7 +106,7 @@ async def discord_callback(code: str, state: str | None = None, response: Respon
     redirect = RedirectResponse(url=redirect_url, status_code=302)
     redirect.set_cookie(
         key=SESSION_COOKIE_NAME,
-        value=session_token,
+        value=sign_token(session_token),
         max_age=SESSION_MAX_AGE_DAYS * 86400,
         httponly=True,
         samesite="lax",
@@ -116,9 +119,11 @@ async def discord_callback(code: str, state: str | None = None, response: Respon
 @router.get("/logout")
 async def logout(request: Request):
     """Delete session and clear cookie."""
-    token = request.cookies.get(SESSION_COOKIE_NAME)
-    if token:
-        await delete_session(token)
+    signed = request.cookies.get(SESSION_COOKIE_NAME)
+    if signed:
+        raw = unsign_token(signed)
+        if raw:
+            await delete_session(raw)
     response = RedirectResponse(url="/login", status_code=302)
     response.delete_cookie(SESSION_COOKIE_NAME, domain=COOKIE_DOMAIN)
     return response
