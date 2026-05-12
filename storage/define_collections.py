@@ -150,6 +150,17 @@ class DefineCollections:
                 IndexModel([('updated_at', -1)], name='updated_at_desc')
             ]
         )
+        # Bot status presets (single-guild admin tool)
+        self._collection_configs['bot_statuses'] = CollectionConfig(
+            name='BotStatuses',
+            database='Settings',
+            connection='primary',
+            indexes=[
+                IndexModel([('preset_name', 1)], unique=True, name='preset_name_unique'),
+                IndexModel([('updated_at', -1)], name='updated_at_desc'),
+            ]
+        )
+
         # Boost Tracking collections
         self._collection_configs['serverdata_boosts'] = CollectionConfig(
             name='Boosts',

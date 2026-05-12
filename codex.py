@@ -13,8 +13,10 @@ import logging
 from utils.bot import bot, TOKEN, s
 from utils.logger import get_logger, setup_application_logging
 from utils.sync import load_cogs, attach_databases
-from IdleStatus.idle import rotate_status
 from health_endpoint import initialize_health_server, stop_health_server
+
+# Guild that owns the guild-scoped admin slash commands (e.g. /status).
+STATUS_ADMIN_GUILD_ID = 1265120128295632926
 from storage.database_manager import db_manager
 
 # Initialize application-wide logging
@@ -69,22 +71,23 @@ async def on_ready():
 		sync_start = time.perf_counter()
 		try:
 			synced_global = await bot.tree.sync()
+			admin_guild = discord.Object(id=STATUS_ADMIN_GUILD_ID)
+			synced_admin = await bot.tree.sync(guild=admin_guild)
 			sync_time = time.perf_counter() - sync_start
 			logger.info(f"Command synchronization completed in {sync_time:.2f}s")
-			logger.info(f"Synchronized {len(synced_global)} global slash commands")
+			logger.info(
+				f"Synchronized {len(synced_global)} global + "
+				f"{len(synced_admin)} guild-scoped slash commands"
+			)
 		except Exception as e:
 			logger.error(f"Error during command synchronization: {e}", exc_info=True)
 			raise
 
-		# Status and presence setup
-		status_start = time.perf_counter()
+		# Set initial online presence
 		try:
 			await bot.change_presence(status=discord.Status.online)
-			rotate_status.start()
-			status_time = time.perf_counter() - status_start
-			logger.info(f"Status rotation initialized in {status_time:.2f}s")
 		except Exception as e:
-			logger.error(f"Error initializing status rotation: {e}", exc_info=True)
+			logger.error(f"Error setting initial presence: {e}", exc_info=True)
 
 		# Log all commands in a structured format
 		await log_all_commands()
@@ -157,16 +160,6 @@ async def shutdown_handler():
     """
 	logger.info("Initiating graceful shutdown...")
 	shutdown_start = time.perf_counter()
-
-	# Stop status rotation
-	try:
-		if rotate_status.is_running():
-			rotate_status.cancel()
-			logger.info("Status rotation task stopped successfully")
-		else:
-			logger.debug("Status rotation task was not running")
-	except Exception as e:
-		logger.error(f"Error stopping status rotation: {e}", exc_info=True)
 
 	# Stop health check server
 	try:
