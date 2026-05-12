@@ -1,7 +1,7 @@
 import time
 from typing import Dict, Any, Optional
 
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import AsyncMongoClient
 from pymongo.errors import ConnectionFailure
 
 from utils.logger import get_logger
@@ -24,15 +24,15 @@ class ConnectionPool:
             'retryWrites': True,
             'retryReads': True
         }
-        self.client: Optional[AsyncIOMotorClient] = None
+        self.client: Optional[AsyncMongoClient] = None
         self._health_check_interval = 30  # seconds
         self._last_health_check = 0
 
-    async def initialize(self) -> AsyncIOMotorClient:
+    async def initialize(self) -> AsyncMongoClient:
         """Initialize the connection pool."""
         if self.client is None:
             logger.info(f"Initializing MongoDB connection pool for {self.connection_name}...")
-            self.client = AsyncIOMotorClient(self.uri, **self.config)
+            self.client = AsyncMongoClient(self.uri, **self.config)
             await self._health_check()
             logger.info(f"MongoDB connection pool for {self.connection_name} initialized successfully")
         return self.client
@@ -47,7 +47,7 @@ class ConnectionPool:
             logger.error(f"MongoDB health check failed for {self.connection_name}: {e}")
             raise ConnectionFailure(f"Database health check failed for {self.connection_name}")
 
-    async def get_client(self) -> AsyncIOMotorClient:
+    async def get_client(self) -> AsyncMongoClient:
         """Get a healthy client connection."""
         if self.client is None:
             await self.initialize()
@@ -61,6 +61,6 @@ class ConnectionPool:
     async def close(self):
         """Close the connection pool."""
         if self.client:
-            self.client.close()
+            await self.client.close()
             self.client = None
             logger.info(f"MongoDB connection pool for {self.connection_name} closed")

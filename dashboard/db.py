@@ -5,29 +5,29 @@ ServerData) and the shared session store (WebSessions.SharedSessions +
 WebSessions.OAuthStates).
 """
 
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import AsyncMongoClient
 
 from dashboard.config import MONGO_URI
 
-_client: AsyncIOMotorClient | None = None
+_client: AsyncMongoClient | None = None
 
 
 async def connect():
     global _client
     if not MONGO_URI:
         raise RuntimeError("MONGO_URI environment variable is required")
-    _client = AsyncIOMotorClient(MONGO_URI)
+    _client = AsyncMongoClient(MONGO_URI)
     await _client.admin.command("ping")
 
 
 async def close():
     global _client
     if _client:
-        _client.close()
+        await _client.close()
         _client = None
 
 
-def _get_client() -> AsyncIOMotorClient:
+def _get_client() -> AsyncMongoClient:
     if _client is None:
         raise RuntimeError("Database not connected - call connect() first")
     return _client

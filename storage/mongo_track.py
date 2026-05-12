@@ -7,7 +7,7 @@ from typing import Dict, List, Tuple, Any, Set
 from pymongo import UpdateOne
 from dotenv import load_dotenv
 from datetime import datetime, timezone
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import AsyncMongoClient
 
 from utils.bot import s
 from utils.logger import get_logger, PerformanceLogger
@@ -56,7 +56,7 @@ class TrackManager:
 
 		# Mongo
 		try:
-			self.mongo_client = AsyncIOMotorClient(MONGO_URI)
+			self.mongo_client = AsyncMongoClient(MONGO_URI)
 			db = self.mongo_client["Ecom-Server"]
 			self.collection = db["Users"]
 			logger.info(f"{s}MongoDB connection established successfully")
@@ -850,7 +850,7 @@ class TrackManager:
 					self.stop_auto_flush()
 
 				logger.info(f"{s}Closing MongoDB client...")
-				self.mongo_client.close()
+				await self.mongo_client.close()
 				logger.info(f"{s}MongoDB client closed successfully")
 
 			except Exception as e:

@@ -5,7 +5,7 @@ from typing import Dict, Any, List, Optional, Union
 
 import backoff
 import pytz
-from motor.motor_asyncio import AsyncIOMotorCollection
+from pymongo.asynchronous.collection import AsyncCollection
 from pymongo import UpdateOne, InsertOne, DeleteOne, ReplaceOne
 from pymongo.errors import BulkWriteError, ConnectionFailure, OperationFailure
 
@@ -39,7 +39,7 @@ def with_retry(max_retries: int = 3, backoff_factor: float = 1.0):
 class CollectionManager:
     """Manages CRUD operations for a specific collection with caching and optimization."""
 
-    def __init__(self, collection: AsyncIOMotorCollection, config: CollectionConfig):
+    def __init__(self, collection: AsyncCollection, config: CollectionConfig):
         self.collection = collection
         self.config = config
         self.name = config.name

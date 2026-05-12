@@ -5,7 +5,9 @@ from typing import Dict, List, Any, Callable
 from datetime import datetime, timedelta
 
 import pytz
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase, AsyncIOMotorCollection
+from pymongo import AsyncMongoClient
+from pymongo.asynchronous.database import AsyncDatabase
+from pymongo.asynchronous.collection import AsyncCollection
 from pymongo import UpdateOne
 from dotenv import load_dotenv
 
@@ -60,7 +62,7 @@ class DatabaseManager(DefineCollections, DatabaseProperties):
                 # Stop at first missing connection to maintain order
                 break
 
-        self.databases: Dict[str, AsyncIOMotorDatabase] = {}
+        self.databases: Dict[str, AsyncDatabase] = {}
         self.collections: Dict[str, CollectionManager] = {}
         self._collection_configs: Dict[str, CollectionConfig] = {}
         self._initialized = False
@@ -185,7 +187,7 @@ class DatabaseManager(DefineCollections, DatabaseProperties):
 
     # Collection Access Methods
 
-    def get_database(self, name: str) -> AsyncIOMotorDatabase:
+    def get_database(self, name: str) -> AsyncDatabase:
         """
         Get a database by name.
 
@@ -224,7 +226,7 @@ class DatabaseManager(DefineCollections, DatabaseProperties):
             raise ValueError(f"Collection '{collection_key}' not configured")
         return self.collections[collection_key]
 
-    def get_raw_collection(self, database_name: str, collection_name: str) -> AsyncIOMotorCollection:
+    def get_raw_collection(self, database_name: str, collection_name: str) -> AsyncCollection:
         """
         Get raw collection access for advanced operations.
 
@@ -238,7 +240,7 @@ class DatabaseManager(DefineCollections, DatabaseProperties):
         database = self.get_database(database_name)
         return database[collection_name]
 
-    def get_client(self, connection_name: str = 'primary') -> AsyncIOMotorClient:
+    def get_client(self, connection_name: str = 'primary') -> AsyncMongoClient:
         """
         Get a client for a specific connection.
 
@@ -246,14 +248,14 @@ class DatabaseManager(DefineCollections, DatabaseProperties):
             connection_name: Name of the connection pool ('primary', 'secondary', 'third', etc.)
 
         Returns:
-            AsyncIOMotorClient instance
+            AsyncMongoClient instance
         """
         self._ensure_initialized()
         if connection_name not in self.connection_pools:
             raise ValueError(f"Connection '{connection_name}' not configured")
         return self.connection_pools[connection_name].client
 
-    async def get_client_async(self, connection_name: str = 'primary') -> AsyncIOMotorClient:
+    async def get_client_async(self, connection_name: str = 'primary') -> AsyncMongoClient:
         """
         Get a client for a specific connection asynchronously.
 
@@ -261,7 +263,7 @@ class DatabaseManager(DefineCollections, DatabaseProperties):
             connection_name: Name of the connection pool ('primary', 'secondary', 'third', etc.)
 
         Returns:
-            AsyncIOMotorClient instance
+            AsyncMongoClient instance
         """
         self._ensure_initialized()
         if connection_name not in self.connection_pools:
@@ -269,7 +271,7 @@ class DatabaseManager(DefineCollections, DatabaseProperties):
         return await self.connection_pools[connection_name].get_client()
 
     def get_database_from_connection(self, database_name: str,
-                                     connection_name: str = 'primary') -> AsyncIOMotorDatabase:
+                                     connection_name: str = 'primary') -> AsyncDatabase:
         """
         Get a database from a specific connection.
 
@@ -288,7 +290,7 @@ class DatabaseManager(DefineCollections, DatabaseProperties):
         return client[database_name]
 
     def get_raw_collection_from_connection(self, database_name: str, collection_name: str,
-                                           connection_name: str = 'primary') -> AsyncIOMotorCollection:
+                                           connection_name: str = 'primary') -> AsyncCollection:
         """
         Get raw collection access from a specific connection for advanced operations.
 

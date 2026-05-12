@@ -7,7 +7,7 @@
 [![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](https://python.org)
 [![discord.py](https://img.shields.io/badge/discord.py-2.6+-5865F2?logo=discord&logoColor=white)](https://github.com/Rapptz/discord.py)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![MongoDB](https://img.shields.io/badge/MongoDB-motor-47A248?logo=mongodb&logoColor=white)](https://www.mongodb.com)
+[![MongoDB](https://img.shields.io/badge/MongoDB-pymongo--async-47A248?logo=mongodb&logoColor=white)](https://www.mongodb.com)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
 
 Information hub, daily engagement, suggestions, announcements, new member screening,
@@ -103,7 +103,7 @@ A companion **web dashboard** lets admins build and preview guide pages with a d
 
 | Layer | Technology |
 |-------|-----------|
-| **Bot** | Python 3.13 &middot; discord.py 2.6+ &middot; MongoDB (motor) |
+| **Bot** | Python 3.13 &middot; discord.py 2.6+ &middot; MongoDB (pymongo async) |
 | **Dashboard** | FastAPI &middot; React 19 &middot; Vite &middot; TypeScript |
 | **Search** | RapidFuzz fuzzy matching |
 | **Deployment** | Docker Compose with health checks and auto-rollback |
