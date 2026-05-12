@@ -228,7 +228,7 @@ class CollectionManager:
             List of aggregation results
         """
         try:
-            cursor = self.collection.aggregate(pipeline, **kwargs)
+            cursor = await self.collection.aggregate(pipeline, **kwargs)
             results = await cursor.to_list(length=None)
             logger.debug(f"Aggregation returned {len(results)} results from {self.name}")
             return results

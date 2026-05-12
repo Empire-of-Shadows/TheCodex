@@ -674,10 +674,11 @@ class GuildCacheManager:
 			}
 
 			# Get channel type breakdown
-			channel_types = await self._channels.aggregate([
+			channel_types_cursor = await self._channels.aggregate([
 				{"$match": {"guild_id": guild_id}},
 				{"$group": {"_id": "$type", "count": {"$sum": 1}}}
 			])
+			channel_types = await channel_types_cursor.to_list(length=None)
 
 			stats["channel_types"] = {ct["_id"]: ct["count"] for ct in channel_types}
 
@@ -711,7 +712,8 @@ class GuildCacheManager:
 				}}
 			]
 
-			result = await self._members.aggregate(pipeline)
+			result_cursor = await self._members.aggregate(pipeline)
+			result = await result_cursor.to_list(length=None)
 
 			if result:
 				insights = result[0]

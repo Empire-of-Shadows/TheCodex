@@ -38,7 +38,8 @@ async def _get_wyr_activity(user_id: int, guild_ids: list[int]) -> dict:
             "last_vote": {"$max": "$last_vote"},
         }},
     ]
-    result = await db.wyr_leaderboard().aggregate(pipeline).to_list(1)
+    cursor = await db.wyr_leaderboard().aggregate(pipeline)
+    result = await cursor.to_list(1)
     if not result:
         return {
             "total_votes": 0,
@@ -79,7 +80,7 @@ async def _get_suggestions_activity(user_id: int, guild_ids: list[int]) -> dict:
         {"$match": match},
         {"$group": {"_id": "$status", "count": {"$sum": 1}}},
     ]
-    status_cursor = db.suggestions_suggestions().aggregate(status_pipeline)
+    status_cursor = await db.suggestions_suggestions().aggregate(status_pipeline)
     by_status: dict[str, int] = {}
     total = 0
     last_activity = None

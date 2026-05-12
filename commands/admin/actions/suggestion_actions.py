@@ -79,14 +79,14 @@ class SuggestionActions:
             total_suggestions = await col.count_documents({"guild_id": guild_id})
 
             # Status distribution
-            async for doc in col.aggregate([
+            async for doc in await col.aggregate([
                 {"$match": {"guild_id": guild_id}},
                 {"$group": {"_id": "$status", "count": {"$sum": 1}}},
             ]):
                 status_breakdown[doc["_id"]] = doc["count"]
 
             # Category distribution
-            async for doc in col.aggregate([
+            async for doc in await col.aggregate([
                 {"$match": {"guild_id": guild_id}},
                 {"$group": {"_id": "$category", "count": {"$sum": 1}}},
             ]):
@@ -94,7 +94,7 @@ class SuggestionActions:
 
             # Top contributors (up to 5, non-anonymous)
             contributor_docs: list = []
-            async for doc in col.aggregate([
+            async for doc in await col.aggregate([
                 {"$match": {"guild_id": guild_id, "anonymous": False}},
                 {"$group": {"_id": "$user_id", "count": {"$sum": 1}}},
                 {"$sort": {"count": -1}},
