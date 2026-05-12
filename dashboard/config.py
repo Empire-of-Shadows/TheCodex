@@ -1,10 +1,4 @@
-"""Dashboard configuration - environment variables and constants.
-
-Canonical env names (read first, with legacy fallbacks during cutover):
-- GATEKEEPER_CLIENT_ID / GATEKEEPER_CLIENT_SECRET / GATEKEEPER_REDIRECT_URI
-- MONGO_PRIMARY_URI (was THECODEX)
-- SHARED_SESSIONS_URI (canonical Mongo for WebSessions.SharedSessions)
-"""
+"""Dashboard configuration - environment variables and constants."""
 
 import os
 from dotenv import load_dotenv
@@ -12,34 +6,20 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def _env_first(*names: str, default: str = "") -> str:
-    """Return the first non-empty env var from names, else default."""
-    for name in names:
-        value = os.getenv(name)
-        if value:
-            return value
-    return default
-
-
 # Discord OAuth2 - shared GateKeeper bot across the ecosystem
-DASHBOARD_CLIENT_ID = _env_first("GATEKEEPER_CLIENT_ID", "DASHBOARD_CLIENT_ID")
-DASHBOARD_CLIENT_SECRET = _env_first("GATEKEEPER_CLIENT_SECRET", "DASHBOARD_CLIENT_SECRET")
+DASHBOARD_CLIENT_ID = os.getenv("GATEKEEPER_CLIENT_ID", "")
+DASHBOARD_CLIENT_SECRET = os.getenv("GATEKEEPER_CLIENT_SECRET", "")
 
 # Codex bot token - used to check which guilds the bot is in
 BOT_TOKEN = os.getenv("DISCORD_TOKEN", "")
-REDIRECT_URI = _env_first(
+REDIRECT_URI = os.getenv(
     "GATEKEEPER_REDIRECT_URI",
-    "DASHBOARD_REDIRECT_URI",
-    default="http://localhost:54002/auth/discord/callback",
+    "http://localhost:54002/auth/discord/callback",
 )
 DISCORD_API_BASE = "https://discord.com/api/v10"
 
-# MongoDB - Codex's primary data
-MONGO_URI = _env_first("MONGO_PRIMARY_URI", "THECODEX")
-
-# MongoDB - shared session store. Codex's primary IS the canonical store, but
-# we read it via a separate variable so the code matches Host/Ecom.
-SHARED_SESSIONS_URI = _env_first("SHARED_SESSIONS_URI", "MONGO_PRIMARY_URI", "THECODEX")
+# MongoDB - single canonical URI for everything (codex data + shared sessions)
+MONGO_URI = os.getenv("MONGO_URI", "")
 
 # Session signing (itsdangerous URLSafeTimedSerializer key)
 SECRET_KEY = os.getenv("DASHBOARD_SECRET_KEY", "")

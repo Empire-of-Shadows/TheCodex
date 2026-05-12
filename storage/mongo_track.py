@@ -14,7 +14,7 @@ from utils.logger import get_logger, PerformanceLogger
 
 load_dotenv()
 
-MONGO_URI = os.getenv("MONGO_URI2")
+MONGO_URI = os.getenv("MONGO_URI")
 
 logger = get_logger("mongo_track")
 

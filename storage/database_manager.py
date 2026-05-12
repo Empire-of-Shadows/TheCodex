@@ -17,7 +17,7 @@ from storage.define_collections import DefineCollections
 
 # Load environment variables
 load_dotenv()
-primary = os.getenv("THECODEX")
+primary = os.getenv("MONGO_URI")
 logger = logging.getLogger("DatabaseManager")
 
 
