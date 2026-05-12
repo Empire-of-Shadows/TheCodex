@@ -15,8 +15,6 @@ class DefineCollections:
             database='Daily',
             connection='primary',
             indexes=[
-                IndexModel([('date', -1)]),
-                IndexModel([('guild_id', 1), ('date', -1)]),
                 IndexModel([('created_at', -1)])
             ]
         )
@@ -26,7 +24,8 @@ class DefineCollections:
             database='Daily',
             connection='primary',
             indexes=[
-                IndexModel([('user_id', 1), ('guild_id', 1)]),
+                IndexModel([('user_id', 1), ('guild_id', 1)], unique=True, name='user_guild_unique'),
+                IndexModel([('guild_id', 1), ('total_votes', -1)], name='guild_leaderboard'),
                 IndexModel([('score', -1)]),
                 IndexModel([('updated_at', -1)])
             ]

@@ -71,9 +71,9 @@ class WYRCommandGroup(app_commands.Group):
                     category = guild_config.wyr.get("default_category", "sfw")
 
                 if random_pick:
-                    question = await self.cog.get_random_question(category)
+                    question = await self.cog.get_random_question(category, guild_id=guild_id)
                 else:
-                    question = await self.cog.get_next_question(category)
+                    question = await self.cog.get_next_question(category, guild_id=guild_id)
 
                 if not question:
                     logger.warning(f"No {category} questions available for manual post by {interaction.user}")
@@ -131,7 +131,7 @@ class WYRCommandGroup(app_commands.Group):
 
         try:
             with PerformanceLogger(logger, f"wyr_stats_lookup_{target_user.id}"):
-                stats = await self.cog.get_user_stats(target_user.id)
+                stats = await self.cog.get_user_stats(target_user.id, interaction.guild_id)
 
                 embed = discord.Embed(
                     title=f" WYR Stats for {target_user.display_name}",
@@ -220,7 +220,7 @@ class WYRCommandGroup(app_commands.Group):
                 return
 
             # Get results using the question ID
-            results = await self.cog.get_question_results(question_id)
+            results = await self.cog.get_question_results(question_id, interaction.guild_id)
             if not results:
                 logger.warning(f"Could not fetch results for question {question_id} from message {message_id}")
                 await interaction.response.send_message("❌ Could not fetch results for that question.", ephemeral=True)
@@ -285,8 +285,9 @@ class WYRCommandGroup(app_commands.Group):
 
         try:
             with PerformanceLogger(logger, f"wyr_leaderboard_generation_limit_{limit}"):
-                # Get top users from leaderboard collection using the new database manager
+                # Get top users from leaderboard collection — filtered to current guild
                 top_users = await db_manager.daily_wyr_leaderboard.find_many(
+                    filter_dict={"guild_id": str(interaction.guild_id)},
                     sort=[("total_votes", -1)],
                     limit=limit
                 )
@@ -336,8 +337,10 @@ class WYRCommandGroup(app_commands.Group):
 
         try:
             with PerformanceLogger(logger, f"wyr_stats_reset_{user.id}"):
-                # Use the new database manager to delete user stats
-                success = await db_manager.daily_wyr_leaderboard.delete_one({"user_id": str(user.id)})
+                # Delete this user's stats for the current guild only
+                success = await db_manager.daily_wyr_leaderboard.delete_one(
+                    {"user_id": str(user.id), "guild_id": str(interaction.guild_id)}
+                )
 
                 if success:
                     embed = discord.Embed(
@@ -622,7 +625,7 @@ class WYR(commands.Cog):
             with PerformanceLogger(logger, f"wyr_post_guild_{guild_id}"):
                 category = guild_config.wyr.get("default_category", "sfw")
 
-                question = await self.get_next_question(category)
+                question = await self.get_next_question(category, guild_id=guild_id)
                 if not question:
                     logger.warning(f"No {category} questions available for guild {guild_id} - skipping")
                     return
@@ -664,93 +667,110 @@ class WYR(commands.Cog):
 
                 await thread.send(_format_wyr_string(starter_msg, question, now))
 
-                await self.increment_used_count(question["_id"])
+                await self.increment_used_count(question["_id"], guild_id)
                 logger.info(f"Posted WYR question {question['_id']} in guild {guild_id}, channel {guild_config.wyr['channel_id']}")
 
         except Exception as e:
             logger.error(f"Error posting WYR to guild {guild_id}: {e}", exc_info=True)
 
-    async def update_user_leaderboard(self, user_id, option_chosen):
+    async def update_user_leaderboard(self, user_id, guild_id, option_chosen):
         """
-        Update user statistics in the WYR_Leaderboard collection using the new DatabaseManager.
+        Update user statistics in the WYR_Leaderboard collection (per-guild scoped).
         """
         try:
-            with PerformanceLogger(logger, f"update_user_leaderboard_{user_id}"):
+            with PerformanceLogger(logger, f"update_user_leaderboard_{user_id}_{guild_id}"):
                 user_id_str = str(user_id)
+                gid_str = str(guild_id)
+                now = datetime.now(timezone.utc)
 
-                # Check if user exists in leaderboard
-                user_stats = await db_manager.daily_wyr_leaderboard.find_one({"user_id": user_id_str})
+                user_stats = await db_manager.daily_wyr_leaderboard.find_one(
+                    {"user_id": user_id_str, "guild_id": gid_str}
+                )
 
                 if not user_stats:
-                    # Create new user entry
                     new_user = {
                         "user_id": user_id_str,
+                        "guild_id": gid_str,
                         "total_votes": 1,
                         "option1_votes": 1 if option_chosen == "option1" else 0,
                         "option2_votes": 1 if option_chosen == "option2" else 0,
                         "option3_votes": 1 if option_chosen == "option3" else 0,
-                        "last_vote": datetime.now(timezone.utc),
-                        "first_vote": datetime.now(timezone.utc)
+                        "score": 1,
+                        "first_vote": now,
+                        "last_vote": now,
+                        "updated_at": now,
                     }
                     await db_manager.daily_wyr_leaderboard.create_one(new_user)
-                    logger.info(f"Created new leaderboard entry for user {user_id}: {option_chosen}")
+                    logger.info(f"Created leaderboard entry for user {user_id} in guild {guild_id}: {option_chosen}")
                 else:
-                    # Update existing user
+                    new_total = user_stats.get("total_votes", 0) + 1
                     update_query = {
                         "$inc": {
                             "total_votes": 1,
-                            f"{option_chosen}_votes": 1
+                            f"{option_chosen}_votes": 1,
                         },
                         "$set": {
-                            "last_vote": datetime.now(timezone.utc)
-                        }
+                            "last_vote": now,
+                            "updated_at": now,
+                            "score": new_total,
+                        },
                     }
                     await db_manager.daily_wyr_leaderboard.update_one(
-                        {"user_id": user_id_str},
-                        update_query
+                        {"user_id": user_id_str, "guild_id": gid_str},
+                        update_query,
                     )
                     logger.info(
-                        f"Updated leaderboard for user {user_id}: {option_chosen} (total: {user_stats.get('total_votes', 0) + 1})")
+                        f"Updated leaderboard for user {user_id} in guild {guild_id}: {option_chosen} (total: {new_total})"
+                    )
 
         except Exception as e:
-            logger.error(f"Error updating user leaderboard for {user_id}: {e}", exc_info=True)
+            logger.error(f"Error updating user leaderboard for {user_id} in guild {guild_id}: {e}", exc_info=True)
 
-    async def get_next_question(self, category="sfw", exclude_used=False):
+    async def get_next_question(self, category="sfw", guild_id=None, exclude_used=False):
         """
-        Fetch the next "Would You Rather" question with specified criteria using the new DatabaseManager.
+        Fetch the next "Would You Rather" question for a guild — least-used in that guild first.
         """
         try:
-            with PerformanceLogger(logger, f"get_next_question_{category}"):
+            with PerformanceLogger(logger, f"get_next_question_{category}_{guild_id}"):
                 if category == "sfw":
                     query = {"nsfw": False}
                 elif category == "nsfw":
                     query = {"nsfw": True}
                 else:
                     query = {"tags": category}
-                if exclude_used:
-                    query["used_count"] = {"$eq": 0}
 
-                # Use the new database manager to find questions
+                gid_str = str(guild_id) if guild_id is not None else None
+                used_path = f"guilds.{gid_str}.used_count" if gid_str else "used_count"
+
+                if exclude_used:
+                    # Treat missing nested key (never posted in this guild) as zero.
+                    query["$or"] = [
+                        {used_path: {"$exists": False}},
+                        {used_path: 0},
+                    ]
+
                 questions = await db_manager.daily_wyr.find_many(
                     filter_dict=query,
-                    sort=[("used_count", 1)],
-                    limit=1
+                    sort=[(used_path, 1)],
+                    limit=1,
                 )
 
                 if questions:
                     question = questions[0]
+                    used = ((question.get("guilds") or {}).get(gid_str) or {}).get("used_count", 0) if gid_str else question.get("used_count", 0)
                     logger.info(
-                        f"Retrieved next {category} question: ID {question['_id']} (used_count: {question.get('used_count', 0)})")
+                        f"Retrieved next {category} question: ID {question['_id']} (guild_used_count: {used})"
+                    )
                     return question
                 else:
-                    logger.warning(f"No {category} questions available (exclude_used: {exclude_used})")
+                    logger.warning(f"No {category} questions available for guild {guild_id} (exclude_used: {exclude_used})")
                     return None
 
         except Exception as e:
-            logger.error(f"Error fetching next WYR question ({category}): {e}", exc_info=True)
+            logger.error(f"Error fetching next WYR question ({category}, guild {guild_id}): {e}", exc_info=True)
             return None
 
-    async def get_random_question(self, category="sfw"):
+    async def get_random_question(self, category="sfw", guild_id=None):
         """
         Get a random question from the specified category using the new DatabaseManager.
         """
@@ -782,19 +802,20 @@ class WYR(commands.Cog):
             logger.error(f"Error fetching random WYR question ({category}): {e}", exc_info=True)
             return None
 
-    async def get_user_stats(self, user_id):
+    async def get_user_stats(self, user_id, guild_id):
         """
-        Get user voting statistics from the leaderboard collection using the new DatabaseManager.
+        Get user voting statistics for a specific guild from the leaderboard collection.
         """
         default_stats = {"option1_votes": 0, "option2_votes": 0, "option3_votes": 0, "total_votes": 0}
 
         try:
-            with PerformanceLogger(logger, f"get_user_stats_{user_id}"):
-                # Use the new database manager to find user stats
-                user_stats = await db_manager.daily_wyr_leaderboard.find_one({"user_id": str(user_id)})
+            with PerformanceLogger(logger, f"get_user_stats_{user_id}_{guild_id}"):
+                user_stats = await db_manager.daily_wyr_leaderboard.find_one(
+                    {"user_id": str(user_id), "guild_id": str(guild_id)}
+                )
 
                 if not user_stats:
-                    logger.info(f"No stats found for user {user_id}")
+                    logger.info(f"No stats found for user {user_id} in guild {guild_id}")
                     return default_stats
 
                 stats = {
@@ -813,61 +834,64 @@ class WYR(commands.Cog):
             logger.error(f"Error fetching user stats for {user_id}: {e}", exc_info=True)
             return default_stats
 
-    async def record_vote(self, question_id, user_id, option):
+    async def record_vote(self, question_id, user_id, guild_id, option):
         """
-        Record a user's vote for a question and update leaderboard using the new DatabaseManager.
+        Record a user's vote for a question (per-guild scoped) and update leaderboard.
         """
         try:
-            with PerformanceLogger(logger, f"record_vote_{user_id}_{option}"):
-                # Check if user has already voted to handle vote count properly
+            with PerformanceLogger(logger, f"record_vote_{user_id}_{guild_id}_{option}"):
+                gid = str(guild_id)
                 existing_question = await db_manager.daily_wyr.find_one({"_id": question_id})
                 if not existing_question:
                     logger.error(f"Question {question_id} not found for vote recording")
                     return
 
-                existing_votes = existing_question.get("votes", {})
+                guild_data = (existing_question.get("guilds") or {}).get(gid) or {}
+                existing_votes = guild_data.get("votes", {})
                 previous_vote = existing_votes.get(str(user_id))
 
-                update_query = {"$set": {f"votes.{user_id}": option}}
+                update_query = {"$set": {f"guilds.{gid}.votes.{user_id}": option}}
                 is_new_vote = not previous_vote
 
-                # If this is a new vote, increment the chosen option
                 if is_new_vote:
-                    update_query["$inc"] = {f"vote_counts.{option}": 1}
-                # If changing vote, decrement old option and increment new option
+                    update_query["$inc"] = {f"guilds.{gid}.vote_counts.{option}": 1}
                 elif previous_vote != option:
                     update_query["$inc"] = {
-                        f"vote_counts.{previous_vote}": -1,
-                        f"vote_counts.{option}": 1
+                        f"guilds.{gid}.vote_counts.{previous_vote}": -1,
+                        f"guilds.{gid}.vote_counts.{option}": 1,
                     }
 
-                # Use the new database manager to update the question
                 await db_manager.daily_wyr.update_one({"_id": question_id}, update_query)
 
-                # Only update leaderboard for new votes (not vote changes)
                 if is_new_vote:
-                    await self.update_user_leaderboard(user_id, option)
+                    await self.update_user_leaderboard(user_id, guild_id, option)
 
                 vote_type = "new" if is_new_vote else "changed" if previous_vote != option else "duplicate"
-                logger.info(f"Recorded {vote_type} vote for user {user_id} on question {question_id}: {option}")
+                logger.info(
+                    f"Recorded {vote_type} vote for user {user_id} on question {question_id} in guild {guild_id}: {option}"
+                )
 
         except Exception as e:
-            logger.error(f"Error recording vote (user: {user_id}, question: {question_id}, option: {option}): {e}",
-                         exc_info=True)
+            logger.error(
+                f"Error recording vote (user: {user_id}, guild: {guild_id}, question: {question_id}, option: {option}): {e}",
+                exc_info=True,
+            )
 
-    async def get_question_results(self, question_id):
+    async def get_question_results(self, question_id, guild_id):
         """
-        Get voting results for a specific question using the new DatabaseManager.
+        Get voting results for a specific question scoped to a guild.
         """
         try:
-            with PerformanceLogger(logger, f"get_question_results_{question_id}"):
-                # Use the new database manager to find the question
+            with PerformanceLogger(logger, f"get_question_results_{question_id}_{guild_id}"):
+                gid = str(guild_id)
                 question = await db_manager.daily_wyr.find_one({"_id": question_id})
                 if not question:
                     logger.warning(f"Question {question_id} not found for results")
                     return None
 
-                vote_counts = question.get("vote_counts", {"option1": 0, "option2": 0})
+                guild_data = (question.get("guilds") or {}).get(gid) or {}
+                vote_counts = guild_data.get("vote_counts") or {"option1": 0, "option2": 0}
+                votes_map = guild_data.get("votes", {})
                 has_option3 = bool(question.get("option_3"))
                 total_votes = (
                     vote_counts.get("option1", 0)
@@ -887,7 +911,7 @@ class WYR(commands.Cog):
                     "option1_percentage": option1_percentage,
                     "option2_percentage": option2_percentage,
                     "total_votes": total_votes,
-                    "votes": question.get("votes", {})
+                    "votes": votes_map,
                 }
 
                 if has_option3:
@@ -902,24 +926,32 @@ class WYR(commands.Cog):
             logger.error(f"Error getting question results for {question_id}: {e}", exc_info=True)
             return None
 
-    async def increment_used_count(self, question_id):
+    async def increment_used_count(self, question_id, guild_id):
         """
-        Increment the `used_count` for a specific question using the new DatabaseManager.
+        Increment the per-guild `used_count` for a specific question.
         """
         try:
-            # Use the new database manager to update the used count
+            gid = str(guild_id)
             success = await db_manager.daily_wyr.update_one(
                 {"_id": question_id},
-                {"$inc": {"used_count": 1}}
+                {
+                    "$inc": {f"guilds.{gid}.used_count": 1},
+                    "$set": {f"guilds.{gid}.last_posted": datetime.now(timezone.utc)},
+                },
             )
 
             if success:
-                logger.info(f"Incremented used_count for question {question_id}")
+                logger.info(f"Incremented used_count for question {question_id} in guild {guild_id}")
             else:
-                logger.warning(f"No document modified when incrementing used_count for question {question_id}")
+                logger.warning(
+                    f"No document modified when incrementing used_count for question {question_id} in guild {guild_id}"
+                )
 
         except Exception as e:
-            logger.error(f"Error updating used_count for question {question_id}: {e}", exc_info=True)
+            logger.error(
+                f"Error updating used_count for question {question_id} in guild {guild_id}: {e}",
+                exc_info=True,
+            )
 
     def create_question_embed(self, question, show_results=False, results=None):
         """
@@ -1043,7 +1075,7 @@ class WYRView(discord.ui.View):
                                                             ephemeral=True)
                     return
 
-                results = await cog.get_question_results(question_id)
+                results = await cog.get_question_results(question_id, interaction.guild_id)
                 if not results:
                     logger.warning(f"Could not fetch results for question {question_id}")
                     await interaction.response.send_message("❌ Could not fetch results.", ephemeral=True)
@@ -1118,7 +1150,7 @@ class WYRView(discord.ui.View):
                                                             ephemeral=True)
                     return
 
-                await cog.record_vote(question_id, interaction.user.id, option)
+                await cog.record_vote(question_id, interaction.user.id, interaction.guild_id, option)
 
                 option_text = {"option1": "Option 1", "option2": "Option 2", "option3": "Option 3"}[option]
                 embed = discord.Embed(

@@ -618,8 +618,13 @@ class GuildEventHandler:
             await manager.invalidate_cache(guild_id)
 
             # --- WYR (Would You Rather) ---
-            totals["daily_wyr"] = await col("daily_wyr").delete_many({"guild_id": guild_id})
-            totals["daily_wyr_leaderboard"] = await col("daily_wyr_leaderboard").delete_many({"guild_id": guild_id})
+            # Question pool is shared across guilds; only strip this guild's per-guild block.
+            gid_str = str(guild_id)
+            totals["daily_wyr"] = await col("daily_wyr").update_many(
+                {f"guilds.{gid_str}": {"$exists": True}},
+                {"$unset": {f"guilds.{gid_str}": ""}},
+            )
+            totals["daily_wyr_leaderboard"] = await col("daily_wyr_leaderboard").delete_many({"guild_id": gid_str})
             totals["daily_wyr_mappings"] = await col("daily_wyr_mappings").delete_many({"guild_id": guild_id})
 
             # --- Suggestions (votes/notifications reference suggestion_id, not guild_id directly) ---
