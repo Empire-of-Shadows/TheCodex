@@ -169,6 +169,9 @@ class StatusManager:
 
 	async def set_status(self, status_data: Dict[str, str]):
 		"""Set the bot's status"""
+		if bot.is_closed() or not bot.is_ready():
+			logger.debug("Skipping status update: gateway not ready")
+			return
 		try:
 			status_type = status_data["type"]
 			name = status_data["name"]
