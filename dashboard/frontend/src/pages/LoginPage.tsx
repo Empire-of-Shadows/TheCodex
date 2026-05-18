@@ -21,7 +21,7 @@ export default function LoginPage() {
   }, []);
 
   return (
-    <>
+    <main className="login-main">
       <div className="login-hero">
         <img src="/brand/artifact-codex.svg" className="login-mark" alt="" />
         <h1>The Codex Dashboard</h1>
@@ -29,7 +29,7 @@ export default function LoginPage() {
           Sign in with Discord to view stats and manage your servers. Your Empire of Shadows
           session is shared - one login covers every bot dashboard.
         </p>
-        <a href="/auth/discord" className="btn btn-primary">
+        <a href="/auth/discord" className="cta">
           Login with Discord
         </a>
 
@@ -75,6 +75,6 @@ export default function LoginPage() {
 
       {/* Reserved for future ecosystem info sections (bot features, screenshots, etc.). */}
       <div className="login-below" />
-    </>
+    </main>
   );
 }

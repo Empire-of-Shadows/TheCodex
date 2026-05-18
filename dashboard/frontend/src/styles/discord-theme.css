@@ -1408,11 +1408,35 @@ body::before {
   max-width: 38ch;
   line-height: 1.5;
 }
-.login-hero .btn-primary {
-  margin-top: 0.25rem;
-  padding: 12px 32px;
-  font-size: 16px;
+.cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.65rem 1.1rem;
   border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--brand-gradient);
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform 0.15s ease, filter 0.2s ease, box-shadow 0.2s ease;
+  font-size: 0.95rem;
+}
+.cta:hover {
+  transform: translateY(-1px);
+  filter: saturate(115%);
+  box-shadow: 0 0 0 3px var(--ring);
+}
+.login-hero .cta {
+  margin-top: 0.25rem;
+  padding: 0.8rem 1.6rem;
+  font-size: 1rem;
+}
+
+.login-main {
+  flex: 1;
+  padding: clamp(1.5rem, 3vw, 2.5rem) 0 4rem;
 }
 
 .login-divider {
