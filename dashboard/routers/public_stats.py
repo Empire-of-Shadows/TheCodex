@@ -22,7 +22,7 @@ async def _compute() -> dict[str, int]:
     suggestions = await db.suggestions_suggestions().count_documents({})
 
     wyr_votes = 0
-    agg = db.wyr_leaderboard().aggregate([
+    agg = await db.wyr_leaderboard().aggregate([
         {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$total_votes", 0]}}}}
     ])
     async for doc in agg:

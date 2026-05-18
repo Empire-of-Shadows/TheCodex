@@ -87,9 +87,15 @@ if os.path.isdir(_frontend_dist):
     app.mount("/assets", StaticFiles(directory=os.path.join(_frontend_dist, "assets")), name="assets")
 
 
-# SPA fallback — any unmatched GET returns index.html for client-side routing
+# SPA fallback — any unmatched GET returns index.html for client-side routing.
+# Before falling back, serve any real file shipped in `dist/` (favicons, brand
+# images, robots.txt, etc.) directly so the SPA fallback doesn't swallow them.
 @app.get("/{path:path}")
 async def spa_fallback(request: Request, path: str):
+    if path and ".." not in path:
+        candidate = os.path.normpath(os.path.join(_frontend_dist, path))
+        if candidate.startswith(_frontend_dist) and os.path.isfile(candidate):
+            return FileResponse(candidate)
     if os.path.isfile(_index_html):
         return FileResponse(_index_html)
     return {"error": "Frontend not built. Run: cd dashboard/frontend && npm run build"}
