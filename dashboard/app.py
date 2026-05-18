@@ -25,6 +25,7 @@ from dashboard.routers.docs import router as docs_router
 from dashboard.routers.public_stats import router as public_stats_router
 
 _frontend_dist = os.path.join(os.path.dirname(__file__), "frontend", "dist")
+_frontend_public = os.path.join(os.path.dirname(__file__), "frontend", "public")
 _index_html = os.path.join(_frontend_dist, "index.html")
 _START_TIME = time.time()
 
@@ -88,14 +89,17 @@ if os.path.isdir(_frontend_dist):
 
 
 # SPA fallback — any unmatched GET returns index.html for client-side routing.
-# Before falling back, serve any real file shipped in `dist/` (favicons, brand
-# images, robots.txt, etc.) directly so the SPA fallback doesn't swallow them.
+# Before falling back, serve any real file shipped in `dist/` or `public/`
+# (favicons, brand images, robots.txt, etc.) directly so the SPA fallback
+# doesn't swallow them. `public/` is checked second to cover the case where
+# `dist/` hasn't been rebuilt after new assets were added.
 @app.get("/{path:path}")
 async def spa_fallback(request: Request, path: str):
     if path and ".." not in path:
-        candidate = os.path.normpath(os.path.join(_frontend_dist, path))
-        if candidate.startswith(_frontend_dist) and os.path.isfile(candidate):
-            return FileResponse(candidate)
+        for root in (_frontend_dist, _frontend_public):
+            candidate = os.path.normpath(os.path.join(root, path))
+            if candidate.startswith(root) and os.path.isfile(candidate):
+                return FileResponse(candidate)
     if os.path.isfile(_index_html):
         return FileResponse(_index_html)
     return {"error": "Frontend not built. Run: cd dashboard/frontend && npm run build"}
