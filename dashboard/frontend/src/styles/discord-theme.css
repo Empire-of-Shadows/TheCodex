@@ -126,9 +126,24 @@ body::before {
   font-size: 18px;
   color: var(--text-1);
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+}
+.app-header h1 img {
+  width: 26px;
+  height: 26px;
+  filter: drop-shadow(0 2px 8px rgba(77, 14, 179, 0.45));
+}
+.app-header h1 .app-header__title-text {
+  font-family: var(--eos-font-display);
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
-.app-header .user-info {
+.app-header .user-info,
+.user-info {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -136,7 +151,8 @@ body::before {
   font-size: 14px;
 }
 
-.app-header .user-info img {
+.app-header .user-info img,
+.user-info > img {
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -442,6 +458,42 @@ body::before {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-1);
+}
+.builder-guild-badge .pill-mono {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--brand);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: white;
+}
+
+.eyebrow-h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* Builder header — slim toolbar treatment (no Cinzel display title,
+   no logomark) since the builder lives in its own focused workspace. */
+.app-layout--builder .app-header {
+  padding: 8px 16px;
+}
+.app-layout--builder .app-header h1 {
+  font-family: var(--eos-font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.app-layout--builder .app-header h1 img {
+  display: none;
 }
 
 /* ── Mode toggle ────────────────────────────────────────────────────── */
@@ -1287,33 +1339,162 @@ body::before {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* ── Login page ─────────────────────────────────────────────────────── */
+/* ── Login hero ─────────────────────────────────────────────────────── */
+/* Shared layout with TheHost dashboard. Open-bottom panel: visual structure
+   on top, dissolves into page below so future ecosystem content can flow
+   naturally beneath the CTA + tiles. */
 
-.login-page {
+.login-hero {
+  position: relative;
+  width: 100%;
+  max-width: 680px;
+  margin: 4rem auto 0;
+  padding: 3rem 2rem 2.5rem;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
   flex-direction: column;
-  gap: 24px;
+  align-items: center;
   text-align: center;
+  gap: 1.25rem;
+  border-top: 1px solid var(--border-subtle);
+  border-radius: 18px 18px 0 0;
+  background:
+    radial-gradient(700px 300px at 50% -10%, rgba(125, 74, 255, 0.22), transparent 65%),
+    radial-gradient(500px 250px at 20% 30%, rgba(80, 200, 255, 0.08), transparent 70%),
+    radial-gradient(500px 250px at 80% 60%, rgba(125, 74, 255, 0.10), transparent 70%);
+  background-size: 200% 200%, 200% 200%, 200% 200%;
+  background-position: 50% 0%, 0% 50%, 100% 50%;
+  animation: hero-drift 28s ease-in-out infinite alternate;
+}
+@keyframes hero-drift {
+  0% {
+    background-position: 50% 0%, 0% 50%, 100% 50%;
+  }
+  100% {
+    background-position: 50% 100%, 100% 50%, 0% 50%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .login-hero {
+    animation: none;
+  }
 }
 
-.login-page h1 {
-  font-size: 36px;
-  color: var(--text-1);
+.login-hero .login-mark {
+  width: 96px;
+  height: 96px;
+  filter: drop-shadow(0 6px 18px rgba(77, 14, 179, 0.45));
+}
+.login-hero h1 {
+  margin: 0;
+  font-family: var(--eos-font-display);
+  font-size: clamp(1.6rem, 3vw, 2.1rem);
   font-weight: 700;
+  letter-spacing: 0.04em;
+  background: linear-gradient(135deg, #ffffff, #cfd3e1);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
-
-.login-page p {
-  color: var(--text-muted);
-  font-size: 18px;
+.login-hero .tagline {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 1rem;
+  max-width: 38ch;
+  line-height: 1.5;
 }
-
-.login-page .btn-primary {
+.login-hero .btn-primary {
+  margin-top: 0.25rem;
   padding: 12px 32px;
   font-size: 16px;
   border-radius: 999px;
+}
+
+.login-divider {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 360px;
+  gap: 0.75rem;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-top: 0.5rem;
+}
+.login-divider::before,
+.login-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+}
+
+.login-tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.85rem;
+  width: 100%;
+  max-width: 560px;
+}
+@media (max-width: 520px) {
+  .login-tiles {
+    grid-template-columns: 1fr;
+  }
+}
+.tile-button {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.9rem 1rem;
+  border-radius: 14px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  color: var(--text-1);
+  text-align: left;
+  text-decoration: none;
+  transition: transform 0.15s ease, border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+.tile-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(125, 74, 255, 0.45);
+  background: rgba(125, 74, 255, 0.08);
+  box-shadow: 0 0 0 3px var(--ring);
+  color: var(--text-1);
+}
+.tile-button .tile-title {
+  font-weight: 600;
+  font-size: 0.98rem;
+}
+.tile-button .tile-desc {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.login-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.5rem 1.25rem;
+  margin-top: 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+.login-stats .stat-num {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--text-1);
+  margin-right: 0.35rem;
+}
+.login-stats .stat-sep {
+  opacity: 0.4;
+}
+
+.login-below {
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
 }
 
 /* ── Scrollbar ──────────────────────────────────────────────────────── */
@@ -1385,23 +1566,208 @@ body::before {
   padding: 16px 24px;
 }
 
-/* ── Activity cards ────────────────────────────────────────────────── */
+/* ── Dashboard hero (Empire Overview) ─────────────────────────────── */
+
+.dash-hero {
+  position: relative;
+  padding: 40px 24px 28px;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  overflow: hidden;
+}
+
+.dash-hero__orb {
+  position: absolute;
+  top: -120px;
+  right: -80px;
+  width: 360px;
+  height: 360px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(169, 125, 255, 0.40) 0%, transparent 65%),
+    radial-gradient(circle at 70% 70%, rgba(77, 14, 179, 0.30) 0%, transparent 70%);
+  filter: blur(20px);
+  pointer-events: none;
+  animation: heroOrb 8s ease-in-out infinite;
+}
+@keyframes heroOrb {
+  0%, 100% { transform: scale(1) translate(0, 0); opacity: 0.9; }
+  50% { transform: scale(1.08) translate(-12px, 8px); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dash-hero__orb { animation: none; }
+}
+
+.dash-hero__sigil {
+  width: 96px;
+  height: 96px;
+  filter: drop-shadow(0 8px 24px rgba(77, 14, 179, 0.55));
+  position: relative;
+  z-index: 1;
+}
+
+.dash-hero__copy {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.dash-hero__eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  color: var(--eos-fg-accent, #a97dff);
+  text-transform: uppercase;
+}
+
+.dash-hero__title {
+  font-family: var(--eos-font-display);
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 700;
+  line-height: 1.05;
+  color: var(--text-1);
+  letter-spacing: 0.02em;
+}
+
+.dash-hero__sub {
+  font-size: 15px;
+  color: var(--text-2);
+  max-width: 540px;
+}
+
+.dash-hero__strip {
+  margin-left: auto;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 900px) {
+  .dash-hero { flex-direction: column; align-items: flex-start; }
+  .dash-hero__strip { margin-left: 0; }
+}
+
+.empire-stat {
+  min-width: 110px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+}
+
+.empire-stat__value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-1);
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.empire-stat__value .delta {
+  font-size: 11px;
+  color: var(--success);
+  font-weight: 600;
+}
+
+.empire-stat__label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.empire-stat__pulse {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success);
+  margin-right: 6px;
+  box-shadow: 0 0 8px var(--success);
+  animation: livePulse 2s ease-in-out infinite;
+}
+@keyframes livePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
+}
+
+/* ── Section title ─────────────────────────────────────────────────── */
+
+.section-title {
+  color: var(--text-1);
+  margin: 24px 24px 16px;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+/* ── Activity cards (v2: sigil tiles + accent bar + featured) ─────── */
 
 .activity-card {
+  position: relative;
   background: var(--bg-card);
   backdrop-filter: blur(10px);
   border-radius: var(--radius);
-  padding: 20px;
+  padding: 20px 20px 20px 24px;
   border: 1px solid var(--border-subtle);
   box-shadow: var(--shadow);
+  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+  overflow: hidden;
+}
+
+.activity-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 4px;
+  background: var(--card-accent, var(--brand));
+}
+
+.activity-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(77, 14, 179, 0.4);
+  box-shadow: var(--shadow), 0 0 0 1px rgba(77, 14, 179, 0.18), 0 0 32px rgba(77, 14, 179, 0.18);
+}
+
+.activity-card--featured {
+  background:
+    linear-gradient(135deg, rgba(77, 14, 179, 0.25) 0%, rgba(122, 61, 240, 0.12) 60%, rgba(255, 255, 255, 0.04) 100%),
+    rgba(255, 255, 255, 0.04);
+  border-color: rgba(122, 61, 240, 0.4);
+  box-shadow: var(--shadow), 0 0 32px rgba(77, 14, 179, 0.30);
 }
 
 .activity-card__header {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   margin-bottom: 16px;
 }
+
+.activity-card__sigil {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 4px;
+  flex-shrink: 0;
+}
+.activity-card__sigil img { width: 100%; height: 100%; object-fit: contain; }
 
 .activity-card__icon {
   font-size: 20px;
@@ -1413,11 +1779,25 @@ body::before {
   color: var(--text-1);
 }
 
+.activity-card__featured-tag {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--eos-fg-accent, #a97dff);
+  background: rgba(169, 125, 255, 0.12);
+  border: 1px solid rgba(169, 125, 255, 0.4);
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+
 .activity-card__stat {
-  font-size: 36px;
+  font-size: 40px;
   font-weight: 700;
   color: var(--text-1);
   line-height: 1;
+  letter-spacing: -0.01em;
 }
 
 .activity-card__stat-label {
@@ -1459,6 +1839,20 @@ body::before {
 .wyr-bar__segment--1 { background: var(--brand-light); }
 .wyr-bar__segment--2 { background: var(--success); }
 .wyr-bar__segment--3 { background: var(--warning); }
+
+.wyr-sparkline {
+  margin-top: 10px;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 32px;
+}
+.wyr-sparkline__bar {
+  flex: 1;
+  background: linear-gradient(180deg, rgba(169, 125, 255, 0.95), rgba(77, 14, 179, 0.4));
+  border-radius: 2px;
+  min-height: 4px;
+}
 
 /* ── Status badges ─────────────────────────────────────────────────── */
 

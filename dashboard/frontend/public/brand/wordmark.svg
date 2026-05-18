@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 96" width="480" height="96" fill="none" role="img" aria-label="Empire of Shadows">
+  
+  <defs>
+    <linearGradient id="eosWordGrad" x1="0" y1="0" x2="480" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"></stop>
+      <stop offset="1" stop-color="#a97dff"></stop>
+    </linearGradient>
+  </defs>
+
+  <text x="0" y="50" font-family="Cinzel, &#39;Trajan Pro&#39;, serif" font-size="34" font-weight="700" fill="url(#eosWordGrad)" letter-spacing="0.06em">EMPIRE OF SHADOWS</text>
+
+  <line x1="0" y1="64" x2="480" y2="64" stroke="rgba(122,61,240,0.55)" stroke-width="1"></line>
+
+  <text x="0" y="80" font-family="&#39;Segoe UI&#39;, sans-serif" font-size="10" font-weight="600" fill="#9aa3b2" letter-spacing="0.42em">DISCORD  ECOSYSTEM</text>
+</svg>

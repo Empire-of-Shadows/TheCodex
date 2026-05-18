@@ -59,3 +59,19 @@ export const api = {
   getDocs: (builder: "guide" | "welcome", topic: string) =>
     apiFetch<{ title: string; content: string }>(`/api/docs/${builder}/${topic}`),
 };
+
+export interface PublicStats {
+  servers: number;
+  suggestions: number;
+  wyr_votes: number;
+}
+
+export async function fetchPublicStats(): Promise<PublicStats | null> {
+  try {
+    const resp = await fetch("/api/stats/public", { credentials: "omit" });
+    if (!resp.ok) return null;
+    return (await resp.json()) as PublicStats;
+  } catch {
+    return null;
+  }
+}
