@@ -23,7 +23,7 @@ export default function LoginPage() {
   return (
     <>
       <div className="login-hero">
-        <img src="/brand/logo-mark.png" className="login-mark" alt="" />
+        <img src="/brand/artifact-codex.svg" className="login-mark" alt="" />
         <h1>The Codex Dashboard</h1>
         <p className="tagline">
           Sign in with Discord to view stats and manage your servers. Your Empire of Shadows
