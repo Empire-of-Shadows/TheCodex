@@ -24,8 +24,8 @@ from dashboard.routers.validate import router as validate_router
 from dashboard.routers.docs import router as docs_router
 from dashboard.routers.public_stats import router as public_stats_router
 
-_frontend_dist = os.path.join(os.path.dirname(__file__), "frontend", "dist")
-_frontend_public = os.path.join(os.path.dirname(__file__), "frontend", "public")
+_frontend_dist = os.path.abspath(os.path.join(os.path.dirname(__file__), "frontend", "dist"))
+_frontend_public = os.path.abspath(os.path.join(os.path.dirname(__file__), "frontend", "public"))
 _index_html = os.path.join(_frontend_dist, "index.html")
 _START_TIME = time.time()
 
