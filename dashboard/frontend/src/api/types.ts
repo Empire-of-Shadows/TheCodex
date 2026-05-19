@@ -205,3 +205,24 @@ export const VALID_ACTIONS: Record<string, { description: string }> = {
   server_rules: { description: "Shows link to server rules channel" },
   role_info: { description: "Shows server roles overview" },
 };
+
+
+// ── Audit log ────────────────────────────────────────────────────────────
+
+export interface AuditLogEntry {
+  guild_id: string;
+  actor_id: string;
+  actor_name: string;
+  source: "discord" | "dashboard";
+  section: string;
+  key: string;
+  old_value: unknown;
+  new_value: unknown;
+  action: "set" | "clear" | "toggle" | "create" | "remove";
+  created_at: string;
+}
+
+export interface AuditLogResponse {
+  entries: AuditLogEntry[];
+  next_cursor: string | null;
+}

@@ -19,6 +19,9 @@ from utils.logger import get_logger
 from .actions import EmbedConfigActions, WYRConfigActions, NewMemberActions, TrackerActions, DropsActions, ColorSetActions, AnnouncementActions, SuggestionActions
 from .actions.guide_actions import GuideActions
 from .permission_checks import check_channel_permissions, check_role_permissions
+from .role_auth import get_panel_role, MOD_ALLOWED_SECTIONS
+from storage.audit_log import get_audit_logger
+from storage.config_manager import get_config_manager
 from .views import (
     build_main_panel,
     build_subcategory_panel,
@@ -101,7 +104,6 @@ class AdminCog(commands.Cog):
     admin_group = app_commands.Group(
         name="admin",
         description="Admin commands for managing embed configuration",
-        default_permissions=discord.Permissions(manage_guild=True)
     )
 
     # ==================== Master Admin Panel ====================
@@ -116,7 +118,25 @@ class AdminCog(commands.Cog):
             )
             return
 
-        logger.info(f"Admin panel opened by {interaction.user} in guild {interaction.guild.id}")
+        # Resolve panel access tier: admin (MANAGE_GUILD or configured admin
+        # role) gets full access; mod (configured moderator role) is restricted
+        # to MOD_ALLOWED_SECTIONS; everyone else is refused.
+        cm = await get_config_manager()
+        cfg = await cm.get_config(interaction.guild.id)
+        panel_role = get_panel_role(interaction.user, cfg)
+        if panel_role == "none":
+            await interaction.response.send_message(
+                "You do not have permission to use the admin panel. "
+                "Requires **Manage Server**, the configured Admin role, "
+                "or the configured Mod role.",
+                ephemeral=True,
+            )
+            return
+
+        logger.info(
+            f"Admin panel opened by {interaction.user} in guild "
+            f"{interaction.guild.id} (role={panel_role})"
+        )
 
         # Lookup for group keys -> display labels
         group_labels = {key: label for key, label, _ in PANEL_GROUPS}
@@ -139,6 +159,15 @@ class AdminCog(commands.Cog):
         # Subcategory routing - dispatches to existing _show_* methods
         async def subcategory_callback(sub_interaction: discord.Interaction, subcategory: str):
             guild_id = sub_interaction.guild.id
+
+            # Mod-tier restriction: only sections in MOD_ALLOWED_SECTIONS are reachable.
+            if panel_role == "mod" and subcategory not in MOD_ALLOWED_SECTIONS:
+                await sub_interaction.response.send_message(
+                    "This section is restricted to server admins. "
+                    "Mods can only adjust the sections opted in by your admins.",
+                    ephemeral=True,
+                )
+                return
 
             if subcategory in _EMBED_GATED_KEYS:
                 if not await setup_gatekeeper.is_embed_setup_complete(guild_id):
@@ -232,6 +261,8 @@ class AdminCog(commands.Cog):
                 "guide_upload": self._show_guide_upload_menu,
                 "guide_enabled": self._show_guide_enabled_menu,
                 "guide_status": self._show_guide_status,
+                "admin_roles": self._show_admin_roles_menu,
+                "mod_roles": self._show_mod_roles_menu,
             }
             handler = handlers.get(subcategory)
             if handler:
@@ -2368,6 +2399,115 @@ class AdminCog(commands.Cog):
 
         layout.add_item(discord.ui.TextDisplay("\n".join(lines)))
         return layout
+
+
+    # ==================== Panel Access (Admin / Mod Roles) ====================
+
+    async def _show_admin_roles_menu(self, interaction: discord.Interaction):
+        await self._show_panel_roles_menu(
+            interaction,
+            role_type="admin",
+            heading="## Admin Roles",
+            description=(
+                "Members with any of the selected roles get **full admin panel** access, "
+                "equivalent to Manage Server. Leave blank if you only want Manage Server members to use the panel."
+            ),
+        )
+
+    async def _show_mod_roles_menu(self, interaction: discord.Interaction):
+        await self._show_panel_roles_menu(
+            interaction,
+            role_type="moderator",
+            heading="## Mod Roles (optional)",
+            description=(
+                "Optional. Members with the selected roles can open the panel but are restricted "
+                "to mod-allowed sections (set by your admins). Leave blank to disable the Mod tier."
+            ),
+        )
+
+    async def _show_panel_roles_menu(
+        self,
+        interaction: discord.Interaction,
+        *,
+        role_type: str,
+        heading: str,
+        description: str,
+    ):
+        guild = interaction.guild
+        cm = await get_config_manager()
+
+        async def current_role_ids() -> list[int]:
+            cfg = await cm.get_config(guild.id)
+            return [int(r) for r in (cfg.roles.get(role_type) or [])]
+
+        def _build_view(current: list[int]) -> discord.ui.LayoutView:
+            view = discord.ui.LayoutView(timeout=300.0)
+            container = discord.ui.Container()
+            container.add_item(discord.ui.TextDisplay(heading))
+            container.add_item(discord.ui.Separator())
+            container.add_item(discord.ui.TextDisplay(description))
+
+            if current:
+                mentions = " ".join(f"<@&{rid}>" for rid in current)
+                container.add_item(discord.ui.TextDisplay(f"**Current:** {mentions}"))
+            else:
+                container.add_item(discord.ui.TextDisplay("**Current:** _none_"))
+
+            select = discord.ui.RoleSelect(
+                placeholder="Select role(s)...",
+                min_values=0,
+                max_values=10,
+                default_values=[discord.Object(id=rid) for rid in current],
+            )
+
+            async def on_select(sel_inter: discord.Interaction):
+                rl_key = (sel_inter.user.id, f"panel_{role_type}_roles")
+                now = time.monotonic()
+                if now - self._autosave_cooldowns.get(rl_key, 0.0) < self.AUTOSAVE_COOLDOWN:
+                    await sel_inter.response.send_message(
+                        "Saving too quickly - please wait a moment.", ephemeral=True
+                    )
+                    return
+                self._autosave_cooldowns[rl_key] = now
+
+                new_ids = [int(r.id) for r in select.values]
+                cfg = await cm.get_config(guild.id)
+                old_ids = list(cfg.roles.get(role_type) or [])
+                cfg.roles[role_type] = new_ids
+                ok = await cm.save_config(cfg)
+                if ok:
+                    logger.info(
+                        f"Admin {sel_inter.user} set {role_type} roles to {new_ids} "
+                        f"in guild {guild.id}"
+                    )
+                    try:
+                        al = await get_audit_logger()
+                        await al.log(
+                            guild_id=guild.id,
+                            actor_id=sel_inter.user.id,
+                            actor_name=str(sel_inter.user),
+                            source="discord",
+                            section="roles",
+                            key=f"roles.{role_type}",
+                            old_value=old_ids,
+                            new_value=new_ids,
+                            action="set",
+                        )
+                    except Exception as e:
+                        logger.debug(f"Audit write skipped for roles.{role_type}: {e}")
+                    await sel_inter.response.edit_message(view=_build_view(new_ids))
+                else:
+                    await sel_inter.response.send_message(
+                        f"Failed to save {role_type} roles.", ephemeral=True
+                    )
+
+            select.callback = on_select
+            container.add_item(select)
+            view.add_item(container)
+            return view
+
+        current = await current_role_ids()
+        await interaction.response.send_message(view=_build_view(current), ephemeral=True)
 
 
 async def setup(bot: commands.Bot):

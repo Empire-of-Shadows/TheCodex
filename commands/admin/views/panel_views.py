@@ -21,6 +21,7 @@ PANEL_GROUPS = [
     ("announcements", "Announcements", "Configure announcement thread auto-creation"),
     ("suggestions", "Suggestions", "Configure suggestion channel and view stats"),
     ("guide_settings", "Guide", "Configure the server guide system"),
+    ("panel_access", "Panel Access", "Configure who can use this admin panel"),
 ]
 
 # Sub-categories within each group
@@ -76,6 +77,10 @@ PANEL_SUBCATEGORIES = {
         ("guide_upload", "Guide JSON Builder", "Upload a custom guide JSON file"),
         ("guide_enabled", "Guide Enabled", "Enable or disable the guide system"),
         ("guide_status", "View Status", "View guide system configuration"),
+    ],
+    "panel_access": [
+        ("admin_roles", "Admin Roles", "Roles granted full panel access (same as Manage Server)"),
+        ("mod_roles", "Mod Roles", "Optional - roles granted limited panel access"),
     ],
 }
 

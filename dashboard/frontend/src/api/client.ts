@@ -1,4 +1,13 @@
-import type { User, Guild, GuideData, WelcomeData, UserActivity, Channel, Role } from "./types";
+import type {
+  User,
+  Guild,
+  GuideData,
+  WelcomeData,
+  UserActivity,
+  Channel,
+  Role,
+  AuditLogResponse,
+} from "./types";
 
 async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -58,6 +67,20 @@ export const api = {
 
   getDocs: (builder: "guide" | "welcome", topic: string) =>
     apiFetch<{ title: string; content: string }>(`/api/docs/${builder}/${topic}`),
+
+  auditLog: (
+    guildId: string,
+    before?: string | null,
+    section?: string | null,
+    limit = 50,
+  ) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (before) params.set("before", before);
+    if (section) params.set("section", section);
+    return apiFetch<AuditLogResponse>(
+      `/api/guilds/${guildId}/audit-log?${params.toString()}`,
+    );
+  },
 };
 
 export interface PublicStats {

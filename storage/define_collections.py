@@ -283,6 +283,18 @@ class DefineCollections:
             ]
         )
 
+        # Audit Log - admin setting mutations (1 year TTL on created_at)
+        self._collection_configs['settings_audit_log'] = CollectionConfig(
+            name='AuditLog',
+            database='Settings',
+            connection='primary',
+            indexes=[
+                IndexModel([('guild_id', 1), ('created_at', -1)], name='guild_created_desc'),
+                IndexModel([('created_at', 1)], name='created_at_ttl',
+                           expireAfterSeconds=31536000),
+            ]
+        )
+
         # Color Set collections
         self._collection_configs['color_color_sets'] = CollectionConfig(
             name='ColorSets',

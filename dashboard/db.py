@@ -45,6 +45,11 @@ def guild_config():
     return _get_client()["Settings"]["GuildConfig"]
 
 
+def audit_log():
+    """Settings.AuditLog - admin setting mutation audit trail."""
+    return _get_client()["Settings"]["AuditLog"]
+
+
 def shared_sessions():
     """WebSessions.SharedSessions - cross-subdomain OAuth session storage."""
     return _get_client()["WebSessions"]["SharedSessions"]

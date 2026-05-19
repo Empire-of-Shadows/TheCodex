@@ -23,6 +23,7 @@ from dashboard.routers.activity import router as activity_router
 from dashboard.routers.validate import router as validate_router
 from dashboard.routers.docs import router as docs_router
 from dashboard.routers.public_stats import router as public_stats_router
+from dashboard.routers.audit_log import router as audit_log_router
 
 _frontend_dist = os.path.abspath(os.path.join(os.path.dirname(__file__), "frontend", "dist"))
 _frontend_public = os.path.abspath(os.path.join(os.path.dirname(__file__), "frontend", "public"))
@@ -61,6 +62,7 @@ app.include_router(builder_router, prefix="/api")
 app.include_router(validate_router, prefix="/api")
 app.include_router(docs_router, prefix="/api")
 app.include_router(public_stats_router, prefix="/api")
+app.include_router(audit_log_router, prefix="/api")
 
 
 @app.get("/health")
