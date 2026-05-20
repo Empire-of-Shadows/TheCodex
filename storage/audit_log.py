@@ -24,7 +24,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from utilities.logger_setup import get_logger
+from utils.logger import get_logger
 
 logger = get_logger("AuditLog")
 
