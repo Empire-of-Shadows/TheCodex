@@ -2502,7 +2502,9 @@ class AdminCog(commands.Cog):
                     )
 
             select.callback = on_select
-            container.add_item(select)
+            select_row = discord.ui.ActionRow()
+            select_row.add_item(select)
+            container.add_item(select_row)
             view.add_item(container)
             return view
 
