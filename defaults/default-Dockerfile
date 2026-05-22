@@ -12,8 +12,10 @@ RUN apt-get update && \
 
 WORKDIR /app
 
+ARG GIT_REF=Revamp
+
 # Clone your GitHub repo directly
-RUN git clone https://github.com/Empire-of-Shadows/TheCodex.git .
+RUN git clone --depth 1 --branch "${GIT_REF}" https://github.com/Empire-of-Shadows/TheCodex.git .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \

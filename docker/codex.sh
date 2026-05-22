@@ -45,6 +45,7 @@ else
     echo "Mode: cached build"
 fi
 echo "Branch: $BRANCH"
+export GIT_REF=$BRANCH
 # Step 0: Git Update
 echo ""
 echo "--- Updating source code from branch $BRANCH ---"

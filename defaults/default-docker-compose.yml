@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        - GIT_REF=${GIT_REF:-Revamp}
     env_file:
       - .env
     environment:
