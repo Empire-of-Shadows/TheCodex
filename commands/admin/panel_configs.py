@@ -14,6 +14,8 @@ import discord
 
 from .views.panel_engine import PanelNode
 from .views.embed_views import TIER_NAMES, TIER_LABELS, FEATURE_OPTIONS
+from .panel_branding import PANEL_TITLE, PANEL_DESCRIPTION
+from storage.config_manager import get_config_manager
 from .actions.embed_config_actions import EmbedConfigActions
 from .actions.wyr_actions import WYRConfigActions
 from .actions.new_member_actions import NewMemberActions
@@ -21,6 +23,7 @@ from .actions.announcement_actions import AnnouncementActions
 from .actions.suggestion_actions import SuggestionActions
 from .actions.guide_actions import GuideActions
 from .actions.drops_actions import DropsActions
+from .actions.color_set_actions import ColorSetActions
 from storage.setup_gatekeeper import setup_gatekeeper
 from Features.NewMembers.welcome_schema import validate_welcome_schema
 from Features.Guide.guide_schema import validate_guide_schema
@@ -334,6 +337,7 @@ DESCRIPTION_LIMITS_CONFIG = PanelNode(
     label="Description Limits",
     kind="menu",
     description="Configure character limits for embed descriptions.",
+    default_summary="Using defaults",
     children={
         "default_limit": PanelNode(
             key="default_limit",
@@ -342,6 +346,7 @@ DESCRIPTION_LIMITS_CONFIG = PanelNode(
             description="Set the default character limit applied to all users.",
             get_values=_get_default_limit,
             set_values=_set_default_limit,
+            is_customized=_value_diverges(_get_default_limit, "500"),
             options=[(str(v), f"{v} characters") for v in [500, 1000, 1500, 2000, 2500, 3000, 3500, 4000]],
             min_values=1,
             max_values=1,
@@ -355,7 +360,7 @@ DESCRIPTION_LIMITS_CONFIG = PanelNode(
                 get_values=lambda guild_id, _t=t: _get_tier_limit(guild_id, _t),
                 set_values=lambda guild_id, vals, _t=t: _set_tier_limit(guild_id, vals, _t),
                 clear_values=lambda guild_id, _t=t: _clear_tier_limit(guild_id, _t),
-                pre_check=lambda inter, gid, _t=t: setup_gatekeeper.get_tier_gate_embed(gid, _t),
+                pre_check=lambda inter, gid, _t=t: setup_gatekeeper.get_tier_gate_layout(gid, _t),
                 modal_title=f"Set {TIER_LABELS[t]} Description Limit",
                 modal_label="Character Limit",
                 modal_placeholder="e.g., 1000  (1–4000)",
@@ -452,6 +457,7 @@ WYR_SCHEDULE_CONFIG = PanelNode(
     label="WYR Schedule",
     kind="menu",
     description="Configure when WYR questions post each day. Each field autosaves independently.",
+    default_summary="Using defaults",
     children={
         "wyr_hour": PanelNode(
             key="wyr_hour",
@@ -461,6 +467,7 @@ WYR_SCHEDULE_CONFIG = PanelNode(
             options=[(str(h), f"{h:02d}:00") for h in range(24)],
             get_values=WYRConfigActions.get_schedule_hour,
             set_values=WYRConfigActions.set_schedule_hour,
+            is_customized=_value_diverges(WYRConfigActions.get_schedule_hour, "6"),
             min_values=1,
             max_values=1,
         ),
@@ -472,6 +479,7 @@ WYR_SCHEDULE_CONFIG = PanelNode(
             options=[("0", ":00"), ("15", ":15"), ("30", ":30"), ("45", ":45")],
             get_values=WYRConfigActions.get_schedule_minute,
             set_values=WYRConfigActions.set_schedule_minute,
+            is_customized=_value_diverges(WYRConfigActions.get_schedule_minute, "0"),
             min_values=1,
             max_values=1,
         ),
@@ -483,6 +491,7 @@ WYR_SCHEDULE_CONFIG = PanelNode(
             options=_WYR_TIMEZONE_OPTIONS,
             get_values=WYRConfigActions.get_schedule_timezone,
             set_values=WYRConfigActions.set_schedule_timezone,
+            is_customized=_value_diverges(WYRConfigActions.get_schedule_timezone, "America/Chicago"),
             min_values=1,
             max_values=1,
         ),
@@ -497,6 +506,7 @@ WYR_CATEGORY_CONFIG = PanelNode(
     options=_WYR_CATEGORY_OPTIONS,
     get_values=WYRConfigActions.get_category_as_list,
     set_values=lambda gid, vals: WYRConfigActions.set_category(gid, vals[0]),
+    is_customized=_value_diverges(WYRConfigActions.get_category_as_list, "sfw"),
     min_values=1,
     max_values=1,
 )
@@ -506,6 +516,7 @@ WYR_THREAD_CONFIG = PanelNode(
     label="WYR Thread Settings",
     kind="menu",
     description="Configure discussion threads created with each WYR post.",
+    default_summary="Using defaults",
     children={
         "wyr_thread_format": PanelNode(
             key="wyr_thread_format",
@@ -536,6 +547,7 @@ WYR_THREAD_CONFIG = PanelNode(
             options=_WYR_ARCHIVE_OPTIONS,
             get_values=WYRConfigActions.get_thread_auto_archive,
             set_values=WYRConfigActions.set_thread_auto_archive,
+            is_customized=_value_diverges(WYRConfigActions.get_thread_auto_archive, "1440"),
             min_values=1,
             max_values=1,
         ),
@@ -550,6 +562,7 @@ WYR_CLEANUP_CONFIG = PanelNode(
     options=_WYR_CLEANUP_OPTIONS,
     get_values=WYRConfigActions.get_cleanup_days_as_list,
     set_values=lambda gid, vals: WYRConfigActions.set_cleanup_days(gid, int(vals[0])),
+    is_customized=_value_diverges(WYRConfigActions.get_cleanup_days_as_list, "30"),
     min_values=1,
     max_values=1,
 )
@@ -562,6 +575,7 @@ DROPS_SCHEDULE_CONFIG = PanelNode(
     label="Drops Schedule",
     kind="menu",
     description="Configure when daily Prime Gaming drops post. Each field autosaves independently.",
+    default_summary="Using defaults",
     children={
         "drops_hour": PanelNode(
             key="drops_hour",
@@ -571,6 +585,7 @@ DROPS_SCHEDULE_CONFIG = PanelNode(
             options=[(str(h), f"{h:02d}:00") for h in range(24)],
             get_values=DropsActions.get_schedule_hour,
             set_values=DropsActions.set_schedule_hour,
+            is_customized=_value_diverges(DropsActions.get_schedule_hour, "6"),
             min_values=1,
             max_values=1,
         ),
@@ -582,6 +597,7 @@ DROPS_SCHEDULE_CONFIG = PanelNode(
             options=[("0", ":00"), ("15", ":15"), ("30", ":30"), ("45", ":45")],
             get_values=DropsActions.get_schedule_minute,
             set_values=DropsActions.set_schedule_minute,
+            is_customized=_value_diverges(DropsActions.get_schedule_minute, "30"),
             min_values=1,
             max_values=1,
         ),
@@ -593,6 +609,7 @@ DROPS_SCHEDULE_CONFIG = PanelNode(
             options=_WYR_TIMEZONE_OPTIONS,
             get_values=DropsActions.get_schedule_timezone,
             set_values=DropsActions.set_schedule_timezone,
+            is_customized=_value_diverges(DropsActions.get_schedule_timezone, "America/Chicago"),
             min_values=1,
             max_values=1,
         ),
@@ -648,6 +665,7 @@ NM_SETTINGS_CONFIG = PanelNode(
     label="General Settings",
     kind="menu",
     description="Account age requirement, auto-kick, and system feature toggles.",
+    default_summary="Using defaults",
     children={
         "nm_enabled": PanelNode(
             key="nm_enabled",
@@ -657,6 +675,7 @@ NM_SETTINGS_CONFIG = PanelNode(
             options=_NM_TOGGLE_OPTIONS,
             get_values=NewMemberActions.get_enabled_as_list,
             set_values=NewMemberActions.set_enabled_from_list,
+            is_customized=_value_diverges(NewMemberActions.get_enabled_as_list, "false"),
             min_values=1,
             max_values=1,
         ),
@@ -668,6 +687,7 @@ NM_SETTINGS_CONFIG = PanelNode(
             options=_NM_ACCOUNT_AGE_OPTIONS,
             get_values=NewMemberActions.get_account_age_as_list,
             set_values=NewMemberActions.set_account_age_from_list,
+            is_customized=_value_diverges(NewMemberActions.get_account_age_as_list, "90"),
             min_values=1,
             max_values=1,
         ),
@@ -679,6 +699,7 @@ NM_SETTINGS_CONFIG = PanelNode(
             options=_NM_TOGGLE_OPTIONS,
             get_values=NewMemberActions.get_auto_kick_as_list,
             set_values=NewMemberActions.set_auto_kick_from_list,
+            is_customized=_value_diverges(NewMemberActions.get_auto_kick_as_list, "true"),
             min_values=1,
             max_values=1,
         ),
@@ -690,6 +711,7 @@ NM_SETTINGS_CONFIG = PanelNode(
             options=_NM_TOGGLE_OPTIONS,
             get_values=NewMemberActions.get_welcome_enabled_as_list,
             set_values=NewMemberActions.set_welcome_enabled_from_list,
+            is_customized=_value_diverges(NewMemberActions.get_welcome_enabled_as_list, "true"),
             min_values=1,
             max_values=1,
         ),
@@ -701,6 +723,7 @@ NM_SETTINGS_CONFIG = PanelNode(
             options=_NM_TOGGLE_OPTIONS,
             get_values=NewMemberActions.get_whitelist_system_as_list,
             set_values=NewMemberActions.set_whitelist_system_from_list,
+            is_customized=_value_diverges(NewMemberActions.get_whitelist_system_as_list, "true"),
             min_values=1,
             max_values=1,
         ),
@@ -748,6 +771,7 @@ ANN_SETTINGS_CONFIG = PanelNode(
     label="Thread Settings",
     kind="menu",
     description="Configure how discussion threads are created on announcements.",
+    default_summary="Using defaults",
     children={
         "ann_thread_auto_create": PanelNode(
             key="ann_thread_auto_create",
@@ -757,6 +781,7 @@ ANN_SETTINGS_CONFIG = PanelNode(
             options=_ANN_TOGGLE_OPTIONS,
             get_values=AnnouncementActions.get_thread_auto_create_as_list,
             set_values=AnnouncementActions.set_thread_auto_create_from_list,
+            is_customized=_value_diverges(AnnouncementActions.get_thread_auto_create_as_list, "true"),
             min_values=1,
             max_values=1,
         ),
@@ -775,6 +800,10 @@ ANN_SETTINGS_CONFIG = PanelNode(
             modal_max_length=100,
             get_values=AnnouncementActions.get_thread_name_format_as_list,
             set_values=AnnouncementActions.set_thread_name_format,
+            is_customized=_value_diverges(
+                AnnouncementActions.get_thread_name_format_as_list,
+                "💬 {message_content}",
+            ),
         ),
         "ann_thread_archive": PanelNode(
             key="ann_thread_archive",
@@ -784,6 +813,7 @@ ANN_SETTINGS_CONFIG = PanelNode(
             options=_ANN_ARCHIVE_OPTIONS,
             get_values=AnnouncementActions.get_thread_auto_archive_as_list,
             set_values=AnnouncementActions.set_thread_auto_archive_from_list,
+            is_customized=_value_diverges(AnnouncementActions.get_thread_auto_archive_as_list, "1440"),
             min_values=1,
             max_values=1,
         ),
@@ -800,6 +830,10 @@ ANN_SETTINGS_CONFIG = PanelNode(
             modal_paragraph=True,
             get_values=AnnouncementActions.get_thread_welcome_message_as_list,
             set_values=AnnouncementActions.set_thread_welcome_message,
+            is_customized=_value_diverges(
+                AnnouncementActions.get_thread_welcome_message_as_list,
+                "💬 **Discussion Thread**\n\nDiscuss this announcement here!",
+            ),
         ),
         "ann_auto_delete": PanelNode(
             key="ann_auto_delete",
@@ -809,6 +843,7 @@ ANN_SETTINGS_CONFIG = PanelNode(
             options=_ANN_TOGGLE_OPTIONS,
             get_values=AnnouncementActions.get_auto_delete_threads_as_list,
             set_values=AnnouncementActions.set_auto_delete_threads_from_list,
+            is_customized=_value_diverges(AnnouncementActions.get_auto_delete_threads_as_list, "true"),
             min_values=1,
             max_values=1,
         ),
@@ -872,6 +907,297 @@ GUIDE_ENABLED_CONFIG = PanelNode(
     options=_GUIDE_TOGGLE_OPTIONS,
     get_values=GuideActions.get_enabled_as_list,
     set_values=GuideActions.set_enabled_from_list,
+    is_customized=_value_diverges(GuideActions.get_enabled_as_list, "true"),
     min_values=1,
     max_values=1,
+)
+
+
+# ── Panel Access (admin/mod role) get_values for dashboard summary ───────────
+
+async def _get_panel_role(guild_id: int, role_field: str) -> list:
+    cm = await get_config_manager()
+    cfg = await cm.get_config(guild_id)
+    return [int(r) for r in (cfg.roles.get(role_field) or [])]
+
+
+async def _set_panel_role(guild_id: int, ids: list, role_field: str) -> bool:
+    cm = await get_config_manager()
+    cfg = await cm.get_config(guild_id)
+    cfg.roles[role_field] = [int(r) for r in ids]
+    return await cm.save_config(cfg)
+
+
+async def _clear_panel_role(guild_id: int, role_field: str) -> bool:
+    cm = await get_config_manager()
+    cfg = await cm.get_config(guild_id)
+    cfg.roles[role_field] = []
+    return await cm.save_config(cfg)
+
+
+ADMIN_ROLES_CONFIG = PanelNode(
+    key="admin_roles",
+    label="Panel Access Roles",
+    kind="role_select",
+    description=(
+        "Grants full admin panel access (same as Manage Server). "
+        "Members holding any of these roles can open `/admin panel`."
+    ),
+    get_values=lambda gid: _get_panel_role(gid, "admin"),
+    set_values=lambda gid, ids: _set_panel_role(gid, ids, "admin"),
+    clear_values=lambda gid: _clear_panel_role(gid, "admin"),
+    min_values=0,
+    max_values=10,
+)
+
+MOD_ROLES_CONFIG = PanelNode(
+    key="mod_roles",
+    label="Mod Access Roles",
+    kind="role_select",
+    description=(
+        "Optional — grants limited (mod-tier) panel access to sections opted in "
+        "by your admins. Leave blank to disable the Mod tier."
+    ),
+    get_values=lambda gid: _get_panel_role(gid, "moderator"),
+    set_values=lambda gid, ids: _set_panel_role(gid, ids, "moderator"),
+    clear_values=lambda gid: _clear_panel_role(gid, "moderator"),
+    min_values=0,
+    max_values=10,
+)
+
+
+# ── Status / bespoke stubs (handler-driven; dashboard summary only) ──────────
+#
+# These subcategories dispatch to bespoke `_show_*` handlers in admin_cog
+# rather than the engine's _navigate_to. They appear here so the dashboard
+# tree can list them with a label, description, and lock state. Kind="menu"
+# with no children → dashboard renders "Not configured".
+
+def _stub(key: str, label: str, description: str = "") -> PanelNode:
+    return PanelNode(key=key, label=label, kind="menu", description=description)
+
+
+def _view_stub(key: str, label: str, description: str = "") -> PanelNode:
+    """Read-only "View Status" entry — surfaces as 'View only' in parent menus
+    so it never reports a misleading 'Not configured'."""
+    return PanelNode(
+        key=key, label=label, kind="menu", description=description, view_only=True,
+    )
+
+
+def _value_diverges(getter, default_str: str):
+    """Build an `is_customized` predicate that returns True when the leaf's
+    current value (stringified) differs from the supplied default."""
+    async def _pred(guild_id: int) -> bool:
+        try:
+            vals = list(await getter(guild_id))
+        except Exception:
+            return False
+        if not vals:
+            return False
+        return str(vals[0]) != default_str
+    return _pred
+
+
+async def _color_tiers_summary_values(guild_id: int) -> list:
+    """Return a non-empty marker list when Color Tiers is configured.
+
+    Considered configured if a server default color is set OR any color sets exist.
+    """
+    out: list = []
+    try:
+        default_color = await ColorSetActions.get_default_color(guild_id)
+        if default_color is not None:
+            out.append("default_color")
+    except Exception:
+        pass
+    try:
+        sets = await ColorSetActions.list_color_sets(guild_id)
+        if sets:
+            out.append(f"sets:{len(sets)}")
+    except Exception:
+        pass
+    return out
+
+
+EMBED_STATUS_STUB = _view_stub("status", "View Status", "View embed configuration summary.")
+COLOR_TIERS_STUB = PanelNode(
+    key="color_tiers",
+    label="Color Tiers",
+    kind="menu",
+    description="Manage per-guild color palettes.",
+    get_values=_color_tiers_summary_values,
+)
+WYR_STATUS_STUB = _view_stub("wyr_status", "WYR Status", "View WYR configuration summary.")
+NM_STATUS_STUB = _view_stub("nm_status", "View Status", "View new members system status.")
+TAG_TRACKER_STUB = _stub("tag_tracker", "Tag Tracker", "Configure server tag tracking.")
+BOOST_TRACKER_STUB = _stub("boost_tracker", "Boost Tracker", "Configure boost log channel.")
+TRACKER_STATUS_STUB = _view_stub("tracker_status", "View Status", "View tracker configuration summary.")
+DROPS_CHANNEL_STUB = _stub("drops_channel", "Drops Channel", "Channel for daily Prime Gaming drops.")
+DROPS_TRACKER_STUB = _stub("drops_tracker", "Tracked Channels", "Channels tracked for stats.")
+DROPS_MANAGER_STUB = _stub("drops_manager_role", "Manager Role", "Role allowed to manage drops via /drop.")
+DROPS_STATUS_STUB = _view_stub("drops_status", "View Status", "View drops configuration and stats.")
+ANN_STATUS_STUB = _view_stub("ann_status", "View Status", "View announcement configuration summary.")
+SUG_UPDATE_STUB = _stub("sug_update_status", "Update Status", "Update a suggestion's review status.")
+SUG_EXPORT_STUB = _stub("sug_export", "Export", "Export suggestions as CSV or JSON.")
+SUG_STATUS_STUB = _view_stub("sug_status", "View Status", "View suggestion system stats.")
+GUIDE_STATUS_STUB = _view_stub("guide_status", "View Status", "View guide system configuration.")
+
+
+# ── MAIN_PANEL tree (Message 1 dashboard) ────────────────────────────────────
+#
+# Two-level tree per ADMIN_PANEL_STANDARD.md §1/§7:
+#   MAIN_PANEL.children = group menus (panel_access, embed_settings, ...)
+#   group.children      = subcategory entries (handler dispatch via admin_cog)
+#
+# `category_group="main"` renders above the "── Feature Configurations ──"
+# divider in the dashboard Select; "feature" renders below.
+
+_PANEL_ACCESS_GROUP = PanelNode(
+    key="panel_access",
+    label="Role Configuration",
+    kind="menu",
+    description="Delegate admin panel access to server roles.",
+    category_group="main",
+    children={
+        "admin_roles": ADMIN_ROLES_CONFIG,
+        "mod_roles": MOD_ROLES_CONFIG,
+    },
+)
+
+_EMBED_SETTINGS_GROUP = PanelNode(
+    key="embed_settings",
+    label="Embed Settings",
+    kind="menu",
+    description="Configure embed colors, tiers, limits, and features.",
+    category_group="feature",
+    children={
+        "role_tiers": ROLE_TIER_CONFIG,
+        "description_limits": DESCRIPTION_LIMITS_CONFIG,
+        "color_tiers": COLOR_TIERS_STUB,
+        "feature_access": FEATURE_ACCESS_CONFIG,
+        "status": EMBED_STATUS_STUB,
+    },
+)
+
+_WYR_SETTINGS_GROUP = PanelNode(
+    key="wyr_settings",
+    label="WYR Settings",
+    kind="menu",
+    description="Configure Would You Rather scheduling and behavior.",
+    category_group="feature",
+    children={
+        "wyr_channel": WYR_CHANNEL_CONFIG,
+        "wyr_ping_role": WYR_PING_ROLE_CONFIG,
+        "wyr_schedule": WYR_SCHEDULE_CONFIG,
+        "wyr_category": WYR_CATEGORY_CONFIG,
+        "wyr_thread": WYR_THREAD_CONFIG,
+        "wyr_cleanup": WYR_CLEANUP_CONFIG,
+        "wyr_status": WYR_STATUS_STUB,
+    },
+)
+
+_NEW_MEMBERS_GROUP = PanelNode(
+    key="new_members",
+    label="New Members",
+    kind="menu",
+    description="Configure welcome messages, account age, and whitelist.",
+    category_group="feature",
+    children={
+        "nm_welcome_channel": NM_WELCOME_CHANNEL_CONFIG,
+        "nm_welcome_builder": NM_WELCOME_TEXT_CONFIG,
+        "nm_settings": NM_SETTINGS_CONFIG,
+        "nm_whitelist_role": NM_WHITELIST_ROLE_CONFIG,
+        "nm_status": NM_STATUS_STUB,
+    },
+)
+
+_TRACKERS_GROUP = PanelNode(
+    key="trackers",
+    label="Trackers",
+    kind="menu",
+    description="Configure boost tracker and tag tracker.",
+    category_group="feature",
+    children={
+        "tag_tracker": TAG_TRACKER_STUB,
+        "boost_tracker": BOOST_TRACKER_STUB,
+        "tracker_status": TRACKER_STATUS_STUB,
+    },
+)
+
+_UPDATES_DROPS_GROUP = PanelNode(
+    key="updates_drops",
+    label="Updates & Drops",
+    kind="menu",
+    description="Configure drops channel and tracked channels.",
+    category_group="feature",
+    children={
+        "drops_channel": DROPS_CHANNEL_STUB,
+        "drops_schedule": DROPS_SCHEDULE_CONFIG,
+        "drops_tracker": DROPS_TRACKER_STUB,
+        "drops_manager_role": DROPS_MANAGER_STUB,
+        "drops_status": DROPS_STATUS_STUB,
+    },
+)
+
+_ANNOUNCEMENTS_GROUP = PanelNode(
+    key="announcements",
+    label="Announcements",
+    kind="menu",
+    description="Configure announcement thread auto-creation.",
+    category_group="feature",
+    children={
+        "ann_channel": ANN_CHANNEL_CONFIG,
+        "ann_settings": ANN_SETTINGS_CONFIG,
+        "ann_status": ANN_STATUS_STUB,
+    },
+)
+
+_SUGGESTIONS_GROUP = PanelNode(
+    key="suggestions",
+    label="Suggestions",
+    kind="menu",
+    description="Configure suggestion channel and view stats.",
+    category_group="feature",
+    children={
+        "sug_channel": SUG_CHANNEL_CONFIG,
+        "sug_update_status": SUG_UPDATE_STUB,
+        "sug_export": SUG_EXPORT_STUB,
+        "sug_status": SUG_STATUS_STUB,
+    },
+)
+
+_GUIDE_SETTINGS_GROUP = PanelNode(
+    key="guide_settings",
+    label="Guide",
+    kind="menu",
+    description="Configure the server guide system.",
+    category_group="feature",
+    children={
+        "guide_channel": GUIDE_CHANNEL_CONFIG,
+        "guide_upload": GUIDE_UPLOAD_CONFIG,
+        "guide_enabled": GUIDE_ENABLED_CONFIG,
+        "guide_status": GUIDE_STATUS_STUB,
+    },
+)
+
+
+MAIN_PANEL = PanelNode(
+    key="main",
+    label=PANEL_TITLE,
+    kind="menu",
+    description=PANEL_DESCRIPTION,
+    children={
+        # Main Configurations (per §7 hierarchy)
+        "panel_access": _PANEL_ACCESS_GROUP,
+        # Feature Configurations
+        "embed_settings": _EMBED_SETTINGS_GROUP,
+        "wyr_settings": _WYR_SETTINGS_GROUP,
+        "new_members": _NEW_MEMBERS_GROUP,
+        "trackers": _TRACKERS_GROUP,
+        "updates_drops": _UPDATES_DROPS_GROUP,
+        "announcements": _ANNOUNCEMENTS_GROUP,
+        "suggestions": _SUGGESTIONS_GROUP,
+        "guide_settings": _GUIDE_SETTINGS_GROUP,
+    },
 )

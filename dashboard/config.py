@@ -9,6 +9,10 @@ load_dotenv()
 # Discord OAuth2 - shared GateKeeper bot across the ecosystem
 DASHBOARD_CLIENT_ID = os.getenv("GATEKEEPER_CLIENT_ID", "")
 DASHBOARD_CLIENT_SECRET = os.getenv("GATEKEEPER_CLIENT_SECRET", "")
+if not DASHBOARD_CLIENT_ID:
+    raise RuntimeError("GATEKEEPER_CLIENT_ID environment variable is required")
+if not DASHBOARD_CLIENT_SECRET:
+    raise RuntimeError("GATEKEEPER_CLIENT_SECRET environment variable is required")
 
 # Codex bot token - used to check which guilds the bot is in
 BOT_TOKEN = os.getenv("DISCORD_TOKEN", "")
@@ -36,13 +40,17 @@ IS_PRODUCTION = os.getenv("ENVIRONMENT", "development").lower() == "production"
 HOST = os.getenv("DASHBOARD_HOST", "0.0.0.0")
 PORT = int(os.getenv("DASHBOARD_PORT", "54002"))
 
-# CORS
+# CORS — filter falsy entries so an unset BASE_URL doesn't leak an empty origin.
 CORS_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:54002",
-    "http://127.0.0.1:54002",
-    os.getenv("BASE_URL", ""),
+    o
+    for o in [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:54002",
+        "http://127.0.0.1:54002",
+        os.getenv("BASE_URL"),
+    ]
+    if o
 ]
 
 # Discord permission flag for MANAGE_GUILD

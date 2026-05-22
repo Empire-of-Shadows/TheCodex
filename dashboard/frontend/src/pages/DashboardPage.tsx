@@ -1,8 +1,34 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, fetchPublicStats, type PublicStats } from "../api/client";
 import type { User, Guild, UserActivity } from "../api/types";
 import AppHeader from "../components/AppHeader";
+import { formatError } from "../utils/formatError";
+
+function GuildIcon({
+  id,
+  icon,
+  name,
+  size,
+}: {
+  id: string;
+  icon: string | null | undefined;
+  name: string;
+  size: 32 | 96;
+}) {
+  const [broken, setBroken] = useState(false);
+  if (!icon || broken) {
+    return <span className={size === 32 ? "pill-mono" : "guild-icon-fallback"}>{name[0]}</span>;
+  }
+  return (
+    <img
+      src={`https://cdn.discordapp.com/icons/${id}/${icon}.png?size=${size}`}
+      alt=""
+      onError={() => setBroken(true)}
+      loading="lazy"
+    />
+  );
+}
 
 const SIGIL = {
   codex: "/brand/artifact-codex.svg",
@@ -234,23 +260,36 @@ export default function DashboardPage() {
   const [guilds, setGuilds] = useState<Guild[]>([]);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedGuildId, setSelectedGuildId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedGuildId = searchParams.get("guild");
   const [activity, setActivity] = useState<UserActivity | null>(null);
   const [activityLoading, setActivityLoading] = useState(false);
   const [publicStats, setPublicStats] = useState<PublicStats | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
-    Promise.all([api.me(), api.guilds(), api.botInviteUrl(), api.getUserActivity()])
+    Promise.all([
+      api.me(),
+      api.guilds(),
+      api.botInviteUrl(),
+      api.getUserActivity(selectedGuildId ?? undefined),
+    ])
       .then(([u, g, invite, act]) => {
         setUser(u);
         setGuilds(g);
         setInviteUrl(invite.url);
         setActivity(act);
       })
-      .catch(() => navigate("/login"))
+      .catch((e) => {
+        console.error("Dashboard load failed", e);
+        if ((e as Error).message === "Unauthorized") return;
+        setLoadError(formatError(e, "Failed to load dashboard."));
+      })
       .finally(() => setLoading(false));
     fetchPublicStats().then(setPublicStats);
+    // selectedGuildId intentionally excluded so initial mount uses URL once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
 
   const fetchActivity = (guildId?: string) => {
@@ -258,16 +297,51 @@ export default function DashboardPage() {
     api
       .getUserActivity(guildId)
       .then(setActivity)
-      .catch(() => setActivity(null))
+      .catch((e) => {
+        console.error("Activity fetch failed", e);
+        setActivity(null);
+      })
       .finally(() => setActivityLoading(false));
   };
 
   const handleGuildFilter = (guildId: string | null) => {
-    setSelectedGuildId(guildId);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (guildId) next.set("guild", guildId);
+        else next.delete("guild");
+        return next;
+      },
+      { replace: true },
+    );
     fetchActivity(guildId ?? undefined);
   };
 
-  if (loading) return <div className="loading">Loading...</div>;
+  if (loading) {
+    return (
+      <div className="app-layout">
+        <div className="page-skeleton" role="status" aria-busy="true">
+          <div className="skeleton-bar skeleton-bar--lg" />
+          <div className="skeleton-grid">
+            <div className="skeleton-card" />
+            <div className="skeleton-card" />
+            <div className="skeleton-card" />
+            <div className="skeleton-card" />
+          </div>
+          <span className="visually-hidden">Loading dashboard…</span>
+        </div>
+      </div>
+    );
+  }
+  if (loadError) {
+    return (
+      <div className="app-layout">
+        <div className="loading" role="alert" style={{ padding: 32 }}>
+          {loadError}
+        </div>
+      </div>
+    );
+  }
   if (!user) return null;
 
   const botGuilds = guilds.filter((g) => g.bot_in_guild);
@@ -300,11 +374,7 @@ export default function DashboardPage() {
             className={`guild-pill${selectedGuildId === g.id ? " active" : ""}`}
             onClick={() => handleGuildFilter(g.id)}
           >
-            {g.icon ? (
-              <img src={`https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=32`} alt="" />
-            ) : (
-              <span className="pill-mono">{g.name[0]}</span>
-            )}
+            <GuildIcon id={g.id} icon={g.icon} name={g.name} size={32} />
             {g.name}
           </button>
         ))}
@@ -312,8 +382,12 @@ export default function DashboardPage() {
 
       {/* Activity Cards */}
       {activityLoading ? (
-        <div className="loading" style={{ padding: "32px 24px" }}>
-          Loading activity...
+        <div className="activity-grid" role="status" aria-busy="true">
+          <div className="skeleton-card" />
+          <div className="skeleton-card" />
+          <div className="skeleton-card" />
+          <div className="skeleton-card" />
+          <span className="visually-hidden">Loading activity…</span>
         </div>
       ) : activity ? (
         <div className="activity-grid">
@@ -322,7 +396,11 @@ export default function DashboardPage() {
           <TagTrackerCard tags={activity.tag_tracker} />
           <BoostCard boost={activity.boost} />
         </div>
-      ) : null}
+      ) : (
+        <div className="empty-state" role="status" style={{ padding: "32px 24px" }}>
+          No activity yet — once you use Codex features (WYR, suggestions, tag tracker, boosts), they'll show up here.
+        </div>
+      )}
 
       {/* Admin Section */}
       {selectedGuildId && (
@@ -359,11 +437,7 @@ export default function DashboardPage() {
                   onClick={() => handleGuildClick(g)}
                 >
                   <div className="guild-icon">
-                    {g.icon ? (
-                      <img src={`https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=96`} alt="" />
-                    ) : (
-                      g.name[0]
-                    )}
+                    <GuildIcon id={g.id} icon={g.icon} name={g.name} size={96} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="guild-name">{g.name}</div>

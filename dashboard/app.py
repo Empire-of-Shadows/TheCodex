@@ -24,6 +24,10 @@ from dashboard.routers.validate import router as validate_router
 from dashboard.routers.docs import router as docs_router
 from dashboard.routers.public_stats import router as public_stats_router
 from dashboard.routers.audit_log import router as audit_log_router
+from utils.logger import get_logger
+
+startup_logger = get_logger("dashboard.startup")
+health_logger = get_logger("dashboard.health")
 
 _frontend_dist = os.path.abspath(os.path.join(os.path.dirname(__file__), "frontend", "dist"))
 _frontend_public = os.path.abspath(os.path.join(os.path.dirname(__file__), "frontend", "public"))
@@ -33,11 +37,14 @@ _START_TIME = time.time()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    startup_logger.info("Dashboard starting up")
     await db.connect()
     # Codex owns the canonical session Mongo - ensure TTL indexes exist.
     await ensure_oauth_state_ttl_index()
     await ensure_session_ttl_index()
+    startup_logger.info("Dashboard ready (frontend_built=%s)", os.path.isfile(_index_html))
     yield
+    startup_logger.info("Dashboard shutting down")
     await db.close()
 
 
@@ -80,6 +87,7 @@ async def health():
         await client.admin.command("ping")
         response["database_connected"] = True
     except Exception:
+        health_logger.warning("Mongo health ping failed", exc_info=True)
         response["database_connected"] = False
         response["status"] = "degraded"
     return response

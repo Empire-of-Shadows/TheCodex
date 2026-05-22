@@ -1,6 +1,6 @@
 """FastAPI dependencies for authentication."""
 
-from fastapi import Cookie, HTTPException
+from fastapi import Cookie, Depends, HTTPException
 
 from dashboard.auth.session import get_session
 from dashboard.auth.signing import unsign_token
@@ -33,6 +33,15 @@ def user_can_manage_guild(session: dict, guild_id: str) -> bool:
 
 
 def require_guild_access(session: dict, guild_id: str):
-    """Raise 403 if user cannot manage the guild."""
+    """Raise 403 if user cannot manage the guild. (helper form)"""
     if not user_can_manage_guild(session, guild_id):
         raise HTTPException(status_code=403, detail="No MANAGE_GUILD permission for this guild")
+
+
+async def require_guild_manage(
+    guild_id: str,
+    session: dict = Depends(get_current_user),
+) -> dict:
+    """FastAPI dependency: 401 if anon, 403 if user lacks MANAGE_GUILD. Returns the session."""
+    require_guild_access(session, guild_id)
+    return session

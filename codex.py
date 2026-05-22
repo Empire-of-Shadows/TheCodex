@@ -16,7 +16,7 @@ from utils.sync import load_cogs, attach_databases
 from health_endpoint import initialize_health_server, stop_health_server
 
 # Guild that owns the guild-scoped admin slash commands (e.g. /status).
-STATUS_ADMIN_GUILD_ID = 1265120128295632926
+STATUS_ADMIN_GUILD_ID = 1497083403453989007
 from storage.database_manager import db_manager
 
 # Initialize application-wide logging

@@ -12,9 +12,125 @@ from utils.logger import get_logger
 
 logger = get_logger("AdminViews")
 
+BOT_ID = "codex"
+
+# Container accent colors per ADMIN_PANEL_STANDARD.md §4.
+READONLY_COLOR = 0x4d0eb3
+NOTICE_COLOR = 0xE67E22
+PREMIUM_COLOR = 0xF1C40F
+
+
+def cid(module: str, action: str, node_key: Optional[str] = None) -> str:
+    """Build a standardized custom_id per ADMIN_PANEL_STANDARD.md §6."""
+    parts = [BOT_ID, module, action]
+    if node_key:
+        parts.append(node_key)
+    return ":".join(parts)
+
+
+def _container(accent: Optional[int], items) -> discord.ui.Container:
+    c = discord.ui.Container(accent_color=accent)
+    for it in items:
+        c.add_item(it)
+    return c
+
+
+def readonly_container(*items: discord.ui.Item) -> discord.ui.Container:
+    """Container with the read-only accent color (#4d0eb3)."""
+    return _container(READONLY_COLOR, items)
+
+
+def editable_container(*items: discord.ui.Item) -> discord.ui.Container:
+    """Container with no accent — used for current-value + active editor blocks."""
+    return _container(None, items)
+
+
+def notice_container(*items: discord.ui.Item) -> discord.ui.Container:
+    """Container with the notice/error accent color (orange)."""
+    return _container(NOTICE_COLOR, items)
+
+
+def premium_container(*items: discord.ui.Item) -> discord.ui.Container:
+    """Container with the premium-gate accent color (gold)."""
+    return _container(PREMIUM_COLOR, items)
+
+
+def build_notice_layout(title: str, body: str = "") -> discord.ui.LayoutView:
+    """Standard Message-3 notice layout: a LayoutView wrapping one notice Container."""
+    layout = discord.ui.LayoutView()
+    text = f"## {title}" + (f"\n{body}" if body else "")
+    layout.add_item(notice_container(discord.ui.TextDisplay(text)))
+    return layout
+
+
+def build_premium_layout(title: str, body: str = "") -> discord.ui.LayoutView:
+    """Premium-gate layout: LayoutView wrapping one premium Container."""
+    layout = discord.ui.LayoutView()
+    text = f"## {title}" + (f"\n{body}" if body else "")
+    layout.add_item(premium_container(discord.ui.TextDisplay(text)))
+    return layout
+
+
+async def safe_edit(target, **kwargs) -> bool:
+    """Run target.edit(**kwargs), swallowing HTTPException per §9.
+
+    target may be a discord.Message, Interaction.edit_original_response bound method,
+    or anything else with an async edit() method. Returns True on success.
+    """
+    try:
+        await target.edit(**kwargs)
+        return True
+    except discord.HTTPException as exc:
+        logger.warning("admin panel edit failed: %s", exc)
+        return False
+
+
+async def safe_followup_notice(interaction: discord.Interaction, title: str, body: str = "") -> None:
+    """Send a Message-3 notice via followup, swallowing HTTPException per §9."""
+    try:
+        await interaction.followup.send(
+            view=build_notice_layout(title, body),
+            ephemeral=True,
+        )
+    except discord.HTTPException as exc:
+        logger.warning("admin panel notice followup failed: %s", exc)
+
+
+class LockedLayoutView(discord.ui.LayoutView):
+    """LayoutView that enforces author lock via interaction_check (§2.2 / §10.4).
+
+    Pass the panel session's admin_id at construction. Any non-admin interaction
+    receives an orange Access Denied notice and the check returns False.
+    """
+
+    def __init__(self, *, admin_id: int, touch: Optional[Callable[[], None]] = None, timeout: Optional[float] = None):
+        super().__init__(timeout=timeout)
+        self._admin_id = admin_id
+        self._touch = touch
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self._admin_id:
+            try:
+                await interaction.response.send_message(
+                    view=build_notice_layout(
+                        "Access Denied",
+                        "Only the admin who opened this panel can interact with it.",
+                    ),
+                    ephemeral=True,
+                )
+            except discord.HTTPException:
+                pass
+            return False
+        if self._touch is not None:
+            try:
+                self._touch()
+            except Exception:
+                logger.exception("session.touch() raised in LockedLayoutView")
+        return True
+
 
 def create_unique_id() -> int:
-    """Generate a unique ID using microsecond timestamp."""
+    """Legacy unique ID generator. New code should use cid() instead."""
     return int(time.time() * 1000000)
 
 
@@ -44,76 +160,6 @@ def build_config_display(config_lines: list[str], header: str = "**Current Confi
     """Build a configuration list display."""
     content = header + "\n" + "\n".join(config_lines)
     return discord.ui.TextDisplay(content)
-
-
-def build_action_buttons(
-    save_callback: Callable[[discord.Interaction], Awaitable[None]],
-    cancel_callback: Callable[[discord.Interaction], Awaitable[None]],
-    save_label: str = "Save",
-    cancel_label: str = "Cancel",
-    save_style: discord.ButtonStyle = discord.ButtonStyle.green,
-    cancel_style: discord.ButtonStyle = discord.ButtonStyle.secondary
-) -> discord.ui.ActionRow:
-    """Build standard Save/Cancel action buttons in an ActionRow."""
-    unique_id = create_unique_id()
-
-    save_btn = discord.ui.Button(
-        label=save_label,
-        style=save_style,
-        custom_id=f"save_{unique_id}"
-    )
-    save_btn.callback = save_callback
-
-    cancel_btn = discord.ui.Button(
-        label=cancel_label,
-        style=cancel_style,
-        custom_id=f"cancel_{unique_id}"
-    )
-    cancel_btn.callback = cancel_callback
-
-    btn_row = discord.ui.ActionRow()
-    btn_row.add_item(save_btn)
-    btn_row.add_item(cancel_btn)
-
-    return btn_row
-
-
-def build_confirmation_buttons(
-    confirm_callback: Callable[[discord.Interaction], Awaitable[None]],
-    cancel_callback: Callable[[discord.Interaction], Awaitable[None]],
-    confirm_label: str = "Confirm",
-    cancel_label: str = "Cancel",
-    confirm_style: discord.ButtonStyle = discord.ButtonStyle.danger
-) -> discord.ui.ActionRow:
-    """Build confirmation buttons for destructive actions."""
-    return build_action_buttons(
-        save_callback=confirm_callback,
-        cancel_callback=cancel_callback,
-        save_label=confirm_label,
-        cancel_label=cancel_label,
-        save_style=confirm_style,
-        cancel_style=discord.ButtonStyle.secondary
-    )
-
-
-def build_back_button(
-    callback: Callable[[discord.Interaction], Awaitable[None]],
-    label: str = "Back"
-) -> discord.ui.ActionRow:
-    """Build a back navigation button."""
-    unique_id = create_unique_id()
-
-    back_btn = discord.ui.Button(
-        label=label,
-        style=discord.ButtonStyle.secondary,
-        custom_id=f"back_{unique_id}"
-    )
-    back_btn.callback = callback
-
-    btn_row = discord.ui.ActionRow()
-    btn_row.add_item(back_btn)
-
-    return btn_row
 
 
 def build_select_row(select: discord.ui.Select) -> discord.ui.ActionRow:

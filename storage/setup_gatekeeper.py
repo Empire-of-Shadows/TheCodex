@@ -601,53 +601,37 @@ class SetupGatekeeper:
             )
             return True  # Fail open
 
-    def build_tier_not_configured_embed(self, tier_name: str) -> discord.Embed:
-        """Build the 'tier not configured' notification embed without sending it.
+    def build_tier_not_configured_layout(self, tier_name: str) -> discord.ui.LayoutView:
+        """Build the 'tier not configured' Components v2 notice LayoutView.
 
-        Separated from the send logic so callers can control the response
-        sequence (e.g. edit_message first to reset a dropdown, then followup).
-
-        Args:
-            tier_name: Tier key — one of "tier_1" … "tier_5"
-
-        Returns:
-            A discord.Embed ready to send
+        Returns a Message-3 style notice (orange container) per
+        ADMIN_PANEL_STANDARD.md §0.1 — no embeds on admin panels.
         """
-        tier_label = tier_name.replace("_", " ").title()  # "tier_3" → "Tier 3"
-        embed = discord.Embed(
-            title="Tier Not Configured",
-            description=(
-                f"**{tier_label}** has no roles assigned yet.\n\n"
-                "Settings for this tier have no effect until at least one role is "
-                "mapped to it — so saving here would create dead configuration.\n\n"
-                "**How to fix:**\n"
-                "Go back and select **Role Tier Mapping**, then assign at least one "
-                f"role to {tier_label}."
-            ),
-            color=discord.Color.orange(),
-        )
-        embed.set_footer(text=f"Once {tier_label} has roles assigned, this setting will unlock.")
-        return embed
+        from commands.admin.views.base import build_notice_layout
 
-    async def get_tier_gate_embed(
+        tier_label = tier_name.replace("_", " ").title()  # "tier_3" → "Tier 3"
+        body = (
+            f"**{tier_label}** has no roles assigned yet.\n\n"
+            "Settings for this tier have no effect until at least one role is "
+            "mapped to it — so saving here would create dead configuration.\n\n"
+            "**How to fix:**\n"
+            "Go back and select **Role Tier Mapping**, then assign at least one "
+            f"role to {tier_label}.\n\n"
+            f"_Once {tier_label} has roles assigned, this setting will unlock._"
+        )
+        return build_notice_layout("Tier Not Configured", body)
+
+    async def get_tier_gate_layout(
         self, guild_id: int, tier_name: str
-    ) -> "discord.Embed | None":
-        """Return the notification embed if a tier has no roles, or None if allowed.
+    ) -> "discord.ui.LayoutView | None":
+        """Return a notice LayoutView if the tier has no roles, or None if allowed.
 
         Designed for panel contexts where the caller must control the response
         sequence: edit_message (to reset the dropdown) before followup (notification).
-
-        Args:
-            guild_id:  The guild ID as an integer
-            tier_name: Tier key — one of "tier_1" … "tier_5"
-
-        Returns:
-            None if the tier is configured and the action may proceed,
-            or a discord.Embed to display if the tier has no roles yet
         """
         if await self.is_tier_ready(guild_id, tier_name):
             return None
-        return self.build_tier_not_configured_embed(tier_name)
+        return self.build_tier_not_configured_layout(tier_name)
 
     async def check_tier_or_notify(
         self, interaction: discord.Interaction, tier_name: str
@@ -655,29 +639,22 @@ class SetupGatekeeper:
         """Guard for tier-specific settings.
 
         Sends an ephemeral notification and returns False if the tier has no roles.
-        Returns True if the tier is ready. Use get_tier_gate_embed instead when
+        Returns True if the tier is ready. Use get_tier_gate_layout instead when
         you need to reset a dropdown before sending the notification.
-
-        Args:
-            interaction: The Discord interaction to check
-            tier_name:   Tier key — one of "tier_1" … "tier_5"
-
-        Returns:
-            True if the tier has roles and the action may proceed
         """
         guild_id = interaction.guild.id if interaction.guild else None
         if not guild_id:
             return True
 
-        embed = await self.get_tier_gate_embed(guild_id, tier_name)
-        if embed is None:
+        layout = await self.get_tier_gate_layout(guild_id, tier_name)
+        if layout is None:
             return True
 
         try:
             if interaction.response.is_done():
-                await interaction.followup.send(embed=embed, ephemeral=True)
+                await interaction.followup.send(view=layout, ephemeral=True)
             else:
-                await interaction.response.send_message(embed=embed, ephemeral=True)
+                await interaction.response.send_message(view=layout, ephemeral=True)
         except Exception as e:
             logger.warning(f"Failed to send tier-not-configured notice: {e}")
 

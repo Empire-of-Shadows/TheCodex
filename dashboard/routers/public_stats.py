@@ -10,6 +10,9 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from dashboard import db
+from utils.logger import get_logger
+
+logger = get_logger("dashboard.routers.public_stats")
 
 router = APIRouter(tags=["public-stats"])
 
@@ -45,6 +48,7 @@ async def public_stats():
             _cache["data"] = data
             _cache["ts"] = now
         except Exception:
+            logger.warning("public_stats compute failed", exc_info=True)
             if data is None:
                 return JSONResponse(
                     status_code=503,

@@ -10,7 +10,7 @@ Panel views for managing the Updates & Drops system configuration:
 import discord
 from typing import Callable, Awaitable, Dict, Any
 
-from .base import create_unique_id, AdminLayoutBuilder
+from .base import AdminLayoutBuilder, cid, readonly_container, editable_container
 
 
 TRACKER_CATEGORIES = ("Updates", "Free", "Prime")
@@ -24,7 +24,6 @@ def build_drops_channel_view(
     on_toggle: Callable[[discord.Interaction], Awaitable[None]] | None = None,
 ) -> discord.ui.LayoutView:
     """Build the Drops posting channel configuration view."""
-    unique_id = create_unique_id()
     builder = AdminLayoutBuilder()
 
     channel_id = settings.get("drops_channel_id")
@@ -39,18 +38,17 @@ def build_drops_channel_view(
     status_display = "✅ Enabled" if enabled else "❌ Disabled"
 
     builder.add_header("## Drops Channel")
-    builder.add_text(
-        f"**Current Channel:** {channel_display}\n"
-        f"**Status:** {status_display}\n\n"
+    builder.add_item(readonly_container(discord.ui.TextDisplay(
         "Select a channel below for daily Prime Gaming drops posts."
-    )
-    builder.add_separator()
+    )))
 
-    # Channel select
     channel_select = discord.ui.ChannelSelect(
         placeholder="Select drops posting channel...",
-        custom_id=f"drops_ch_{unique_id}",
+        custom_id=cid("editor", "select", "drops_channel"),
         channel_types=[discord.ChannelType.text],
+        default_values=(
+            [discord.Object(id=int(channel_id))] if channel_id else []
+        ),
     )
 
     async def channel_callback(interaction: discord.Interaction):
@@ -61,29 +59,37 @@ def build_drops_channel_view(
 
     select_row = discord.ui.ActionRow()
     select_row.add_item(channel_select)
-    builder.add_item(select_row)
 
-    # Toggle + Done buttons
     btn_row = discord.ui.ActionRow()
 
     if channel_id and on_toggle is not None:
         toggle_btn = discord.ui.Button(
             label="Disable" if enabled else "Enable",
             style=discord.ButtonStyle.danger if enabled else discord.ButtonStyle.success,
-            custom_id=f"drops_ch_toggle_{unique_id}",
+            custom_id=cid("editor", "toggle", "drops_channel"),
         )
         toggle_btn.callback = on_toggle
         btn_row.add_item(toggle_btn)
 
+    builder.add_item(editable_container(
+        discord.ui.TextDisplay(
+            f"**Current Channel:** {channel_display}\n"
+            f"**Status:** {status_display}"
+        ),
+        select_row,
+        btn_row,
+    ))
+
     done_btn = discord.ui.Button(
-        label="Done",
+        label="Back",
         style=discord.ButtonStyle.secondary,
-        custom_id=f"drops_ch_done_{unique_id}",
+        custom_id=cid("editor", "back", "drops_channel"),
     )
     done_btn.callback = on_cancel
-    btn_row.add_item(done_btn)
 
-    builder.add_item(btn_row)
+    done_row = discord.ui.ActionRow()
+    done_row.add_item(done_btn)
+    builder.add_item(done_row)
 
     return builder.build()
 
@@ -96,12 +102,10 @@ def build_drops_tracker_view(
     on_cancel: Callable[[discord.Interaction], Awaitable[None]],
 ) -> discord.ui.LayoutView:
     """Build the tracked channels configuration view (Updates/Free/Prime)."""
-    unique_id = create_unique_id()
     builder = AdminLayoutBuilder()
 
     tracker_channels = settings.get("drops_tracker_channels", {})
 
-    # Build status text
     lines = []
     for category in TRACKER_CATEGORIES:
         ch_id = tracker_channels.get(category)
@@ -113,18 +117,20 @@ def build_drops_tracker_view(
         lines.append(f"- **{category}:** {display}")
 
     builder.add_header("## Tracked Channels")
-    builder.add_text(
-        "Configure which channels to track for drops statistics.\n\n"
-        + "\n".join(lines)
-    )
-    builder.add_separator()
+    builder.add_item(readonly_container(discord.ui.TextDisplay(
+        "Configure which channels to track for drops statistics."
+    )))
 
-    # Per-category channel selects
+    editor_items: list[discord.ui.Item] = [discord.ui.TextDisplay("\n".join(lines))]
     for category in TRACKER_CATEGORIES:
+        cat_ch_id = tracker_channels.get(category)
         ch_select = discord.ui.ChannelSelect(
             placeholder=f"Set channel for {category}...",
-            custom_id=f"drops_trk_{category}_{unique_id}",
+            custom_id=cid("editor", "select", f"drops_tracker_{category.lower()}"),
             channel_types=[discord.ChannelType.text],
+            default_values=(
+                [discord.Object(id=int(cat_ch_id))] if cat_ch_id else []
+            ),
         )
 
         def _make_ch_callback(cat: str):
@@ -134,16 +140,16 @@ def build_drops_tracker_view(
             return ch_callback
 
         ch_select.callback = _make_ch_callback(category)
-
         ch_row = discord.ui.ActionRow()
         ch_row.add_item(ch_select)
-        builder.add_item(ch_row)
+        editor_items.append(ch_row)
 
-    # Done button
+    builder.add_item(editable_container(*editor_items))
+
     done_btn = discord.ui.Button(
-        label="Done",
+        label="Back",
         style=discord.ButtonStyle.secondary,
-        custom_id=f"drops_trk_done_{unique_id}",
+        custom_id=cid("editor", "back", "drops_tracker"),
     )
     done_btn.callback = on_cancel
 
@@ -194,8 +200,6 @@ def build_drops_status_view(
         stats_lines.append(f"- **{category}:** {total} total | {avg}/mo avg | {months} months tracked")
 
     builder.add_header("## Updates & Drops Status")
-    builder.add_text(f"**Server:** {guild.name}")
-    builder.add_separator()
 
     schedule = overview.get("schedule", {}) or {}
     sched_hour = schedule.get("hour", 6)
@@ -203,20 +207,13 @@ def build_drops_status_view(
     sched_tz = schedule.get("timezone", "America/Chicago")
     schedule_display = f"{sched_hour:02d}:{sched_min:02d} {sched_tz}"
 
-    builder.add_text(
+    builder.add_item(readonly_container(discord.ui.TextDisplay(
+        f"**Server:** {guild.name}\n"
         f"**Drops Posting Channel:** {drops_display}\n"
         f"**Status:** {enabled_display}\n"
-        f"**Daily Post Time:** {schedule_display}"
-    )
-    builder.add_separator()
-
-    builder.add_text(
-        "**Tracked Channels:**\n" + "\n".join(tracker_lines)
-    )
-    builder.add_separator()
-
-    builder.add_text(
+        f"**Daily Post Time:** {schedule_display}\n\n"
+        "**Tracked Channels:**\n" + "\n".join(tracker_lines) + "\n\n"
         "**Statistics (Guild):**\n" + "\n".join(stats_lines)
-    )
+    )))
 
     return builder.build()

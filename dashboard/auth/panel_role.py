@@ -13,7 +13,6 @@ Tiers:
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 from typing import Literal
 
@@ -22,8 +21,9 @@ from fastapi import HTTPException
 
 from dashboard import db
 from dashboard.config import BOT_TOKEN, DISCORD_API_BASE, MANAGE_GUILD_PERMISSION
+from utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger("dashboard.auth.panel_role")
 
 PanelRole = Literal["admin", "mod", "none"]
 

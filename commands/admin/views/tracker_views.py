@@ -7,7 +7,7 @@ Panel views for managing Tag Tracker and Boost Tracker configuration.
 import discord
 from typing import Callable, Awaitable, Dict, Any
 
-from .base import create_unique_id, AdminLayoutBuilder
+from .base import AdminLayoutBuilder, cid, readonly_container, editable_container
 
 
 def build_tag_tracker_settings_view(
@@ -20,7 +20,6 @@ def build_tag_tracker_settings_view(
     on_cancel: Callable[[discord.Interaction], Awaitable[None]],
 ) -> discord.ui.LayoutView:
     """Build the Tag Tracker settings view."""
-    unique_id = create_unique_id()
     builder = AdminLayoutBuilder()
 
     enabled = settings.get("tag_tracker_enabled", False)
@@ -35,18 +34,15 @@ def build_tag_tracker_settings_view(
         role_display = "Not configured"
 
     builder.add_header("## Tag Tracker Settings")
-    builder.add_text(
-        f"**Status:** {'Enabled' if enabled else 'Disabled'}\n"
-        f"**Tracked Role:** {role_display}\n"
-        f"**Server Tag:** {server_tag}"
-    )
-    builder.add_separator()
 
-    # Toggle button
+    builder.add_item(readonly_container(discord.ui.TextDisplay(
+        "Track members holding a specific server tag and assign them a role."
+    )))
+
     toggle_btn = discord.ui.Button(
         label=f"Tag Tracker: {'ON' if enabled else 'OFF'}",
         style=discord.ButtonStyle.green if enabled else discord.ButtonStyle.danger,
-        custom_id=f"tt_toggle_{unique_id}",
+        custom_id=cid("editor", "toggle", "tag_tracker"),
     )
 
     async def toggle_callback(interaction: discord.Interaction):
@@ -54,41 +50,26 @@ def build_tag_tracker_settings_view(
 
     toggle_btn.callback = toggle_callback
 
-    # Edit tag button
     tag_btn = discord.ui.Button(
         label="Edit Server Tag",
         style=discord.ButtonStyle.primary,
-        custom_id=f"tt_tag_{unique_id}",
+        custom_id=cid("editor", "edit", "tag_tracker_tag"),
     )
     tag_btn.callback = on_edit_tag
 
-    # Detect tag button
     detect_btn = discord.ui.Button(
         label="Detect Tag",
         style=discord.ButtonStyle.primary,
-        custom_id=f"tt_detect_{unique_id}",
+        custom_id=cid("editor", "detect", "tag_tracker_tag"),
     )
     detect_btn.callback = on_detect_tag
 
-    # Done button
-    done_btn = discord.ui.Button(
-        label="Done",
-        style=discord.ButtonStyle.secondary,
-        custom_id=f"tt_done_{unique_id}",
-    )
-    done_btn.callback = on_cancel
-
-    btn_row = discord.ui.ActionRow()
-    btn_row.add_item(toggle_btn)
-    btn_row.add_item(tag_btn)
-    btn_row.add_item(detect_btn)
-    btn_row.add_item(done_btn)
-    builder.add_item(btn_row)
-
-    # Role select dropdown
     role_select = discord.ui.RoleSelect(
         placeholder="Select role to assign for server tag...",
-        custom_id=f"tt_role_{unique_id}",
+        custom_id=cid("editor", "select", "tag_tracker_role"),
+        default_values=(
+            [discord.Object(id=int(role_id))] if role_id else []
+        ),
     )
 
     async def role_callback(interaction: discord.Interaction):
@@ -97,9 +78,34 @@ def build_tag_tracker_settings_view(
 
     role_select.callback = role_callback
 
+    btn_row = discord.ui.ActionRow()
+    btn_row.add_item(toggle_btn)
+    btn_row.add_item(tag_btn)
+    btn_row.add_item(detect_btn)
+
     select_row = discord.ui.ActionRow()
     select_row.add_item(role_select)
-    builder.add_item(select_row)
+
+    builder.add_item(editable_container(
+        discord.ui.TextDisplay(
+            f"**Status:** {'Enabled' if enabled else 'Disabled'}\n"
+            f"**Tracked Role:** {role_display}\n"
+            f"**Server Tag:** {server_tag}"
+        ),
+        btn_row,
+        select_row,
+    ))
+
+    done_btn = discord.ui.Button(
+        label="Back",
+        style=discord.ButtonStyle.secondary,
+        custom_id=cid("editor", "back", "tag_tracker"),
+    )
+    done_btn.callback = on_cancel
+
+    done_row = discord.ui.ActionRow()
+    done_row.add_item(done_btn)
+    builder.add_item(done_row)
 
     return builder.build()
 
@@ -133,7 +139,6 @@ def build_boost_tracker_settings_view(
     on_cancel: Callable[[discord.Interaction], Awaitable[None]],
 ) -> discord.ui.LayoutView:
     """Build the Boost Tracker settings view."""
-    unique_id = create_unique_id()
     builder = AdminLayoutBuilder()
 
     enabled = settings.get("boost_enabled", False)
@@ -146,18 +151,14 @@ def build_boost_tracker_settings_view(
         channel_display = "Not configured"
 
     builder.add_header("## Boost Tracker Settings")
-    builder.add_text(
-        f"**Status:** {'Enabled' if enabled else 'Disabled'}\n"
-        f"**Boost Log Channel:** {channel_display}\n\n"
+    builder.add_item(readonly_container(discord.ui.TextDisplay(
         "Select a channel below to log boost events."
-    )
-    builder.add_separator()
+    )))
 
-    # Toggle button
     toggle_btn = discord.ui.Button(
         label=f"Boost Tracker: {'ON' if enabled else 'OFF'}",
         style=discord.ButtonStyle.green if enabled else discord.ButtonStyle.danger,
-        custom_id=f"bt_toggle_{unique_id}",
+        custom_id=cid("editor", "toggle", "boost_tracker"),
     )
 
     async def toggle_callback(interaction: discord.Interaction):
@@ -165,24 +166,13 @@ def build_boost_tracker_settings_view(
 
     toggle_btn.callback = toggle_callback
 
-    # Done button
-    done_btn = discord.ui.Button(
-        label="Done",
-        style=discord.ButtonStyle.secondary,
-        custom_id=f"bt_done_{unique_id}",
-    )
-    done_btn.callback = on_cancel
-
-    btn_row = discord.ui.ActionRow()
-    btn_row.add_item(toggle_btn)
-    btn_row.add_item(done_btn)
-    builder.add_item(btn_row)
-
-    # Channel select
     channel_select = discord.ui.ChannelSelect(
         placeholder="Select boost log channel...",
-        custom_id=f"bt_channel_{unique_id}",
+        custom_id=cid("editor", "select", "boost_tracker_channel"),
         channel_types=[discord.ChannelType.text],
+        default_values=(
+            [discord.Object(id=int(channel_id))] if channel_id else []
+        ),
     )
 
     async def channel_callback(interaction: discord.Interaction):
@@ -191,9 +181,31 @@ def build_boost_tracker_settings_view(
 
     channel_select.callback = channel_callback
 
+    toggle_row = discord.ui.ActionRow()
+    toggle_row.add_item(toggle_btn)
+
     select_row = discord.ui.ActionRow()
     select_row.add_item(channel_select)
-    builder.add_item(select_row)
+
+    builder.add_item(editable_container(
+        discord.ui.TextDisplay(
+            f"**Status:** {'Enabled' if enabled else 'Disabled'}\n"
+            f"**Boost Log Channel:** {channel_display}"
+        ),
+        toggle_row,
+        select_row,
+    ))
+
+    done_btn = discord.ui.Button(
+        label="Back",
+        style=discord.ButtonStyle.secondary,
+        custom_id=cid("editor", "back", "boost_tracker"),
+    )
+    done_btn.callback = on_cancel
+
+    done_row = discord.ui.ActionRow()
+    done_row.add_item(done_btn)
+    builder.add_item(done_row)
 
     return builder.build()
 
@@ -228,23 +240,18 @@ def build_tracker_status_view(
     boost_stats = overview.get("boost_stats", {})
 
     builder.add_header("## Tracker Status")
-    builder.add_text(f"**Server:** {guild.name}")
-    builder.add_separator()
 
-    builder.add_text(
+    builder.add_item(readonly_container(discord.ui.TextDisplay(
+        f"**Server:** {guild.name}\n\n"
         f"**Tag Tracker:**\n"
         f"- Status: {'Enabled' if tt_enabled else 'Disabled'}\n"
         f"- Tracked Role: {tt_role_display}\n"
-        f"- Server Tag: {tt_tag}"
-    )
-    builder.add_separator()
-
-    builder.add_text(
+        f"- Server Tag: {tt_tag}\n\n"
         f"**Boost Tracker:**\n"
         f"- Status: {'Enabled' if bt_enabled else 'Disabled'}\n"
         f"- Log Channel: {bt_channel_display}\n"
         f"- Active Boosters: {boost_stats.get('active_boosters', 0)}\n"
         f"- Total Boost Events: {boost_stats.get('total_events', 0)}"
-    )
+    )))
 
     return builder.build()

@@ -9,7 +9,7 @@ from typing import Any, Callable, Awaitable, Dict
 
 import discord
 
-from .base import AdminLayoutBuilder, create_unique_id
+from .base import AdminLayoutBuilder, cid, readonly_container, editable_container, build_notice_layout
 
 # Display labels for suggestion statuses
 _STATUS_LABELS = {
@@ -43,47 +43,39 @@ def build_suggestion_status_view(stats: Dict[str, Any], guild: discord.Guild) ->
         channel_display = "Not configured"
 
     builder.add_header("## Suggestion System Status")
-    builder.add_text(f"**Server:** {guild.name}")
-    builder.add_separator()
 
-    # Channel and totals
-    builder.add_text(
+    sections: list[str] = [
+        f"**Server:** {guild.name}\n"
         f"**Channel:** {channel_display}\n"
         f"**Total Suggestions:** {total_suggestions}\n"
         f"**Total Votes Cast:** {total_votes}"
-    )
+    ]
 
-    # Status breakdown
     if status_breakdown:
-        builder.add_separator()
-        lines = []
+        status_lines = []
         for key in _STATUS_ORDER:
             count = status_breakdown.get(key, 0)
             if count:
-                lines.append(f"**{_STATUS_LABELS.get(key, key)}:** {count}")
-        # Include any statuses not in our predefined list
+                status_lines.append(f"**{_STATUS_LABELS.get(key, key)}:** {count}")
         for key, count in status_breakdown.items():
             if key not in _STATUS_LABELS and count:
-                lines.append(f"**{key.replace('_', ' ').title()}:** {count}")
+                status_lines.append(f"**{key.replace('_', ' ').title()}:** {count}")
+        if status_lines:
+            sections.append("**Status Breakdown**\n" + "\n".join(status_lines))
 
-        if lines:
-            builder.add_text("**Status Breakdown**\n" + "\n".join(lines))
-
-    # Category breakdown
     if category_breakdown:
-        builder.add_separator()
         cat_lines = [f"**{cat}:** {count}" for cat, count in category_breakdown.items() if count]
         if cat_lines:
-            builder.add_text("**Category Breakdown**\n" + "\n".join(cat_lines))
+            sections.append("**Category Breakdown**\n" + "\n".join(cat_lines))
 
-    # Top contributors
     if top_contributors:
-        builder.add_separator()
         contrib_lines = [
             f"**{c['display_name']}:** {c['count']}"
             for c in top_contributors[:5]
         ]
-        builder.add_text("**Top Contributors**\n" + "\n".join(contrib_lines))
+        sections.append("**Top Contributors**\n" + "\n".join(contrib_lines))
+
+    builder.add_item(readonly_container(discord.ui.TextDisplay("\n\n".join(sections))))
 
     return builder.build()
 
@@ -96,8 +88,13 @@ class SuggestionStatusUpdateModal(discord.ui.Modal):
     def __init__(
         self,
         callback: Callable[[discord.Interaction, str, str, str], Awaitable[None]],
+        *,
+        prefill_id: str = "",
+        prefill_status: str = "",
+        prefill_reason: str = "",
+        title: str = "Update Suggestion Status",
     ):
-        super().__init__(title="Update Suggestion Status")
+        super().__init__(title=title)
         self._callback = callback
 
         self.suggestion_id_input = discord.ui.TextInput(
@@ -106,12 +103,14 @@ class SuggestionStatusUpdateModal(discord.ui.Modal):
             min_length=4,
             max_length=36,
             required=True,
+            default=prefill_id or None,
         )
         self.status_input = discord.ui.TextInput(
             label="New Status",
             placeholder="Under Review | Approved | Implemented | Rejected | On Hold",
             max_length=30,
             required=True,
+            default=prefill_status or None,
         )
         self.reason_input = discord.ui.TextInput(
             label="Reason",
@@ -119,6 +118,7 @@ class SuggestionStatusUpdateModal(discord.ui.Modal):
             placeholder="Explain the status change",
             max_length=500,
             required=True,
+            default=prefill_reason or None,
         )
 
         self.add_item(self.suggestion_id_input)
@@ -126,7 +126,9 @@ class SuggestionStatusUpdateModal(discord.ui.Modal):
         self.add_item(self.reason_input)
 
     async def on_submit(self, interaction: discord.Interaction):
+        sid = self.suggestion_id_input.value.strip()
         status = self.status_input.value.strip()
+        reason = self.reason_input.value.strip()
 
         # Validate status (case-insensitive match)
         matched = None
@@ -136,42 +138,41 @@ class SuggestionStatusUpdateModal(discord.ui.Modal):
                 break
 
         if not matched:
-            valid_list = ", ".join(self.ALLOWED_STATUSES)
-            await interaction.response.send_message(
-                f"Invalid status `{status}`. Valid options: {valid_list}",
-                ephemeral=True,
+            valid_list = " | ".join(self.ALLOWED_STATUSES)
+            err_title = f"Invalid status: {valid_list}"
+            retry = SuggestionStatusUpdateModal(
+                callback=self._callback,
+                prefill_id=sid,
+                prefill_status=status,
+                prefill_reason=reason,
+                title=err_title if len(err_title) <= 45 else err_title[:42] + "...",
             )
+            await interaction.response.send_modal(retry)
             return
 
-        await self._callback(
-            interaction,
-            self.suggestion_id_input.value.strip(),
-            matched,
-            self.reason_input.value.strip(),
-        )
+        await self._callback(interaction, sid, matched, reason)
 
 
 def build_suggestion_export_view(
     export_callback: Callable[[discord.Interaction, str], Awaitable[None]],
 ) -> discord.ui.LayoutView:
     """Build a view with a format selector and export button."""
-    unique_id = create_unique_id()
-    layout = discord.ui.LayoutView(timeout=300.0)
+    layout = discord.ui.LayoutView()
 
     layout.add_item(discord.ui.TextDisplay("## Export Suggestions"))
-    layout.add_item(discord.ui.TextDisplay("Select a format and click **Export**."))
-    layout.add_item(discord.ui.Separator())
+    layout.add_item(readonly_container(discord.ui.TextDisplay(
+        "Select a format and click **Export**."
+    )))
 
     format_select = discord.ui.Select(
         placeholder="Select export format...",
-        custom_id=f"sug_export_fmt_{unique_id}",
+        custom_id=cid("editor", "select", "suggestion_export_format"),
         options=[
-            discord.SelectOption(label="CSV", value="CSV", description="Comma-separated values"),
+            discord.SelectOption(label="CSV", value="CSV", default=True, description="Comma-separated values"),
             discord.SelectOption(label="JSON", value="JSON", description="JSON file"),
         ],
     )
 
-    # Track selected format
     selected_format: list[str] = ["CSV"]
 
     async def on_format_select(interaction: discord.Interaction):
@@ -180,14 +181,10 @@ def build_suggestion_export_view(
 
     format_select.callback = on_format_select
 
-    select_row = discord.ui.ActionRow()
-    select_row.add_item(format_select)
-    layout.add_item(select_row)
-
     export_btn = discord.ui.Button(
         label="Export",
         style=discord.ButtonStyle.primary,
-        custom_id=f"sug_export_btn_{unique_id}",
+        custom_id=cid("editor", "export", "suggestion_export"),
     )
 
     async def on_export(interaction: discord.Interaction):
@@ -195,8 +192,12 @@ def build_suggestion_export_view(
 
     export_btn.callback = on_export
 
+    select_row = discord.ui.ActionRow()
+    select_row.add_item(format_select)
+
     btn_row = discord.ui.ActionRow()
     btn_row.add_item(export_btn)
-    layout.add_item(btn_row)
+
+    layout.add_item(editable_container(select_row, btn_row))
 
     return layout

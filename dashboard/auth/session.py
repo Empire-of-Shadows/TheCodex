@@ -16,6 +16,9 @@ from typing import Any
 
 from dashboard import db
 from dashboard.config import SESSION_MAX_AGE_DAYS
+from utils.logger import get_logger
+
+logger = get_logger("dashboard.auth.session")
 
 SESSION_SCHEMA_VERSION = 1
 
@@ -36,6 +39,7 @@ async def create_session(user_data: dict, guilds: list[dict]) -> str:
         "schema_version": SESSION_SCHEMA_VERSION,
     }
     await db.shared_sessions().insert_one(doc)
+    logger.info("Session created user=%s expires=%s", user_data.get("id"), doc["expires_at"].isoformat())
     return token
 
 
