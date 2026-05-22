@@ -827,7 +827,7 @@ class AdminCog(commands.Cog):
         user is never left staring at a stale UI.
         """
         try:
-            await self._safe_edit_original(interaction,**kwargs)
+            await interaction.edit_original_response(**kwargs)
             return True
         except discord.HTTPException as exc:
             logger.warning("admin panel edit_original_response failed: %s", exc)
