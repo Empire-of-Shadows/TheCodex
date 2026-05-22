@@ -28,6 +28,18 @@ from storage.setup_gatekeeper import setup_gatekeeper
 from Features.NewMembers.welcome_schema import validate_welcome_schema
 from Features.Guide.guide_schema import validate_guide_schema
 
+def _value_diverges(getter, default_str: str):
+    """Build an `is_customized` predicate that returns True when the leaf's
+    current value (stringified) differs from the supplied default."""
+    async def _pred(guild_id: int) -> bool:
+        try:
+            vals = list(await getter(guild_id))
+        except Exception:
+            return False
+        if not vals:
+            return False
+        return str(vals[0]) != default_str
+    return _pred
 
 # ── Template download helpers ────────────────────────────────────────────────
 
@@ -984,19 +996,6 @@ def _view_stub(key: str, label: str, description: str = "") -> PanelNode:
         key=key, label=label, kind="menu", description=description, view_only=True,
     )
 
-
-def _value_diverges(getter, default_str: str):
-    """Build an `is_customized` predicate that returns True when the leaf's
-    current value (stringified) differs from the supplied default."""
-    async def _pred(guild_id: int) -> bool:
-        try:
-            vals = list(await getter(guild_id))
-        except Exception:
-            return False
-        if not vals:
-            return False
-        return str(vals[0]) != default_str
-    return _pred
 
 
 async def _color_tiers_summary_values(guild_id: int) -> list:

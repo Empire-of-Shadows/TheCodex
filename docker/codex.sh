@@ -17,6 +17,8 @@ BACKUP_TAG_DASH="the-codex-dashboard:backup"
 HEALTH_CHECK_TIMEOUT=120  # seconds to wait for health check
 
 NO_CACHE=0
+BRANCH=Revamp
+REPO_URL=https://github.com/Empire-of-Shadows/TheCodex.git
 for arg in "$@"; do
     case "$arg" in
         -n|--no-cache)
@@ -42,7 +44,20 @@ if [ "$NO_CACHE" = "1" ]; then
 else
     echo "Mode: cached build"
 fi
-
+echo "Branch: $BRANCH"
+# Step 0: Git Update
+echo ""
+echo "--- Updating source code from branch $BRANCH ---"
+# Move to project root (one level up from docker/ script dir)
+pushd .. > /dev/null
+if [ ! -d ".git" ]; then
+    echo "  No git repo found, initializing from $REPO_URL"
+    git init -q -b "$BRANCH"
+    git remote add origin "$REPO_URL"
+fi
+git fetch origin
+git reset --hard "origin/$BRANCH"
+popd > /dev/null
 # Function to check container health
 check_container_health() {
     local container=$1
