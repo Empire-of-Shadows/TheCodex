@@ -413,6 +413,9 @@ export default function DashboardPage() {
             <button className="btn btn-secondary" onClick={() => navigate(`/builder/${selectedGuildId}`)}>
               Edit Welcome
             </button>
+            <button className="btn btn-secondary" onClick={() => navigate(`/settings/${selectedGuildId}`)}>
+              Settings
+            </button>
             <button className="btn btn-secondary" onClick={() => navigate(`/admin/guilds/${selectedGuildId}/audit-log`)}>
               Audit Log
             </button>

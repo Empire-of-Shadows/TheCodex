@@ -24,6 +24,7 @@ from dashboard.routers.validate import router as validate_router
 from dashboard.routers.docs import router as docs_router
 from dashboard.routers.public_stats import router as public_stats_router
 from dashboard.routers.audit_log import router as audit_log_router
+from dashboard.routers.settings import router as settings_router
 from utils.logger import get_logger
 
 startup_logger = get_logger("dashboard.startup")
@@ -70,6 +71,7 @@ app.include_router(validate_router, prefix="/api")
 app.include_router(docs_router, prefix="/api")
 app.include_router(public_stats_router, prefix="/api")
 app.include_router(audit_log_router, prefix="/api")
+app.include_router(settings_router, prefix="/api")
 
 
 @app.get("/health")

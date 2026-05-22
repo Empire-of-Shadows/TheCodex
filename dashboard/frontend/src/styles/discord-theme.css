@@ -2237,3 +2237,183 @@ body::before {
 
 /* SelectPreview active option */
 .dc-select-option.is-active { background: rgba(255,255,255,0.08); }
+
+
+/* ══════════════════════════════════════════════════════════════════════
+   Admin Settings page
+   Scoped under .admin-settings-page so generic form/tab rules do not
+   leak into BuilderPage (which uses .property-group) or other pages.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.admin-settings-page .muted {
+  color: var(--text-muted);
+}
+
+.admin-settings-page .tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.admin-settings-page .tab {
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+.admin-settings-page .tab:hover {
+  color: var(--text-1);
+}
+.admin-settings-page .tab.active {
+  color: var(--text-1);
+  border-bottom-color: var(--brand-light);
+}
+
+.admin-settings-page .section {
+  margin-bottom: 24px;
+}
+.admin-settings-page .section.card {
+  padding: 20px 24px;
+}
+.admin-settings-page .section h3 {
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin: 0 0 12px;
+}
+
+.admin-settings-page .field {
+  margin-bottom: 16px;
+  min-width: 0;
+}
+.admin-settings-page .field > label:not(.toggle) {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.admin-settings-page .field-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.admin-settings-page .field-row > * {
+  flex: 1 1 220px;
+  min-width: 220px;
+}
+
+.admin-settings-page .field input[type="text"],
+.admin-settings-page .field input[type="number"],
+.admin-settings-page .field select,
+.admin-settings-page .field textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  background: rgba(20, 15, 38, 0.6);
+  color: var(--text-1);
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.admin-settings-page .field input:focus,
+.admin-settings-page .field select:focus,
+.admin-settings-page .field textarea:focus {
+  border-color: var(--brand-light);
+  box-shadow: 0 0 0 3px rgba(125, 74, 255, 0.25);
+}
+.admin-settings-page .field select option {
+  background: #1a1a1f;
+  color: var(--text-1);
+}
+.admin-settings-page .field textarea {
+  resize: vertical;
+  min-height: 80px;
+  font-family: var(--eos-font-mono, ui-monospace, monospace);
+}
+
+/* Pill-switch toggle (matches TheHost pattern). */
+.admin-settings-page .toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 14px;
+  color: var(--text-1);
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+}
+.admin-settings-page .toggle input[type="checkbox"] {
+  appearance: none;
+  width: 38px;
+  height: 22px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s;
+  margin: 0;
+}
+.admin-settings-page .toggle input[type="checkbox"]::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+.admin-settings-page .toggle input[type="checkbox"]:checked {
+  background: var(--brand);
+}
+.admin-settings-page .toggle input[type="checkbox"]:checked::after {
+  transform: translateX(16px);
+}
+.admin-settings-page .toggle input[type="checkbox"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Alerts (shared shape; also fixes AdminAuditLogPage). */
+.alert {
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  background: var(--glass);
+  color: var(--text-1);
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+.alert.success {
+  background: rgba(61, 220, 151, 0.08);
+  border-color: rgba(61, 220, 151, 0.35);
+  color: var(--success);
+}
+.alert.danger {
+  background: rgba(255, 107, 107, 0.08);
+  border-color: rgba(255, 107, 107, 0.35);
+  color: var(--danger);
+}
+.alert.warning {
+  background: rgba(255, 184, 107, 0.08);
+  border-color: rgba(255, 184, 107, 0.35);
+  color: var(--warning);
+}

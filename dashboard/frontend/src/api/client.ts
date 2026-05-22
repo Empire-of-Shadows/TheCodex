@@ -7,6 +7,9 @@ import type {
   Channel,
   Role,
   AuditLogResponse,
+  SettingsResponse,
+  SettingsPatch,
+  GuildSettings,
 } from "./types";
 
 const API_BASE = (import.meta.env.VITE_API_BASE ?? "").replace(/\/$/, "");
@@ -152,6 +155,14 @@ export const api = {
 
   getDocs: (builder: "guide" | "welcome", topic: string) =>
     apiFetch<{ title: string; content: string }>(`/api/docs/${builder}/${topic}`),
+
+  settings: (guildId: string) =>
+    apiFetch<SettingsResponse>(`/api/guilds/${guildId}/settings`),
+  saveSettings: (guildId: string, patch: SettingsPatch) =>
+    apiFetch<{ config: GuildSettings }>(`/api/guilds/${guildId}/settings`, {
+      method: "PUT",
+      body: JSON.stringify(patch),
+    }),
 
   auditLog: (
     guildId: string,

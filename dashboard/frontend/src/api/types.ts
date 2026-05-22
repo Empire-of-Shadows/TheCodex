@@ -226,3 +226,109 @@ export interface AuditLogResponse {
   entries: AuditLogEntry[];
   next_cursor: string | null;
 }
+
+
+// ── Settings ─────────────────────────────────────────────────────────────
+
+export type PanelRole = "admin" | "mod" | "none";
+
+export interface RolesSection {
+  admin: string[];
+  moderator: string[];
+  tiers?: Record<string, unknown>;
+}
+
+export interface ServerSection {
+  admin_channel_id: string | null;
+}
+
+export interface WyrSection {
+  enabled: boolean;
+  channel_id: string | null;
+  ping_role_id: string | null;
+  post_hour: number;
+  post_minute: number;
+  timezone: string;
+  default_category: string;
+  thread_name_format: string;
+  thread_starter_message: string;
+  thread_auto_archive: number;
+  mapping_cleanup_days: number;
+}
+
+export interface NewMembersSection {
+  enabled: boolean;
+  account_age_requirement_days: number;
+  auto_kick: boolean;
+  welcome_channel_id: string | null;
+  whitelist_role_id: string | null;
+  whitelist_enabled: boolean;
+  whitelist_role_name: string;
+  welcome_message_enabled: boolean;
+}
+
+export interface AnnouncementSection {
+  channel_id: string | null;
+  thread_auto_create: boolean;
+  thread_name_format: string;
+  thread_auto_archive_duration: number;
+  thread_welcome_message: string;
+  auto_delete_threads: boolean;
+}
+
+export interface TagTrackerSection {
+  enabled: boolean;
+  server_tag: string | null;
+  role_id: string | null;
+}
+
+export interface DropsSection {
+  enabled: boolean;
+  channel_id: string | null;
+  tracker_channels: Record<string, string | null>;
+  manager_role_id: string | null;
+  post_hour: number;
+  post_minute: number;
+  timezone: string;
+}
+
+export interface SuggestionsSection {
+  channel_id: string | null;
+}
+
+export interface BoostSection {
+  enabled: boolean;
+  channel_id: string | null;
+}
+
+export interface GuideSection {
+  enabled: boolean;
+  channel_id: string | null;
+}
+
+export interface GuildSettings {
+  roles: RolesSection;
+  server: ServerSection;
+  wyr: WyrSection;
+  new_members: NewMembersSection;
+  announcement: AnnouncementSection;
+  tag_tracker: TagTrackerSection;
+  drops: DropsSection;
+  suggestions: SuggestionsSection;
+  boost: BoostSection;
+  guide: GuideSection;
+  setup_complete: boolean;
+}
+
+export type SettingsSection = keyof Omit<GuildSettings, "setup_complete">;
+
+export type SettingsPatch = Partial<{
+  [K in SettingsSection]: Partial<GuildSettings[K]>;
+}>;
+
+export interface SettingsResponse {
+  config: GuildSettings;
+  defaults: GuildSettings;
+  panel_role: PanelRole;
+  mod_allowed_sections: string[];
+}
