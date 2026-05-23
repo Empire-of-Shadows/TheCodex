@@ -1,9 +1,10 @@
 """Dashboard configuration - environment variables and constants."""
 
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parent.parent / "docker" / ".env")
 
 
 # Discord OAuth2 - shared GateKeeper bot across the ecosystem
