@@ -182,11 +182,14 @@ async def _get_tag_status(
 
 
 async def _get_boost_status(user_id: int, guild_ids: list[int], guild_name_map: dict[int, str]) -> dict:
-    """Check boost status for the user across guilds."""
+    """Check boost status for the user across guilds.
+
+    The Boosts collection only holds active boosters — the tracker deletes the
+    doc when a member stops boosting — so presence in the collection means active.
+    """
     cursor = db.serverdata_boosts().find({
         "user_id": user_id,
         "guild_id": {"$in": guild_ids},
-        "is_active": True,
     })
     boosts = []
     async for doc in cursor:
