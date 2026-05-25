@@ -2417,3 +2417,223 @@ body::before {
   border-color: rgba(255, 184, 107, 0.35);
   color: var(--warning);
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   Header nav (parity with TheHost)
+   ══════════════════════════════════════════════════════════════════════ */
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.nav-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-2);
+  border: 2px solid transparent;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+.nav-button:hover {
+  color: var(--text-1);
+  background: rgba(255, 255, 255, 0.05);
+}
+.nav-button.active {
+  color: var(--text-1);
+  border-color: var(--brand);
+  background: rgba(77, 14, 179, 0.15);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Admin "Guild Web" page
+   ══════════════════════════════════════════════════════════════════════ */
+
+.guild-web-layout {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 820px) {
+  .guild-web-layout { grid-template-columns: 1fr; }
+}
+
+.guild-web {
+  position: relative;
+  width: 100%;
+  min-height: 540px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-subtle);
+  background:
+    radial-gradient(ellipse 60% 50% at 50% 42%, rgba(77, 14, 179, 0.14), transparent 70%),
+    var(--bg-card);
+  overflow: hidden;
+}
+.guild-web__svg { display: block; width: 100%; height: 100%; }
+.guild-web__field { animation: gw-drift 16s ease-in-out infinite alternate; }
+@keyframes gw-drift {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(6px, -5px); }
+}
+
+.guild-web__vine {
+  fill: none;
+  stroke: var(--brand-light);
+  stroke-width: 1.5;
+  stroke-opacity: 0.4;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: gw-draw 0.9s ease forwards;
+}
+@keyframes gw-draw { to { stroke-dashoffset: 0; } }
+.guild-web__vine.is-active { stroke-opacity: 0.95; stroke-width: 2.5; }
+
+.guild-web__hub { filter: drop-shadow(0 0 12px rgba(122, 61, 240, 0.5)); }
+.guild-web__hub-halo {
+  fill: rgba(122, 61, 240, 0.25);
+  animation: gw-pulse 2.4s ease-in-out infinite;
+}
+.guild-web__hub-ring { stroke: var(--brand-light); stroke-width: 2.5; }
+@keyframes gw-pulse {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 0.9; transform: scale(1.08); }
+}
+
+.guild-web__node { cursor: pointer; transition: opacity 0.2s; }
+.guild-web__node:focus { outline: none; }
+.guild-web__node-bg { fill: var(--bg-2); }
+.guild-web__node-ring { stroke-width: 2.5; }
+.guild-web__node--admin .guild-web__node-ring { stroke: var(--brand-light); }
+.guild-web__node--mod .guild-web__node-ring { stroke: var(--warning); }
+.guild-web__node--admin { filter: drop-shadow(0 0 6px rgba(122, 61, 240, 0.35)); }
+.guild-web__node--mod { filter: drop-shadow(0 0 6px rgba(255, 184, 107, 0.30)); }
+.guild-web__node.is-setup .guild-web__node-ring { stroke-dasharray: 4 4; }
+.guild-web__node.is-setup { opacity: 0.8; }
+.guild-web__node.is-dim { opacity: 0.32; }
+.guild-web__node.is-selected .guild-web__node-ring,
+.guild-web__node:hover .guild-web__node-ring { stroke-width: 3.5; }
+.guild-web__node.is-selected { opacity: 1; filter: drop-shadow(0 0 14px rgba(122, 61, 240, 0.6)); }
+.guild-web__node:hover { opacity: 1; }
+.guild-web__node-label {
+  fill: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: none;
+}
+.guild-web__node-initial {
+  fill: var(--text-1);
+  font-size: 20px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.guild-web__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  position: sticky;
+  top: 80px;
+}
+.guild-web__panel-head { display: flex; align-items: center; gap: 12px; }
+.guild-web__panel-head .status-badge { margin-top: 4px; display: inline-block; }
+.guild-web__panel-actions { display: flex; flex-direction: column; gap: 8px; }
+.guild-web__panel-actions .btn { width: 100%; }
+
+@media (prefers-reduced-motion: reduce) {
+  .guild-web__field { animation: none; }
+  .guild-web__vine { animation: none; stroke-dashoffset: 0; }
+  .guild-web__hub-halo { animation: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Mod page (under construction)
+   ══════════════════════════════════════════════════════════════════════ */
+
+.mod-construction__sigil {
+  position: relative;
+  z-index: 1;
+  width: 96px;
+  height: 96px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mod-construction__sigil img {
+  width: 72px;
+  height: 72px;
+  filter: drop-shadow(0 8px 24px rgba(77, 14, 179, 0.55));
+  animation: mod-bob 3.5s ease-in-out infinite;
+}
+.mod-construction__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid var(--brand-light);
+  opacity: 0.6;
+  animation: mod-ring 2.4s ease-out infinite;
+}
+.mod-construction__bar {
+  margin-top: 0.9rem;
+  width: 100%;
+  max-width: 320px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--glass-heavy);
+  overflow: hidden;
+}
+.mod-construction__bar > span {
+  display: block;
+  height: 100%;
+  width: 40%;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--brand), var(--brand-light));
+  animation: mod-sweep 1.8s ease-in-out infinite;
+}
+.mod-construction__teaser { opacity: 0.92; }
+.mod-construction__float {
+  font-size: 20px;
+  animation: mod-bob 3.5s ease-in-out infinite;
+}
+.mod-construction__shimmer {
+  margin-top: 14px;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--glass) 0%, rgba(255, 255, 255, 0.14) 50%, var(--glass) 100%);
+  background-size: 200% 100%;
+  animation: mod-shimmer 1.6s linear infinite;
+}
+@keyframes mod-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+@keyframes mod-ring {
+  0% { transform: scale(0.85); opacity: 0.7; }
+  100% { transform: scale(1.25); opacity: 0; }
+}
+@keyframes mod-sweep {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(320%); }
+}
+@keyframes mod-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mod-construction__sigil img,
+  .mod-construction__ring,
+  .mod-construction__bar > span,
+  .mod-construction__float,
+  .mod-construction__shimmer {
+    animation: none;
+  }
+  .mod-construction__bar > span { width: 100%; }
+}

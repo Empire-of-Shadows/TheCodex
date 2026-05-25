@@ -177,6 +177,20 @@ export const api = {
       `/api/guilds/${guildId}/audit-log?${params.toString()}`,
     );
   },
+
+  userDataGuilds: () =>
+    apiFetch<{ id: string; name: string | null; icon: string | null }[]>(
+      "/api/user/data/guilds",
+    ),
+  exportUserDataUrl: (guildId?: string | null) =>
+    guildId
+      ? `${API_BASE}/api/user/data/export?guild_id=${encodeURIComponent(guildId)}`
+      : `${API_BASE}/api/user/data/export`,
+  deleteUserData: (guildId?: string | null) =>
+    apiFetch<{ user_id: string; guild_id: string | null; deleted: Record<string, number> }>(
+      "/api/user/data",
+      { method: "DELETE", body: JSON.stringify({ confirm: true, guild_id: guildId ?? null }) },
+    ),
 };
 
 export interface PublicStats {

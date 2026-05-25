@@ -6,6 +6,8 @@ export interface User {
   global_name: string | null;
   avatar: string | null;
   discriminator: string;
+  can_access_admin_any: boolean;
+  can_access_mod_any: boolean;
 }
 
 export interface Guild {
@@ -15,6 +17,7 @@ export interface Guild {
   bot_in_guild: boolean;
   has_config: boolean;
   setup_required: boolean;
+  panel_role: PanelRole;
 }
 
 // ── User Activity ────────────────────────────────────────────────────────

@@ -7,6 +7,9 @@ import PageSkeleton from "./components/PageSkeleton";
 const BuilderPage = lazy(() => import("./pages/BuilderPage"));
 const AdminAuditLogPage = lazy(() => import("./pages/AdminAuditLogPage"));
 const AdminSettingsPage = lazy(() => import("./pages/AdminSettingsPage"));
+const AdminPage = lazy(() => import("./pages/AdminPage"));
+const ModPage = lazy(() => import("./pages/ModPage"));
+const PrivacyPage = lazy(() => import("./pages/PrivacyPage"));
 
 export default function App() {
   return (
@@ -15,6 +18,9 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/admin" element={<AdminPage />} />
+          <Route path="/mod" element={<ModPage />} />
           <Route path="/builder/:guildId" element={<BuilderPage />} />
           <Route path="/settings/:guildId" element={<AdminSettingsPage />} />
           <Route path="/admin/guilds/:guildId/audit-log" element={<AdminAuditLogPage />} />

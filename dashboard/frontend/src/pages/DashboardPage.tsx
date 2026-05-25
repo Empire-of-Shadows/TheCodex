@@ -349,8 +349,12 @@ export default function DashboardPage() {
   const handleGuildClick = (guild: Guild) => {
     if (guild.setup_required && inviteUrl) {
       window.open(`${inviteUrl}&guild_id=${guild.id}`, "_blank");
-    } else {
+    } else if (guild.panel_role === "admin") {
       navigate(`/builder/${guild.id}`);
+    } else {
+      // Mod-tier (or otherwise non-admin) guild: select it to view activity
+      // rather than opening the admin-only builder.
+      handleGuildFilter(guild.id);
     }
   };
 
@@ -402,26 +406,40 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Admin Section */}
-      {selectedGuildId && (
-        <div className="admin-section">
-          <h3>Admin</h3>
-          <div className="admin-actions">
-            <button className="btn btn-primary" onClick={() => navigate(`/builder/${selectedGuildId}`)}>
-              Edit Guide
-            </button>
-            <button className="btn btn-secondary" onClick={() => navigate(`/builder/${selectedGuildId}`)}>
-              Edit Welcome
-            </button>
-            <button className="btn btn-secondary" onClick={() => navigate(`/settings/${selectedGuildId}`)}>
-              Settings
-            </button>
-            <button className="btn btn-secondary" onClick={() => navigate(`/admin/guilds/${selectedGuildId}/audit-log`)}>
-              Audit Log
-            </button>
+      {/* Admin Section - gated by the selected guild's panel role */}
+      {(() => {
+        const sel = guilds.find((g) => g.id === selectedGuildId);
+        if (!selectedGuildId || !sel || sel.panel_role === "none") return null;
+        if (sel.panel_role !== "admin") {
+          return (
+            <div className="admin-section">
+              <h3>Moderator</h3>
+              <div className="admin-actions">
+                <span className="guild-invite-hint">Moderator access. Management tools are coming soon.</span>
+              </div>
+            </div>
+          );
+        }
+        return (
+          <div className="admin-section">
+            <h3>Admin</h3>
+            <div className="admin-actions">
+              <button className="btn btn-primary" onClick={() => navigate(`/builder/${selectedGuildId}`)}>
+                Edit Guide
+              </button>
+              <button className="btn btn-secondary" onClick={() => navigate(`/builder/${selectedGuildId}`)}>
+                Edit Welcome
+              </button>
+              <button className="btn btn-secondary" onClick={() => navigate(`/settings/${selectedGuildId}`)}>
+                Settings
+              </button>
+              <button className="btn btn-secondary" onClick={() => navigate(`/admin/guilds/${selectedGuildId}/audit-log`)}>
+                Audit Log
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Guild Grid (all guilds view) */}
       {selectedGuildId === null && (

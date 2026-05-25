@@ -8,6 +8,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException
 
 from dashboard.auth.dependencies import get_current_user, require_guild_manage
+from dashboard.auth.panel_role import resolve_panel_role
 from dashboard.config import BOT_TOKEN, DISCORD_API_BASE, MANAGE_GUILD_PERMISSION
 from dashboard import db
 from utils.logger import get_logger
@@ -30,16 +31,44 @@ _channels_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 _roles_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
 
+_ADMIN_PROBE_LIMIT = 25
+
+
 @router.get("/me")
 async def me(session: dict = Depends(get_current_user)):
-    """Return the current user's info."""
+    """Return the current user's info plus panel-access flags.
+
+    Mirrors TheHost: probe configured panel roles across bot-present session
+    guilds. admin = MANAGE_GUILD anywhere OR an admin role anywhere; mod = a mod
+    role anywhere (`resolve_panel_role` only returns "mod" when the user is not
+    admin on that guild, so MANAGE_GUILD never grants mod).
+    """
     user = session["user_data"]
+    can_manage_any = any(
+        (int(g.get("permissions", 0)) & MANAGE_GUILD_PERMISSION) == MANAGE_GUILD_PERMISSION
+        for g in session.get("guilds", [])
+    )
+
+    bot_guild_ids = await _fetch_bot_guild_ids()
+    candidate_ids = [
+        g["id"] for g in session.get("guilds", []) if g["id"] in bot_guild_ids
+    ][:_ADMIN_PROBE_LIMIT]
+    results = await asyncio.gather(
+        *(resolve_panel_role(session, gid) for gid in candidate_ids),
+        return_exceptions=True,
+    )
+    roles = [r for r in results if isinstance(r, str)]
+    can_access_admin_any = can_manage_any or any(r == "admin" for r in roles)
+    can_access_mod_any = any(r == "mod" for r in roles)
+
     return {
         "id": user["id"],
         "username": user.get("username"),
         "global_name": user.get("global_name"),
         "avatar": user.get("avatar"),
         "discriminator": user.get("discriminator"),
+        "can_access_admin_any": can_access_admin_any,
+        "can_access_mod_any": can_access_mod_any,
     }
 
 
@@ -105,34 +134,53 @@ async def _guild_ids_with_config(guild_ids: list[str]) -> set[str]:
 
 @router.get("/guilds")
 async def guilds(session: dict = Depends(get_current_user)):
-    """Return guilds where the user has MANAGE_GUILD permission, with bot status."""
-    manageable = []
-    for guild in session.get("guilds", []):
-        perms = int(guild.get("permissions", 0))
-        if (perms & MANAGE_GUILD_PERMISSION) == MANAGE_GUILD_PERMISSION:
-            manageable.append({
-                "id": guild["id"],
-                "name": guild["name"],
-                "icon": guild.get("icon"),
-            })
+    """Return guilds the user can manage as admin or mod, with bot status + role.
 
-    if not manageable:
-        return manageable
+    Includes every session guild where the user holds MANAGE_GUILD (admin, shown
+    even when the bot is absent so they can invite it) or a configured admin/mod
+    role. Each entry carries its resolved `panel_role`.
+    """
+    session_guilds = session.get("guilds", [])
+    if not session_guilds:
+        return []
 
-    guild_ids = [g["id"] for g in manageable]
-
+    all_ids = [g["id"] for g in session_guilds]
     bot_guild_ids, configured_ids = await asyncio.gather(
-        _fetch_bot_guild_ids(), _guild_ids_with_config(guild_ids)
+        _fetch_bot_guild_ids(), _guild_ids_with_config(all_ids)
     )
 
-    for g in manageable:
-        bot_present = g["id"] in bot_guild_ids
-        has_config = g["id"] in configured_ids
-        g["bot_in_guild"] = bot_present
-        g["has_config"] = has_config
-        g["setup_required"] = not bot_present and not has_config
+    # Resolve panel roles only for bot-present guilds (role config can't exist
+    # otherwise), so the fan-out stays bounded.
+    probe_targets = [gid for gid in all_ids if gid in bot_guild_ids]
+    role_results = await asyncio.gather(
+        *(resolve_panel_role(session, gid) for gid in probe_targets),
+        return_exceptions=True,
+    )
+    panel_roles = {
+        gid: (r if isinstance(r, str) else "none")
+        for gid, r in zip(probe_targets, role_results)
+    }
 
-    return manageable
+    out: list[dict] = []
+    for guild in session_guilds:
+        gid = guild["id"]
+        perms = int(guild.get("permissions", 0))
+        has_manage = (perms & MANAGE_GUILD_PERMISSION) == MANAGE_GUILD_PERMISSION
+        panel_role = panel_roles.get(gid, "none")
+        if not has_manage and panel_role == "none":
+            continue
+        bot_present = gid in bot_guild_ids
+        out.append({
+            "id": gid,
+            "name": guild["name"],
+            "icon": guild.get("icon"),
+            "bot_in_guild": bot_present,
+            "has_config": gid in configured_ids,
+            "setup_required": not bot_present,
+            "panel_role": panel_role if panel_role != "none" else ("admin" if has_manage else "none"),
+        })
+
+    return out
 
 
 @router.get("/bot-invite-url")
