@@ -1862,11 +1862,73 @@ body::before {
 }
 
 .site-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
   text-align: center;
   padding: 1.25rem;
   color: var(--text-muted);
   font-size: 0.85rem;
   border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.site-footer__links {
+  display: inline-flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.site-footer__links a {
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.site-footer__links a:hover {
+  color: var(--brand-light);
+}
+
+/* Legal documents (Terms, Privacy Policy): readable prose width */
+.legal-doc {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 24px 24px;
+}
+
+.legal-doc .section {
+  margin-bottom: 1.25rem;
+}
+
+.legal-doc .section.card {
+  line-height: 1.65;
+}
+
+.legal-doc h2 {
+  font-size: 1.15rem;
+}
+
+.legal-doc p {
+  margin: 0.6rem 0;
+  color: var(--text-2);
+}
+
+.legal-doc ul {
+  margin: 0.6rem 0;
+  padding-left: 1.4rem;
+}
+
+.legal-doc li {
+  margin: 0.35rem 0;
+  color: var(--text-2);
+}
+
+.legal-doc a {
+  color: var(--brand-light);
+}
+
+.legal-doc .muted {
+  color: var(--text-muted);
 }
 
 .wyr-bar__segment {
