@@ -1,11 +1,9 @@
 import asyncio
-from typing import Optional
 
 import discord
 from discord.ext import commands, tasks
-import logging
 
-from storage.config_manager import get_config
+from storage.config_manager import get_config, get_guild_config_manager
 from utils.logger import get_logger
 
 # Logger
@@ -19,7 +17,7 @@ class TagTracker(commands.Cog):
         logger.info("TagTracker initialized")
 
     async def cog_load(self):
-        """Start the tag check loop when the cog loads."""
+        """Start the periodic reconcile loop when the cog loads."""
         self.check_tags.start()
         logger.info("Tag tracker task started")
 
@@ -27,24 +25,9 @@ class TagTracker(commands.Cog):
         if self.check_tags.is_running():
             self.check_tags.cancel()
 
-    async def _safe_fetch_user(self, user_id: int, max_retries: int = 3) -> Optional[discord.User]:
-        """Fetch a user with 429 retry handling."""
-        for attempt in range(max_retries):
-            try:
-                return await self.bot.fetch_user(user_id)
-            except discord.HTTPException as e:
-                if e.status == 429:
-                    retry_after = getattr(e, 'retry_after', 5.0)
-                    logger.warning(f"Rate limited on fetch_user({user_id}), retrying in {retry_after}s (attempt {attempt + 1}/{max_retries})")
-                    await asyncio.sleep(retry_after)
-                else:
-                    raise
-        logger.error(f"Failed to fetch user {user_id} after {max_retries} retries")
-        return None
-
-    async def _safe_role_change(self, member: discord.Member, role: discord.Role, *, add: bool):
-        """Add or remove a role with 429 retry handling."""
-        for attempt in range(3):
+    async def _safe_role_change(self, member: discord.Member, role: discord.Role, *, add: bool) -> bool:
+        """Add or remove a role with 429 retry handling. Returns True on success."""
+        for _attempt in range(3):
             try:
                 if add:
                     await member.add_roles(role)
@@ -60,8 +43,49 @@ class TagTracker(commands.Cog):
                     raise
         return False
 
+    async def _resolve_tag_settings(self, guild: discord.Guild):
+        """Return (role, server_tag) if tag tracking is active for this guild, else None."""
+        config = await get_config(guild.id)
+        if not config.tag_tracker.get("enabled", False):
+            return None
+        server_tag = config.tag_tracker.get("server_tag")
+        role_id = config.tag_tracker.get("role_id")
+        if not server_tag or not role_id:
+            return None
+        role = guild.get_role(role_id)
+        if not role:
+            logger.warning(f"Tag role {role_id} not found in guild {guild.name}. Skipping.")
+            return None
+        return role, server_tag
+
+    async def _sync_member(self, member: discord.Member, role: discord.Role, server_tag: str) -> bool:
+        """Reconcile one member's tag role against their cached primary_guild tag.
+
+        Reads ``member.primary_guild`` straight from the gateway-populated cache —
+        no per-member ``fetch_user`` call — so a full sweep costs zero API calls
+        in the steady state. Returns True if a role change was actually made.
+        """
+        if member.bot:
+            return False
+
+        primary = member.primary_guild
+        has_tag = bool(primary and primary.tag == server_tag)
+        has_role = role in member.roles
+
+        if has_tag and not has_role:
+            if await self._safe_role_change(member, role, add=True):
+                logger.info(f"Added role {role.name} to {member.name} for having the tag.")
+            return True
+        if not has_tag and has_role:
+            if await self._safe_role_change(member, role, add=False):
+                logger.info(f"Removed role {role.name} from {member.name} for not having the tag.")
+            return True
+        return False
+
     @tasks.loop(hours=1)
     async def check_tags(self):
+        """Periodic safety-net reconcile. Real-time updates flow through
+        on_user_update; this catches anything the gateway missed."""
         if self._lock.locked():
             logger.info("Previous tag check still running, skipping this cycle.")
             return
@@ -70,49 +94,52 @@ class TagTracker(commands.Cog):
             logger.info("Starting tag check...")
 
             for guild in self.bot.guilds:
-                config = await get_config(guild.id)
-
-                if not config.tag_tracker["enabled"]:
-                    logger.debug(f"Tag tracker disabled for guild {guild.name}, skipping.")
+                settings = await self._resolve_tag_settings(guild)
+                if not settings:
                     continue
-
-                server_tag = config.tag_tracker["server_tag"]
-                role_id = config.tag_tracker["role_id"]
-
-                if not server_tag or not role_id:
-                    logger.warning(f"Server tag or role ID not configured for guild {guild.name}. Skipping.")
-                    continue
-
-                role = guild.get_role(role_id)
-                if not role:
-                    logger.warning(f"Role with ID {role_id} not found in guild {guild.name}. Skipping.")
-                    continue
+                role, server_tag = settings
 
                 logger.info(f"Checking tags in guild: {guild.name} ({len(guild.members)} members from cache)")
                 for member in guild.members:
-                    if member.bot:
-                        continue
-
                     try:
-                        user = await self._safe_fetch_user(member.id)
-                        if user is None:
-                            continue
-                        if user.primary_guild and user.primary_guild.tag == server_tag:
-                            if role not in member.roles:
-                                await self._safe_role_change(member, role, add=True)
-                                logger.info(f"Added role {role.name} to {member.name} for having the tag.")
-                        else:
-                            if role in member.roles:
-                                await self._safe_role_change(member, role, add=False)
-                                logger.info(f"Removed role {role.name} from {member.name} for not having the tag.")
-                    except discord.errors.NotFound:
-                        logger.warning(f"Could not fetch user profile for member {member.name} ({member.id}). Skipping.")
+                        changed = await self._sync_member(member, role, server_tag)
+                        # Throttle ONLY when a role was actually mutated, so a
+                        # converged server costs nothing and an initial rollout
+                        # stays under the per-guild role rate limit.
+                        if changed:
+                            await asyncio.sleep(0.5)
+                    except discord.HTTPException as e:
+                        logger.error(f"HTTP error while checking tag for {member.name}: {e}")
                     except Exception as e:
                         logger.error(f"An error occurred while checking tag for {member.name}: {e}")
 
-                    await asyncio.sleep(1.5)
-
             logger.info("Tag check finished.")
+
+    @commands.Cog.listener()
+    async def on_user_update(self, before: discord.User, after: discord.User):
+        """Real-time tag sync when a user changes their primary (clan) guild.
+
+        primary_guild is a user-global attribute, so the change surfaces as a
+        user update rather than a member update. We compare tags (not object
+        identity) to avoid resyncing on unrelated profile edits.
+        """
+        before_tag = before.primary_guild.tag if before.primary_guild else None
+        after_tag = after.primary_guild.tag if after.primary_guild else None
+        if before_tag == after_tag:
+            return
+
+        for guild in self.bot.guilds:
+            member = guild.get_member(after.id)
+            if member is None:
+                continue
+            settings = await self._resolve_tag_settings(guild)
+            if not settings:
+                continue
+            role, server_tag = settings
+            try:
+                await self._sync_member(member, role, server_tag)
+            except discord.HTTPException as e:
+                logger.error(f"Tag sync on user update failed for {after} in {guild.name}: {e}")
 
     @commands.Cog.listener()
     async def on_guild_update(self, before: discord.Guild, after: discord.Guild):
@@ -129,8 +156,7 @@ class TagTracker(commands.Cog):
         current_tag = config.tag_tracker.get("server_tag")
 
         if new_tag and new_tag != current_tag:
-            from storage.config_manager import get_guild_config_manager
-            mgr = get_guild_config_manager()
+            mgr = await get_guild_config_manager()
             config.tag_tracker["server_tag"] = new_tag
             await mgr.save_config(config)
             logger.info(f"Auto-updated server tag for {after.name}: {current_tag!r} -> {new_tag!r}")

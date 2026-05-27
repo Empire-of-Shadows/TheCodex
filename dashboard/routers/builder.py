@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from dashboard import db
-from dashboard.auth.dependencies import require_guild_manage
+from dashboard.auth.panel_role import require_guild_admin
 from utils.logger import get_logger
 
 # Make project-root feature modules importable (Features.* lives above dashboard/).
@@ -39,7 +39,7 @@ class WelcomePutBody(BaseModel):
 
 
 @router.get("/guilds/{guild_id}/guide")
-async def get_guide(guild_id: str, _session: dict = Depends(require_guild_manage)):
+async def get_guide(guild_id: str, _session: dict = Depends(require_guild_admin)):
     """Fetch guide data for a guild."""
     doc = await db.guide_content().find_one({"guild_id": int(guild_id)})
     if doc is None:
@@ -51,7 +51,7 @@ async def get_guide(guild_id: str, _session: dict = Depends(require_guild_manage
 async def put_guide(
     guild_id: str,
     body: GuidePutBody,
-    session: dict = Depends(require_guild_manage),
+    session: dict = Depends(require_guild_admin),
 ):
     """Validate and save guide data for a guild."""
     guide_data = normalize_pages(body.guide_data)
@@ -78,7 +78,7 @@ async def put_guide(
 
 
 @router.get("/guilds/{guild_id}/welcome")
-async def get_welcome(guild_id: str, _session: dict = Depends(require_guild_manage)):
+async def get_welcome(guild_id: str, _session: dict = Depends(require_guild_admin)):
     """Fetch welcome components from GuildConfig."""
     doc = await db.guild_config().find_one({"guild_id": int(guild_id)})
     if doc is None:
@@ -92,7 +92,7 @@ async def get_welcome(guild_id: str, _session: dict = Depends(require_guild_mana
 async def put_welcome(
     guild_id: str,
     body: WelcomePutBody,
-    session: dict = Depends(require_guild_manage),
+    session: dict = Depends(require_guild_admin),
 ):
     """Validate and save welcome components for a guild."""
     welcome_data = body.welcome_data
@@ -102,11 +102,15 @@ async def put_welcome(
 
     user_id = int(session["user_data"]["id"])
     logger.info("Saving welcome for guild %s by user %s", guild_id, user_id)
+    # upsert + guild_id in $set so the save still lands if the config doc was
+    # never seeded (or was removed by guild-data cleanup) — matches put_guide.
     await db.guild_config().update_one(
         {"guild_id": int(guild_id)},
         {"$set": {
+            "guild_id": int(guild_id),
             "new_members.welcome_components": welcome_data,
             "updated_at": datetime.now(timezone.utc),
         }},
+        upsert=True,
     )
     return {"ok": True}

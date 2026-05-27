@@ -17,9 +17,10 @@ import time
 from typing import Literal
 
 import httpx
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException
 
 from dashboard import db
+from dashboard.auth.dependencies import get_current_user
 from dashboard.config import BOT_TOKEN, DISCORD_API_BASE, MANAGE_GUILD_PERMISSION
 from utils.logger import get_logger
 
@@ -160,3 +161,23 @@ async def require_panel_access(session: dict, guild_id: str) -> PanelRole:
     if role == "none":
         raise HTTPException(status_code=403, detail="No panel access for this guild")
     return role
+
+
+async def require_guild_admin(
+    guild_id: str,
+    session: dict = Depends(get_current_user),
+) -> dict:
+    """FastAPI dependency: 401 if anon, 403 unless the user resolves to the
+    "admin" tier for the guild. Returns the session.
+
+    This is the live equivalent of the old session-only MANAGE_GUILD check: a
+    configured admin role is verified against Discord via the bot token, so the
+    builder enforces the same authority the settings route does. (A MANAGE_GUILD
+    holder is still recognised from the session — the app has no stored OAuth
+    token to re-derive that permission live — but this closes the gap for
+    role-based admins and keeps the two write surfaces consistent.)
+    """
+    role = await resolve_panel_role(session, guild_id)
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required for this guild")
+    return session

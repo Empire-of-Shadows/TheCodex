@@ -28,8 +28,14 @@ class GuildEventHandler:
             'first_attempt': None
         })
 
+        # Caps concurrent gatekeep flows so a raid (many simultaneous joins)
+        # can't fan out into an unbounded burst of DMs/kicks that trips
+        # Discord's global rate limits.
+        self._join_sem = asyncio.Semaphore(5)
+
         # Enhanced guild cache with more comprehensive data
         self.guild_cache: Dict[int, Dict[str, Any]] = defaultdict(lambda: {
+            '_initialized': False,  # set True after the one-time baseline scan
             'member_count': 0,
             'bot_count': 0,
             'human_count': 0,  # NEW: Track human members separately
@@ -110,6 +116,8 @@ class GuildEventHandler:
             cache_data['security_metrics']['account_age_violations'] = 0
             cache_data['security_metrics']['rapid_joins'] = 0
 
+            cache_data['_initialized'] = True
+
             self.logger.info(f"Guild cache initialized: {guild.member_count} members, "
                              f"{cache_data['bot_count']} bots, {cache_data['human_count']} humans")
 
@@ -168,9 +176,15 @@ class GuildEventHandler:
 
             if event_type == "member_join":
                 member = kwargs.get('member')
-                if member and not member.bot:  # NEW: Only count human joins
+                # member_count is a cheap cached int. human/bot counts are kept
+                # incrementally (seeded once by initialize_guild_cache) so a join
+                # burst never triggers an O(members) rescan on the event loop.
+                cache_data['member_count'] = guild.member_count
+                if member and member.bot:
+                    cache_data['bot_count'] = cache_data.get('bot_count', 0) + 1
+                elif member:
+                    cache_data['human_count'] = cache_data.get('human_count', 0) + 1
                     cache_data['new_member_joins_today'] += 1
-                    cache_data['human_count'] = await self._count_human_members(guild)  # Update human count
 
                     # Track join patterns only for humans
                     hour = now.hour
@@ -186,22 +200,17 @@ class GuildEventHandler:
                     if recent_joins > 10:  # More than 10 joins in an hour
                         cache_data['security_metrics']['rapid_joins'] += 1
 
-                    if member:
-                        account_age = now - member.created_at
-                        if account_age.days < self.rate_limits['new_account_days']:
-                            cache_data['security_metrics']['account_age_violations'] += 1
-
-                # Always update total member count
-                cache_data['member_count'] = guild.member_count
-                cache_data['bot_count'] = sum(1 for m in guild.members if m.bot)
+                    account_age = now - member.created_at
+                    if account_age.days < self.rate_limits['new_account_days']:
+                        cache_data['security_metrics']['account_age_violations'] += 1
 
             elif event_type == "member_remove":
                 member = kwargs.get('member')
-                if member and not member.bot:  # NEW: Only update human count for human removals
-                    cache_data['human_count'] = await self._count_human_members(guild)
-
                 cache_data['member_count'] = guild.member_count
-                cache_data['bot_count'] = sum(1 for m in guild.members if m.bot)
+                if member and member.bot:
+                    cache_data['bot_count'] = max(0, cache_data.get('bot_count', 0) - 1)
+                elif member:
+                    cache_data['human_count'] = max(0, cache_data.get('human_count', 0) - 1)
 
             elif event_type == "member_kick":
                 member = kwargs.get('member')
@@ -334,6 +343,12 @@ class GuildEventHandler:
             self.logger.error(f"\n{s}Error seeding default config for {guild.name}: {e}\n", exc_info=True)
 
     async def handle_member_join(self, member: discord.Member):
+        """Entry point for joins. Bounds concurrency so a raid of simultaneous
+        joins can't fan out into an unbounded DM/kick burst."""
+        async with self._join_sem:
+            await self._process_member_join(member)
+
+    async def _process_member_join(self, member: discord.Member):
         """Handle member join with bot filtering and comprehensive tracking"""
         self.logger.info(f"\n{s}New member joined: {member} ({member.id}) in {member.guild.name}\n")
 
@@ -346,12 +361,16 @@ class GuildEventHandler:
         account_age = now - member.created_at
         guild = member.guild
 
+        # Seed the comprehensive cache once (one-time O(members) scan) BEFORE
+        # metrics, so the incremental counters start from a correct baseline.
+        # (Previously this ran after update_guild_metrics, which vivified the
+        # defaultdict key first, so this branch never fired.)
+        cache_data = self.guild_cache[guild.id]
+        if not cache_data.get('_initialized'):
+            await self.initialize_guild_cache(guild)
+
         # Update guild metrics (will only count humans due to our update_guild_metrics changes)
         await self.update_guild_metrics(guild, "member_join", member=member)
-
-        # Initialize guild cache if needed
-        if guild.id not in self.guild_cache:
-            await self.initialize_guild_cache(guild)
 
         # Default avatar fallback
         avatar_url = member.display_avatar.url if member.display_avatar else "https://cdn.discordapp.com/embed/avatars/0.png"
@@ -432,9 +451,14 @@ class GuildEventHandler:
                     self.logger.error(f"\n{s}Error checking whitelist: {whitelist_error}\n", exc_info=True)
                     # Continue with normal flow if whitelist check fails
 
-            # Account is too new — check if we can send DM with rate limiting
+            # Account is too new. The kick is the priority: every millisecond
+            # before it is a window where the new account can read channels, so
+            # the DM is strictly best-effort and the old artificial sleeps are
+            # gone. (DMs require a mutual guild, so we still send before kicking,
+            # but never block the kick on it.) For hard gatekeeping, gate channel
+            # access behind a verification role — an age-kick is a backstop, not
+            # a true gate, since it runs after the member is already in.
             can_dm, reason = await self.can_send_dm(member)
-
             if can_dm:
                 try:
                     await member.send(
@@ -453,14 +477,17 @@ class GuildEventHandler:
                 self.logger.info(f"\n{s}Skipped DM to {member} due to rate limiting: {reason}\n")
 
             try:
-                await asyncio.sleep(1.2)
-                await member.kick(reason=f"Account too new ({account_age.days} days old, requires {guild_config.new_members['account_age_requirement_days']})")
+                await member.kick(
+                    reason=f"Account too new ({account_age.days} days old, requires {guild_config.new_members['account_age_requirement_days']})"
+                )
                 await self.update_guild_metrics(guild, "member_kick", member=member)
                 self.logger.info(f"\n{s}Kicked {member} due to account age ({account_age.days} days).\n")
+            except discord.Forbidden:
+                self.logger.error(
+                    f"\n{s}Cannot kick {member}: missing Kick Members permission or role hierarchy too low.\n"
+                )
             except Exception as e:
                 self.logger.error(f"\n{s}Failed to kick {member}: {e}\n")
-
-            await asyncio.sleep(1.2)
             return
 
         # Account is old enough (or auto-kick disabled) - proceed with welcome

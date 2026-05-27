@@ -601,6 +601,13 @@ class GuildConfigManager:
         self.db_manager = db_manager
         self._cache: Dict[int, GuildConfig] = {}
         self._cache_time: Dict[int, datetime] = {}
+        # Last time we verified a cached config against the DB's updated_at.
+        # Within _cache_grace_seconds we trust the in-memory copy and skip the
+        # per-call Mongo round-trip (hot paths: member joins, the WYR tick, the
+        # tag loop). Bot-side writes update the cache directly; only external
+        # (dashboard) edits take up to this long to propagate.
+        self._cache_checked: Dict[int, datetime] = {}
+        self._cache_grace_seconds = 30
         self._settings_cache: Dict[int, Dict] = {}
         self._collection = None
         self._initialized = False
@@ -627,11 +634,18 @@ class GuildConfigManager:
 
         if use_cache and guild_id in self._cache:
             # Check if DB has been updated externally (e.g. by dashboard)
+            now = datetime.now(timezone.utc)
             cache_ts = self._cache_time.get(guild_id)
+            last_check = self._cache_checked.get(guild_id)
+            # Within the grace window, trust the in-memory copy and skip the
+            # staleness probe that otherwise made every "cache hit" a DB call.
+            if last_check and (now - last_check).total_seconds() < self._cache_grace_seconds:
+                return self._cache[guild_id]
             if cache_ts:
                 doc_meta = await self._collection.find_one(
                     {"guild_id": guild_id}, projection={"updated_at": 1}
                 )
+                self._cache_checked[guild_id] = now
                 db_updated = doc_meta.get("updated_at") if doc_meta else None
                 if db_updated and isinstance(db_updated, datetime):
                     if db_updated.tzinfo is None:
@@ -664,8 +678,10 @@ class GuildConfigManager:
                 logger.debug(f"Using default config for unconfigured guild {guild_id}")
 
             async with self._cache_lock:
+                now = datetime.now(timezone.utc)
                 self._cache[guild_id] = config
-                self._cache_time[guild_id] = datetime.now(timezone.utc)
+                self._cache_time[guild_id] = now
+                self._cache_checked[guild_id] = now
 
             return config
 
@@ -705,8 +721,10 @@ class GuildConfigManager:
                 logger.info(f"Created config for guild {config.guild_id}")
 
             async with self._cache_lock:
+                saved_at = datetime.now(timezone.utc)
                 self._cache[config.guild_id] = config
-                self._cache_time[config.guild_id] = datetime.now(timezone.utc)
+                self._cache_time[config.guild_id] = saved_at
+                self._cache_checked[config.guild_id] = saved_at
 
             return True
 
@@ -863,6 +881,7 @@ class GuildConfigManager:
         async with self._cache_lock:
             self._cache.pop(guild_id, None)
             self._cache_time.pop(guild_id, None)
+            self._cache_checked.pop(guild_id, None)
             self._settings_cache.pop(guild_id, None)
             logger.debug(f"Cache invalidated for guild {guild_id}")
 
@@ -871,6 +890,7 @@ class GuildConfigManager:
         async with self._cache_lock:
             self._cache.clear()
             self._cache_time.clear()
+            self._cache_checked.clear()
             self._settings_cache.clear()
             logger.info("All guild config cache cleared")
 

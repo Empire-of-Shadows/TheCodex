@@ -4,7 +4,7 @@ import asyncio
 from datetime import datetime, timezone
 
 import httpx
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from dashboard.auth.dependencies import get_current_user
 from dashboard.config import BOT_TOKEN, DISCORD_API_BASE
@@ -224,6 +224,15 @@ async def user_activity(
     session_guilds = {g["id"]: g["name"] for g in session.get("guilds", [])}
 
     if guild_id:
+        # Scope to a single guild ONLY if the user is actually in it. Without
+        # this check any authenticated user could pass an arbitrary guild_id and
+        # drive bot-token Discord lookups (and read that guild's configured
+        # server_tag / tag-tracker state) for servers they don't belong to.
+        if guild_id not in session_guilds:
+            raise HTTPException(
+                status_code=404,
+                detail="You are not a member of this guild (or session is stale).",
+            )
         target_ids = [int(guild_id)]
         guild_name_map = {int(guild_id): session_guilds.get(guild_id, "Unknown")}
     else:

@@ -16,7 +16,8 @@ from utils.sync import load_cogs, attach_databases
 from health_endpoint import initialize_health_server, stop_health_server
 
 # Guild that owns the guild-scoped admin slash commands (e.g. /status).
-STATUS_ADMIN_GUILD_ID = 1497083403453989007
+# Environment-specific, so it is opt-in via env; guild sync is skipped if unset.
+STATUS_ADMIN_GUILD_ID = int(os.getenv("STATUS_ADMIN_GUILD_ID", "0"))
 from storage.database_manager import db_manager
 
 # Initialize application-wide logging
@@ -48,6 +49,16 @@ async def on_ready():
 	logger.info(f"Bot ID: {bot.user.id}")
 	logger.info(f"Connected to {len(bot.guilds)} guilds")
 
+	# Heavy init (DB attach, cog load, command sync) must run exactly once.
+	# on_ready can fire again on full reconnects - guard so we don't re-load
+	# cogs or re-sync the command tree every time.
+	if getattr(bot, "_init_done", False):
+		try:
+			await bot.change_presence(status=discord.Status.online)
+		except Exception as e:
+			logger.error(f"Error setting presence on reconnect: {e}", exc_info=True)
+		return
+
 	startup_start = time.perf_counter()
 
 	try:
@@ -71,14 +82,21 @@ async def on_ready():
 		sync_start = time.perf_counter()
 		try:
 			synced_global = await bot.tree.sync()
-			admin_guild = discord.Object(id=STATUS_ADMIN_GUILD_ID)
-			synced_admin = await bot.tree.sync(guild=admin_guild)
 			sync_time = time.perf_counter() - sync_start
-			logger.info(f"Command synchronization completed in {sync_time:.2f}s")
-			logger.info(
-				f"Synchronized {len(synced_global)} global + "
-				f"{len(synced_admin)} guild-scoped slash commands"
-			)
+			if STATUS_ADMIN_GUILD_ID:
+				admin_guild = discord.Object(id=STATUS_ADMIN_GUILD_ID)
+				synced_admin = await bot.tree.sync(guild=admin_guild)
+				logger.info(f"Command synchronization completed in {sync_time:.2f}s")
+				logger.info(
+					f"Synchronized {len(synced_global)} global + "
+					f"{len(synced_admin)} guild-scoped slash commands"
+				)
+			else:
+				logger.info(
+					f"Command synchronization completed in {sync_time:.2f}s; "
+					f"{len(synced_global)} global commands "
+					f"(STATUS_ADMIN_GUILD_ID unset, skipped guild sync)"
+				)
 		except Exception as e:
 			logger.error(f"Error during command synchronization: {e}", exc_info=True)
 			raise
@@ -98,6 +116,9 @@ async def on_ready():
 		logger.info("=" * 60)
 		logger.info("BOT IS NOW ONLINE AND READY")
 		logger.info("=" * 60)
+
+		# Mark init complete so a later on_ready (reconnect) skips heavy work.
+		bot._init_done = True
 
 	except Exception as e:
 		logger.error(f"Critical error during bot initialization: {e}", exc_info=True)

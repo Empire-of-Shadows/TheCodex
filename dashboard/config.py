@@ -56,3 +56,36 @@ CORS_ORIGINS = [
 
 # Discord permission flag for MANAGE_GUILD
 MANAGE_GUILD_PERMISSION = 0x20
+
+
+def _validate_config() -> None:
+    """Fail fast on missing/misconfigured environment rather than 500ing later.
+
+    The dashboard cannot function without the bot token (live guild checks) and
+    the Mongo URI. In production, the Secure cookie flag and CORS origin also
+    depend on ENVIRONMENT/BASE_URL being set correctly - a silent wrong default
+    there is a security regression.
+    """
+    required = {
+        "DISCORD_TOKEN": BOT_TOKEN,
+        "MONGO_URI": MONGO_URI,
+    }
+    missing = [name for name, val in required.items() if not val]
+    if missing:
+        raise RuntimeError(
+            f"Missing required environment variables: {', '.join(missing)}"
+        )
+
+    if IS_PRODUCTION:
+        if not os.getenv("BASE_URL"):
+            raise RuntimeError(
+                "BASE_URL must be set in production (used for the CORS origin "
+                "and cookie scope)"
+            )
+        if "localhost" in REDIRECT_URI or "127.0.0.1" in REDIRECT_URI:
+            raise RuntimeError(
+                "GATEKEEPER_REDIRECT_URI still points at localhost in production"
+            )
+
+
+_validate_config()

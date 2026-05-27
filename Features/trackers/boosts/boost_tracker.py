@@ -41,6 +41,20 @@ class BoostTracker(commands.Cog):
                 if not config.boost.get("enabled", False):
                     continue
 
+                # premium_subscribers is derived from the member cache. If this
+                # guild isn't fully chunked yet, the live set is incomplete and
+                # the diff below would falsely "boost_end" every stored booster.
+                # Force a chunk first; skip the guild if it can't be populated.
+                if not guild.chunked:
+                    try:
+                        await guild.chunk()
+                    except Exception as chunk_err:
+                        logger.warning(
+                            f"Skipping boost reconcile for guild {guild.id}: "
+                            f"members not chunked ({chunk_err})"
+                        )
+                        continue
+
                 boosts_collection = self.db_manager.get_collection_manager('serverdata_boosts')
                 events_collection = self.db_manager.get_collection_manager('serverdata_boost_events')
 

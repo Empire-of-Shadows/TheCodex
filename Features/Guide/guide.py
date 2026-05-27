@@ -113,6 +113,8 @@ class SearchEngine:
 		if not guild_index:
 			return []
 
+		# Cap query length so a pathological input can't drive unbounded scoring.
+		query = (query or "")[:200]
 		query_lower = query.lower()
 		query_words = set(query_lower.split())
 		query_keywords = self._extract_keywords(query_lower)

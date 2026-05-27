@@ -7,12 +7,33 @@ and renders the result using Components V2 via GuideRenderer.
 Replaces the old KEYWORD_MAP-based approach with search-based matching.
 """
 
+import time
+
 from discord.ext import commands
 
 from Features.Guide.guide import guide_manager
 from utils.logger import get_logger
 
 logger = get_logger("GuideMentionListener")
+
+# Per-user throttle so a single user can't spam mention-triggered searches.
+_COOLDOWN_SECONDS = 2.0
+_last_used: dict[tuple[int, int], float] = {}
+
+
+def _on_cooldown(guild_id: int, user_id: int) -> bool:
+	now = time.monotonic()
+	key = (guild_id, user_id)
+	if now - _last_used.get(key, 0.0) < _COOLDOWN_SECONDS:
+		return True
+	_last_used[key] = now
+	# Opportunistic prune so the map can't grow without bound.
+	if len(_last_used) > 10000:
+		cutoff = now - 60
+		for k, t in list(_last_used.items()):
+			if t < cutoff:
+				_last_used.pop(k, None)
+	return False
 
 # Generic help trigger words
 HELP_WORDS = {
@@ -45,6 +66,10 @@ class HelpListener(commands.Cog):
 
 		# Must be in a guild
 		if not message.guild:
+			return
+
+		# Throttle per user to prevent mention spam from hammering search.
+		if _on_cooldown(message.guild.id, message.author.id):
 			return
 
 		content = message.content.lower().strip()

@@ -15,7 +15,8 @@ from dashboard.auth.session import (
     ensure_oauth_state_ttl_index,
     ensure_session_ttl_index,
 )
-from dashboard.config import CORS_ORIGINS
+from dashboard.config import CORS_ORIGINS, IS_PRODUCTION
+from dashboard.rate_limit import rate_limit_middleware
 from dashboard.auth.oauth import router as auth_router
 from dashboard.routers.dashboard import router as dashboard_router
 from dashboard.routers.builder import router as builder_router
@@ -35,6 +36,22 @@ _frontend_dist = os.path.abspath(os.path.join(os.path.dirname(__file__), "fronte
 _frontend_public = os.path.abspath(os.path.join(os.path.dirname(__file__), "frontend", "public"))
 _index_html = os.path.join(_frontend_dist, "index.html")
 _START_TIME = time.time()
+
+# CSP matched to the SPA's asset origins: bundled JS/CSS from self, Google Fonts,
+# and images from any https origin (guide markdown previews can embed external
+# images). No inline scripts are emitted by the Vite build, so script-src is
+# 'self' with no 'unsafe-inline'.
+_CSP = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "font-src 'self' https://fonts.gstatic.com data:; "
+    "img-src 'self' data: https:; "
+    "connect-src 'self'; "
+    "frame-ancestors 'none'; "
+    "base-uri 'self'; "
+    "object-src 'none'"
+)
 
 
 @asynccontextmanager
@@ -61,6 +78,22 @@ app.add_middleware(
 )
 
 app.middleware("http")(csrf_middleware)
+app.middleware("http")(rate_limit_middleware)
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = _CSP
+    if IS_PRODUCTION:
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains"
+        )
+    return response
+
 
 app.add_api_route("/auth/csrf", csrf_endpoint, methods=["GET"])
 # API and auth routes (registered first so they take priority)
@@ -123,4 +156,6 @@ if __name__ == "__main__":
     import uvicorn
     from dashboard.config import HOST, PORT
 
-    uvicorn.run("dashboard.app:app", host=HOST, port=PORT, reload=True)
+    # Reload (file-watching, extra process) only in development. The container
+    # entrypoint is `python -m dashboard.app`, so this path runs in production.
+    uvicorn.run("dashboard.app:app", host=HOST, port=PORT, reload=not IS_PRODUCTION)
