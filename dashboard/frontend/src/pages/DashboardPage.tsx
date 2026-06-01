@@ -344,8 +344,6 @@ export default function DashboardPage() {
   }
   if (!user) return null;
 
-  const botGuilds = guilds.filter((g) => g.bot_in_guild);
-
   const handleGuildClick = (guild: Guild) => {
     if (guild.setup_required && inviteUrl) {
       window.open(`${inviteUrl}&guild_id=${guild.id}`, "_blank");
@@ -372,11 +370,12 @@ export default function DashboardPage() {
         >
           All Guilds
         </button>
-        {botGuilds.map((g) => (
+        {guilds.map((g) => (
           <button
             key={g.id}
-            className={`guild-pill${selectedGuildId === g.id ? " active" : ""}`}
-            onClick={() => handleGuildFilter(g.id)}
+            className={`guild-pill${selectedGuildId === g.id ? " active" : ""}${g.setup_required ? " guild-pill--setup" : ""}`}
+            onClick={() => (g.bot_in_guild ? handleGuildFilter(g.id) : handleGuildClick(g))}
+            title={g.setup_required ? "Bot not added" : undefined}
           >
             <GuildIcon id={g.id} icon={g.icon} name={g.name} size={32} />
             {g.name}
@@ -441,36 +440,11 @@ export default function DashboardPage() {
         );
       })()}
 
-      {/* Guild Grid (all guilds view) */}
-      {selectedGuildId === null && (
+      {selectedGuildId === null && guilds.length === 0 && (
         <div style={{ padding: "0 24px 24px" }}>
-          <h2 className="section-title" style={{ margin: "24px 0 16px" }}>Your Servers</h2>
-          {guilds.length === 0 ? (
-            <p style={{ color: "var(--text-muted)" }}>
-              No servers found where you have Manage Server permission.
-            </p>
-          ) : (
-            <div className="guild-grid">
-              {guilds.map((g) => (
-                <div
-                  key={g.id}
-                  className={`card guild-card${g.setup_required ? " guild-card--setup" : ""}`}
-                  onClick={() => handleGuildClick(g)}
-                >
-                  <div className="guild-icon">
-                    <GuildIcon id={g.id} icon={g.icon} name={g.name} size={96} />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="guild-name">{g.name}</div>
-                    {g.setup_required && (
-                      <div className="guild-invite-hint">Bot not installed - click to invite</div>
-                    )}
-                  </div>
-                  {g.setup_required && <div className="guild-invite-badge">Invite</div>}
-                </div>
-              ))}
-            </div>
-          )}
+          <p style={{ color: "var(--text-muted)" }}>
+            No servers found where you have Manage Server permission.
+          </p>
         </div>
       )}
     </div>
