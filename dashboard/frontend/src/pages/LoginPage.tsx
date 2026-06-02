@@ -38,7 +38,7 @@ export default function LoginPage() {
         <div className="login-tiles">
           <a
             className="tile-button"
-            href="https://empireofshadows.club"
+            href="https://eosofficial.club"
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -47,7 +47,7 @@ export default function LoginPage() {
           </a>
           <a
             className="tile-button"
-            href="https://host.empireofshadows.club"
+            href="https://host.eosofficial.club"
             target="_blank"
             rel="noopener noreferrer"
           >
