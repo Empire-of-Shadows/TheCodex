@@ -345,8 +345,10 @@ export default function DashboardPage() {
   if (!user) return null;
 
   const handleGuildClick = (guild: Guild) => {
-    if (guild.setup_required && inviteUrl) {
-      window.open(`${inviteUrl}&guild_id=${guild.id}`, "_blank");
+    if (guild.setup_required) {
+      // Don't auto-open Discord; just select the guild. An explicit invite
+      // link is shown in the section below for the user to click.
+      handleGuildFilter(guild.id);
     } else if (guild.panel_role === "admin") {
       navigate(`/builder/${guild.id}`);
     } else {
@@ -409,6 +411,30 @@ export default function DashboardPage() {
       {(() => {
         const sel = guilds.find((g) => g.id === selectedGuildId);
         if (!selectedGuildId || !sel || sel.panel_role === "none") return null;
+        if (sel.setup_required) {
+          return (
+            <div className="admin-section">
+              <h3>Settings</h3>
+              <div className="admin-actions">
+                {inviteUrl ? (
+                  <a
+                    className="btn btn-primary"
+                    href={`${inviteUrl}&guild_id=${sel.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Invite TheCodex
+                  </a>
+                ) : (
+                  <span className="guild-invite-hint">Bot not in this server yet.</span>
+                )}
+              </div>
+              <p className="guild-invite-hint" style={{ marginTop: 8 }}>
+                Bot not in this server yet. Use the link above to add it, then return here.
+              </p>
+            </div>
+          );
+        }
         if (sel.panel_role !== "admin") {
           return (
             <div className="admin-section">
@@ -432,7 +458,7 @@ export default function DashboardPage() {
               <button className="btn btn-secondary" onClick={() => navigate(`/settings/${selectedGuildId}`)}>
                 Settings
               </button>
-              <button className="btn btn-secondary" onClick={() => navigate(`/admin/guilds/${selectedGuildId}/audit-log`)}>
+              <button className="btn btn-secondary" onClick={() => navigate(`/settings/${selectedGuildId}/audit-log`)}>
                 Audit Log
               </button>
             </div>

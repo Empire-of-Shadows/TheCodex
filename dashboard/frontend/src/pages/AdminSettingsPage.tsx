@@ -794,20 +794,20 @@ function PanelAccessTab({
         <MultiRoleField
           label="Panel Access Roles"
           description="Full admin access (acts like Manage Server)."
-          value={value.admin ?? []}
+          value={value.admin_role_ids ?? []}
           roles={roles}
           max={10}
           disabled={readOnly}
-          onChange={(v) => onChange({ ...value, admin: v })}
+          onChange={(v) => onChange({ ...value, admin_role_ids: v })}
         />
         <MultiRoleField
           label="Mod Access Roles"
           description="Limited (mod-tier) access to opted-in sections."
-          value={value.moderator ?? []}
+          value={value.mod_role_ids ?? []}
           roles={roles}
           max={10}
           disabled={readOnly}
-          onChange={(v) => onChange({ ...value, moderator: v })}
+          onChange={(v) => onChange({ ...value, mod_role_ids: v })}
         />
       </div>
       <SaveBar dirty={dirty} saving={saving} onSave={onSave} readOnly={readOnly} />

@@ -69,6 +69,7 @@ async def me(session: dict = Depends(get_current_user)):
         "discriminator": user.get("discriminator"),
         "can_access_admin_any": can_access_admin_any,
         "can_access_mod_any": can_access_mod_any,
+        "can_access_settings_any": can_access_admin_any or can_access_mod_any,
     }
 
 

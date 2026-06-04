@@ -34,7 +34,7 @@ async def is_admin_check(interaction: Interaction) -> bool:
 
     guild_config = await get_config(interaction.guild.id)
     user_role_ids = {role.id for role in interaction.user.roles}
-    admin_set = set(guild_config.roles["admin"])
+    admin_set = set(guild_config.roles["admin_role_ids"])
 
     return bool(user_role_ids & admin_set)
 
@@ -54,10 +54,10 @@ def has_embed_permissions():
         guild_config = await get_config(interaction.guild.id)
         user_role_ids = {role.id for role in interaction.user.roles}
 
-        if user_role_ids & set(guild_config.roles["admin"]):
+        if user_role_ids & set(guild_config.roles["admin_role_ids"]):
             return True
 
-        if user_role_ids & set(guild_config.roles["moderator"]):
+        if user_role_ids & set(guild_config.roles["mod_role_ids"]):
             return True
 
         tier_role_ids = set(guild_config.get_all_tier_role_ids())

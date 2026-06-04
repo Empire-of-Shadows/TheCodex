@@ -34,8 +34,8 @@ def has_whitelist_permissions_app():
 
         # Check for admin or moderator roles from config
         user_role_ids = {role.id for role in getattr(user, "roles", [])}
-        admin_set = set(guild_config.roles["admin"])
-        mod_set = set(guild_config.roles["moderator"])
+        admin_set = set(guild_config.roles["admin_role_ids"])
+        mod_set = set(guild_config.roles["mod_role_ids"])
 
         return bool(user_role_ids & (admin_set | mod_set))
 

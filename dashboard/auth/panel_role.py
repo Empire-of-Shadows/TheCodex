@@ -1,12 +1,12 @@
 """Panel-role resolution for the Codex dashboard.
 
 Mirrors `commands/admin/role_auth.py` for the web side. TheCodex stores admin
-and moderator roles as lists in `GuildConfig.roles = {"admin": [...], "moderator": [...]}`,
+and moderator roles as lists in `GuildConfig.roles = {"admin_role_ids": [...], "mod_role_ids": [...]}`,
 so resolution checks set overlap rather than a single id.
 
 Tiers:
-  - "admin": MANAGE_GUILD OR overlap with cfg.roles["admin"]
-  - "mod":   overlap with cfg.roles["moderator"]
+  - "admin": MANAGE_GUILD OR overlap with cfg.roles["admin_role_ids"]
+  - "mod":   overlap with cfg.roles["mod_role_ids"]
   - "none":  no access
 """
 
@@ -128,8 +128,14 @@ async def _guild_role_lists(guild_id: str) -> tuple[frozenset[str], frozenset[st
     if not doc:
         return (frozenset(), frozenset())
     roles = doc.get("roles") or {}
-    admin_ids = frozenset(str(r) for r in (roles.get("admin") or []))
-    mod_ids = frozenset(str(r) for r in (roles.get("moderator") or []))
+    # Canonical keys are admin_role_ids / mod_role_ids; fall back to the legacy
+    # admin / moderator names for documents not yet migrated.
+    admin_ids = frozenset(
+        str(r) for r in (roles.get("admin_role_ids") or roles.get("admin") or [])
+    )
+    mod_ids = frozenset(
+        str(r) for r in (roles.get("mod_role_ids") or roles.get("moderator") or [])
+    )
     return (admin_ids, mod_ids)
 
 

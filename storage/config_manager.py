@@ -56,8 +56,8 @@ _LEGACY_FIELDS: tuple = (
 
 def _default_roles() -> Dict[str, Any]:
     return {
-        "admin": [],
-        "moderator": [],
+        "admin_role_ids": [],
+        "mod_role_ids": [],
     }
 
 
@@ -251,15 +251,17 @@ class GuildConfig:
             tiers_stored = stored.get("tiers", {})
             if set(tiers_stored.keys()) & _old_tier_names:
                 tiers_stored = {}
+            # Canonical keys are admin_role_ids / mod_role_ids; fall back to the
+            # legacy admin / moderator names for documents not yet migrated.
             roles = {
-                "admin": stored.get("admin", []),
-                "moderator": stored.get("moderator", []),
+                "admin_role_ids": stored.get("admin_role_ids", stored.get("admin", [])),
+                "mod_role_ids": stored.get("mod_role_ids", stored.get("moderator", [])),
                 "tiers": tiers_stored,
             }
         else:
             roles = {
-                "admin": data.get("admin_role_ids", []),
-                "moderator": data.get("moderator_role_ids", []),
+                "admin_role_ids": data.get("admin_role_ids", []),
+                "mod_role_ids": data.get("moderator_role_ids", []),
                 "tiers": {},
             }
 
@@ -565,11 +567,11 @@ class GuildConfig:
 
     def is_admin_role(self, role_id: int) -> bool:
         """Check if a role ID is an admin role."""
-        return role_id in self.roles["admin"]
+        return role_id in self.roles["admin_role_ids"]
 
     def is_moderator_role(self, role_id: int) -> bool:
         """Check if a role ID is a moderator role."""
-        return role_id in self.roles["moderator"]
+        return role_id in self.roles["mod_role_ids"]
 
     def is_staff_role(self, role_id: int) -> bool:
         """Check if a role ID is admin or moderator."""
@@ -861,15 +863,15 @@ class GuildConfigManager:
         config = await self.get_config(guild_id)
 
         if role_type == "admin":
-            if action == "add" and role_id not in config.roles["admin"]:
-                config.roles["admin"].append(role_id)
-            elif action == "remove" and role_id in config.roles["admin"]:
-                config.roles["admin"].remove(role_id)
+            if action == "add" and role_id not in config.roles["admin_role_ids"]:
+                config.roles["admin_role_ids"].append(role_id)
+            elif action == "remove" and role_id in config.roles["admin_role_ids"]:
+                config.roles["admin_role_ids"].remove(role_id)
         elif role_type == "moderator":
-            if action == "add" and role_id not in config.roles["moderator"]:
-                config.roles["moderator"].append(role_id)
-            elif action == "remove" and role_id in config.roles["moderator"]:
-                config.roles["moderator"].remove(role_id)
+            if action == "add" and role_id not in config.roles["mod_role_ids"]:
+                config.roles["mod_role_ids"].append(role_id)
+            elif action == "remove" and role_id in config.roles["mod_role_ids"]:
+                config.roles["mod_role_ids"].remove(role_id)
         else:
             logger.warning(f"Invalid role type: {role_type}")
             return False
@@ -907,13 +909,13 @@ class GuildConfigManager:
 
     def has_staff_role(self, config: GuildConfig, user_role_ids: Set[int]) -> bool:
         """Check if any of the user's roles are admin or moderator roles."""
-        admin_set = set(config.roles["admin"])
-        mod_set = set(config.roles["moderator"])
+        admin_set = set(config.roles["admin_role_ids"])
+        mod_set = set(config.roles["mod_role_ids"])
         return bool(user_role_ids & (admin_set | mod_set))
 
     def has_admin_role(self, config: GuildConfig, user_role_ids: Set[int]) -> bool:
         """Check if any of the user's roles are admin roles."""
-        admin_set = set(config.roles["admin"])
+        admin_set = set(config.roles["admin_role_ids"])
         return bool(user_role_ids & admin_set)
 
     # ── Typed accessors — Embed Config (async) ───────────────────────────────

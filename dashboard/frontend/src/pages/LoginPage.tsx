@@ -54,6 +54,24 @@ export default function LoginPage() {
             <span className="tile-title">TheHost</span>
             <span className="tile-desc">Games and stats dashboard for TheHost bot.</span>
           </a>
+          <a
+            className="tile-button"
+            href="https://ecom.eosofficial.club"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span className="tile-title">Ecom</span>
+            <span className="tile-desc">Leveling, embers, and economy for the Ecom bot.</span>
+          </a>
+          <a
+            className="tile-button"
+            href="https://reminder.eosofficial.club"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span className="tile-title">Reminder</span>
+            <span className="tile-desc">Bump reminders to keep your server promoted.</span>
+          </a>
         </div>
 
         {stats && (

@@ -5,7 +5,7 @@ import type { Guild, User } from "../api/types";
 import AppHeader from "../components/AppHeader";
 import { GuildWeb } from "../components/GuildWeb";
 
-export default function AdminPage() {
+export default function SettingsPage() {
   const [user, setUser] = useState<User | null>(null);
   const [guilds, setGuilds] = useState<Guild[] | null>(null);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
@@ -19,9 +19,10 @@ export default function AdminPage() {
     api.botInviteUrl().then((r) => setInviteUrl(r.url)).catch(() => {});
   }, []);
 
-  // Client guard: admins reach this page; pure-mod users have no Admin nav link.
+  // Client guard: admins and mods reach Settings; pure-none users have no
+  // Settings nav link. Server-side routes re-check access on their own.
   useEffect(() => {
-    if (user && !user.can_access_admin_any) navigate("/dashboard", { replace: true });
+    if (user && !user.can_access_settings_any) navigate("/dashboard", { replace: true });
   }, [user, navigate]);
 
   const webGuilds = useMemo(
@@ -87,11 +88,10 @@ export default function AdminPage() {
         ) : (
           <div className="guild-web-layout">
             <GuildWeb guilds={webGuilds} selectedId={selectedId} onSelect={setSelectedId} />
-            <AdminActionPanel
+            <SettingsActionPanel
               guild={selected}
               inviteUrl={inviteUrl}
               onNavigate={(path) => navigate(path)}
-              onInvite={(gid) => inviteUrl && window.open(`${inviteUrl}&guild_id=${gid}`, "_blank")}
             />
           </div>
         )}
@@ -100,16 +100,14 @@ export default function AdminPage() {
   );
 }
 
-function AdminActionPanel({
+function SettingsActionPanel({
   guild,
   inviteUrl,
   onNavigate,
-  onInvite,
 }: {
   guild: Guild | null;
   inviteUrl: string | null;
   onNavigate: (path: string) => void;
-  onInvite: (gid: string) => void;
 }) {
   if (!guild) {
     return (
@@ -143,9 +141,14 @@ function AdminActionPanel({
       <div className="guild-web__panel-actions">
         {!guild.bot_in_guild ? (
           inviteUrl && (
-            <button className="btn btn-primary" onClick={() => onInvite(guild.id)}>
+            <a
+              className="btn btn-primary"
+              href={`${inviteUrl}&guild_id=${guild.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               Invite TheCodex
-            </button>
+            </a>
           )
         ) : isAdmin ? (
           <>
@@ -158,7 +161,7 @@ function AdminActionPanel({
             <button className="btn btn-secondary" onClick={() => onNavigate(`/settings/${guild.id}`)}>
               Settings
             </button>
-            <button className="btn btn-secondary" onClick={() => onNavigate(`/admin/guilds/${guild.id}/audit-log`)}>
+            <button className="btn btn-secondary" onClick={() => onNavigate(`/settings/${guild.id}/audit-log`)}>
               Audit Log
             </button>
           </>
@@ -170,7 +173,9 @@ function AdminActionPanel({
       </div>
 
       {!guild.bot_in_guild && (
-        <p className="guild-invite-hint" style={{ marginTop: 0 }}>Bot not in this server yet.</p>
+        <p className="guild-invite-hint" style={{ marginTop: 0 }}>
+          Bot not in this server yet. Use the link above to add it, then return here.
+        </p>
       )}
     </aside>
   );

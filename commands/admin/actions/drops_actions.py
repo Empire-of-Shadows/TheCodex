@@ -141,7 +141,7 @@ class DropsActions:
         user_role_ids = {role.id for role in member.roles}
 
         # Check admin roles
-        if user_role_ids & set(config.roles["admin"]):
+        if user_role_ids & set(config.roles["admin_role_ids"]):
             return True
 
         # Check drops manager role

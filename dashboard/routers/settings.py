@@ -85,7 +85,7 @@ _ROLE_ID_FIELDS: dict[str, tuple[str, ...]] = {
 }
 
 _ROLE_ID_LIST_FIELDS: dict[str, tuple[str, ...]] = {
-    "roles": ("admin", "moderator"),
+    "roles": ("admin_role_ids", "mod_role_ids"),
 }
 
 

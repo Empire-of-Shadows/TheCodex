@@ -955,9 +955,9 @@ ADMIN_ROLES_CONFIG = PanelNode(
         "Grants full admin panel access (same as Manage Server). "
         "Members holding any of these roles can open `/admin panel`."
     ),
-    get_values=lambda gid: _get_panel_role(gid, "admin"),
-    set_values=lambda gid, ids: _set_panel_role(gid, ids, "admin"),
-    clear_values=lambda gid: _clear_panel_role(gid, "admin"),
+    get_values=lambda gid: _get_panel_role(gid, "admin_role_ids"),
+    set_values=lambda gid, ids: _set_panel_role(gid, ids, "admin_role_ids"),
+    clear_values=lambda gid: _clear_panel_role(gid, "admin_role_ids"),
     min_values=0,
     max_values=10,
 )
@@ -970,9 +970,9 @@ MOD_ROLES_CONFIG = PanelNode(
         "Optional — grants limited (mod-tier) panel access to sections opted in "
         "by your admins. Leave blank to disable the Mod tier."
     ),
-    get_values=lambda gid: _get_panel_role(gid, "moderator"),
-    set_values=lambda gid, ids: _set_panel_role(gid, ids, "moderator"),
-    clear_values=lambda gid: _clear_panel_role(gid, "moderator"),
+    get_values=lambda gid: _get_panel_role(gid, "mod_role_ids"),
+    set_values=lambda gid, ids: _set_panel_role(gid, ids, "mod_role_ids"),
+    clear_values=lambda gid: _clear_panel_role(gid, "mod_role_ids"),
     min_values=0,
     max_values=10,
 )

@@ -8,6 +8,7 @@ export interface User {
   discriminator: string;
   can_access_admin_any: boolean;
   can_access_mod_any: boolean;
+  can_access_settings_any: boolean;
 }
 
 export interface Guild {
@@ -236,8 +237,8 @@ export interface AuditLogResponse {
 export type PanelRole = "admin" | "mod" | "none";
 
 export interface RolesSection {
-  admin: string[];
-  moderator: string[];
+  admin_role_ids: string[];
+  mod_role_ids: string[];
   tiers?: Record<string, unknown>;
 }
 
