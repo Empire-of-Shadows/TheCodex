@@ -4,7 +4,7 @@ import { api } from "../api/client";
 import type { User } from "../api/types";
 import AppHeader from "../components/AppHeader";
 
-const EFFECTIVE_DATE = "May 25, 2026";
+const EFFECTIVE_DATE = "June 8, 2026";
 
 export default function PrivacyPolicyPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -33,7 +33,9 @@ export default function PrivacyPolicyPage() {
           <p>
             This policy explains what data TheCodex ("the bot", "we", "us") collects when you use
             the bot or the web dashboard, how we use it, and the choices you have. TheCodex is part
-            of the Empire of Shadows ecosystem and is designed to work in any Discord server.
+            of the Empire of Shadows ecosystem and is designed to work in any Discord server. To
+            power features such as suggestions and polls, the bot uses Discord's <strong>Message
+            Content</strong> intent — see "Information we collect" below for exactly what is kept.
           </p>
         </section>
 
@@ -45,13 +47,30 @@ export default function PrivacyPolicyPage() {
               user ID, username, global display name, and avatar, plus the servers you are in and
               your permissions in them, which we use for access control.
             </li>
-            <li><strong>Would-You-Rather votes</strong> you cast.</li>
-            <li><strong>Suggestions</strong> you submit and vote on, along with related suggestion stats.</li>
+            <li>
+              <strong>Suggestion text and votes:</strong> when you submit a suggestion, the bot
+              reads and <strong>stores the text you write</strong> together with its votes and
+              status, so it can be reviewed and displayed.
+            </li>
+            <li>
+              <strong>Would-You-Rather votes</strong> you cast, with the related poll content.
+            </li>
             <li><strong>Server-boost records</strong> for the servers you boost.</li>
+            <li>
+              <strong>Member whitelist entries</strong> used to control who may use certain
+              features.
+            </li>
+            <li>
+              <strong>A cached copy of server structure</strong> — member, role, and channel lists
+              for the servers the bot is in — kept so the dashboard and bot can resolve names and
+              permissions quickly, along with usage analytics.
+            </li>
             <li><strong>A session cookie</strong> that keeps you signed in to the dashboard.</li>
           </ul>
           <p className="muted">
-            Tag-tracker status is read live from your Discord roles and is not stored.
+            Tag-tracker status is read live from your Discord roles and is not stored. Message
+            content is only read and stored when it is part of a submission you make (such as a
+            suggestion); the bot does not archive general chat history.
           </p>
         </section>
 
@@ -127,10 +146,6 @@ export default function PrivacyPolicyPage() {
             <a href="mailto:support@eosofficial.club"> support@eosofficial.club</a>.
           </p>
         </section>
-
-        <p className="muted" style={{ marginTop: "1rem" }}>
-          This page is provided for transparency and is not legal advice.
-        </p>
       </div>
     </div>
   );

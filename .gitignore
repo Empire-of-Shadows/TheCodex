@@ -1,5 +1,6 @@
 .idea/
 /log/
+/logs/
 **/would_you_rather_questions/
 bot_permissions.csv
 storage/logs/

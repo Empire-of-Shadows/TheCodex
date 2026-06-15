@@ -124,10 +124,6 @@ export default function TermsPage() {
             <a href="mailto:support@eosofficial.club"> support@eosofficial.club</a>.
           </p>
         </section>
-
-        <p className="muted" style={{ marginTop: "1rem" }}>
-          This page is provided for transparency and is not legal advice.
-        </p>
       </div>
     </div>
   );

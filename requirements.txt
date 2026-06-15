@@ -4,6 +4,6 @@ RapidFuzz~=3.14.5
 pytz~=2026.2
 tabulate~=0.10.0
 pendulum~=3.2.0
-aiohttp~=3.13.5
+aiohttp~=3.14.1
 discord.py~=2.7.1
 backoff~=2.2.1
