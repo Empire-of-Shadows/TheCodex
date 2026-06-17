@@ -1,47 +1,66 @@
+# ───────────────────────────────────────────────────────────────────────────
+# VENDORED from admin_engine/ — DO NOT EDIT HERE.
+# Edit the master at <repo-root>/admin_engine/ and run:
+#     python tools/sync_admin_engine.py
+# Drift is enforced by:  python tools/sync_admin_engine.py --check
+# ───────────────────────────────────────────────────────────────────────────
 """
 Permission pre-checks for admin panel channel/role configuration.
 
 Validates that the bot has the necessary Discord permissions before saving
 a channel or role selection, preventing silent runtime failures.
+
+Each check reads requirements from the calling PanelNode itself
+(`required_channel_perms`, `requires_role_manage`) so different bots can
+declare different perms per node without editing this module.
 """
 
 import discord
 
-# Maps PanelNode key -> list of discord.Permissions attribute names required in that channel.
-CHANNEL_PERMISSION_REQUIREMENTS: dict[str, list[str]] = {
-    "wyr_channel": ["send_messages", "create_public_threads", "send_messages_in_threads", "embed_links"],
-    "nm_welcome_channel": ["send_messages", "embed_links"],
-    "ann_channel": ["send_messages", "create_public_threads", "send_messages_in_threads", "manage_threads", "embed_links"],
-    "sug_channel": ["send_messages", "create_public_threads", "send_messages_in_threads", "embed_links"],
-    "guide_channel": ["send_messages"],
-    "drops_channel": ["send_messages", "embed_links"],
-    "drops_tracker": ["view_channel", "read_message_history"],
-    "boost_tracker_channel": ["send_messages"],
-}
+from .views.panel_engine import PanelNode
 
-# Maps PanelNode key -> whether the bot needs manage_roles + hierarchy check.
-ROLE_MANAGE_REQUIREMENTS: dict[str, bool] = {
-    "nm_whitelist_role": True,
-    "tag_tracker_role": True,
-}
+
+# -- Display Helpers --------------------------------------------------------
 
 _PERM_DISPLAY_NAMES: dict[str, str] = {
     "send_messages": "Send Messages",
-    "create_public_threads": "Create Public Threads",
-    "send_messages_in_threads": "Send Messages in Threads",
-    "manage_threads": "Manage Threads",
     "embed_links": "Embed Links",
-    "view_channel": "View Channel",
+    "manage_channels": "Manage Channels",
+    "manage_messages": "Manage Messages",
+    "manage_roles": "Manage Roles",
     "read_message_history": "Read Message History",
+    "add_reactions": "Add Reactions",
+    "view_channel": "View Channel",
+    "attach_files": "Attach Files",
+    "use_external_emojis": "Use External Emojis",
+    "mention_everyone": "Mention Everyone",
 }
 
 
-def check_channel_permissions(guild: discord.Guild, channel_id: int, config_key: str) -> tuple[bool, str | None]:
-    """Check if the bot has required permissions in the given channel.
+def _display(perm: str) -> str:
+    """Return the human-readable label for a permission attribute name."""
+    return _PERM_DISPLAY_NAMES.get(perm, perm.replace("_", " ").title())
 
-    Returns (True, None) if OK, or (False, error_message) if permissions are missing.
+
+# -- Validation Hooks -------------------------------------------------------
+
+def check_channel_permissions(
+    node: PanelNode,
+    guild: discord.Guild,
+    channel_id: int,
+) -> tuple[bool, str | None]:
+    """Check that the bot has every permission listed on `node.required_channel_perms`
+    inside the given channel.
+
+    Inputs:
+        node:       The channel_select PanelNode being saved. Reads
+                    `node.required_channel_perms` (None or empty -> no check).
+        guild:      Guild the channel belongs to.
+        channel_id: Channel being assigned to this setting.
+
+    Returns (True, None) if OK, (False, error_message) if any perm is missing.
     """
-    required = CHANNEL_PERMISSION_REQUIREMENTS.get(config_key)
+    required = node.required_channel_perms
     if not required:
         return True, None
 
@@ -55,7 +74,7 @@ def check_channel_permissions(guild: discord.Guild, channel_id: int, config_key:
     if not missing:
         return True, None
 
-    missing_display = ", ".join(f"**{_PERM_DISPLAY_NAMES.get(p, p)}**" for p in missing)
+    missing_display = ", ".join(f"**{_display(p)}**" for p in missing)
     return False, (
         f"The bot is missing permissions in <#{channel_id}>:\n"
         f"{missing_display}\n\n"
@@ -63,12 +82,23 @@ def check_channel_permissions(guild: discord.Guild, channel_id: int, config_key:
     )
 
 
-def check_role_permissions(guild: discord.Guild, role_id: int, config_key: str) -> tuple[bool, str | None]:
-    """Check if the bot can manage the given role (manage_roles perm + hierarchy).
+def check_role_permissions(
+    node: PanelNode,
+    guild: discord.Guild,
+    role_id: int,
+) -> tuple[bool, str | None]:
+    """Check that the bot can manage the given role when the node opts in.
 
-    Returns (True, None) if OK, or (False, error_message) if the bot cannot manage the role.
+    Inputs:
+        node:    The role_select PanelNode being saved. When
+                 `node.requires_role_manage` is False, the check is skipped.
+        guild:   Guild the role belongs to.
+        role_id: Role being assigned to this setting.
+
+    Returns (True, None) if OK, (False, error_message) if the bot lacks the
+    Manage Roles server perm or the role outranks the bot's top role.
     """
-    if not ROLE_MANAGE_REQUIREMENTS.get(config_key):
+    if not node.requires_role_manage:
         return True, None
 
     if not guild.me.guild_permissions.manage_roles:

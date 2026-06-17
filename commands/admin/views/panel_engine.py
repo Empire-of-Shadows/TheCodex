@@ -1,9 +1,15 @@
+# ───────────────────────────────────────────────────────────────────────────
+# VENDORED from admin_engine/ — DO NOT EDIT HERE.
+# Edit the master at <repo-root>/admin_engine/ and run:
+#     python tools/sync_admin_engine.py
+# Drift is enforced by:  python tools/sync_admin_engine.py --check
+# ───────────────────────────────────────────────────────────────────────────
 """
-Admin Panel Engine — Generic config-driven panel builder.
+Admin Panel Engine -Generic config-driven panel builder.
 
 Defines PanelNode dataclass and generic view builders (build_menu_view,
-build_select_view) so new admin panels can be added as pure config trees
-without writing custom view builder code.
+build_select_view, build_modal_trigger_view) so new admin panels can be
+added as pure config trees without writing custom view builder code.
 """
 
 from __future__ import annotations
@@ -30,41 +36,50 @@ class PanelNode:
         key:          Unique identifier; also used as rate-limit cooldown key.
         label:        Display label for headers and dropdown options.
         kind:         Node type: "menu" | "role_select" | "channel_select" | "option_select"
+                      | "modal_input" | "dual_modal_input" | "file_upload" | "dict_editor"
+                      | "paginated_list" | "grouped_paginated_select" | "action"
         description:  Short description shown in the parent dropdown and as
                       instruction text on the select view.
 
-        children:     (menu only) Ordered dict of child_key → PanelNode.
-        get_values:   async (guild_id) → list  — returns the current selection.
-        set_values:   async (guild_id, values) → bool  — persists new selection.
-        clear_values: Optional async (guild_id) → bool  — enables a Clear button.
+        children:     (menu only) Ordered dict of child_key -> PanelNode.
+        get_values:   async (guild_id) -> list  -returns the current selection.
+        set_values:   async (guild_id, values) -> bool  -persists new selection.
+        clear_values: Optional async (guild_id) -> bool  -enables a Clear button.
+        pre_check:    Optional async (interaction, guild_id) -> LayoutView|None; None=allow.
+        post_save_hook: Optional async (interaction, guild_id, saved_values) -> None.
         options:      (option_select only) list of (value, label) or
                       (value, label, description) tuples.
         min_values:   Minimum number of selections (default 1).
         max_values:   Maximum number of selections (default 25).
+
+        locked_children: (menu only) async (guild_id) -> set[str] of child keys to lock.
+        lock_reason:  Message shown when a locked child is clicked.
+        toggle_get:   (menu only) async (guild_id) -> bool -current enabled state.
+        toggle_set:   (menu only) async (guild_id, enabled: bool) -> bool -set state.
     """
 
     key: str
     label: str
-    kind: str  # "menu" | "role_select" | "channel_select" | "option_select" | "modal_input" | "dual_modal_input" | "file_upload" | "dict_editor"
+    kind: str  # "menu" | "role_select" | "channel_select" | "option_select" | "modal_input" | "dual_modal_input" | "file_upload" | "dict_editor" | "paginated_list" | "grouped_paginated_select" | "action"
     description: str = ""
 
     # menu nodes only
     children: dict[str, "PanelNode"] = field(default_factory=dict)
 
-    # menu lock / toggle support (TheHost parity per ADMIN_PANEL_STANDARD.md)
+    # menu lock / toggle support
     locked_children: Optional[Callable] = None  # async (guild_id) -> set[str]
     lock_reason: str = ""
     toggle_get: Optional[Callable] = None       # async (guild_id) -> bool
     toggle_set: Optional[Callable] = None       # async (guild_id, bool) -> bool
-    on_toggle_callback: Optional[Callable] = None
+    on_toggle_callback: Optional[Callable] = None  # async (guild, enabled: bool) -> None
     description_builder: Optional[Callable] = None  # sync (guild_id) -> str; overrides static description at render time
 
     # select / modal_input nodes
-    get_values: Optional[Callable] = None   # async (guild_id) → list[int | str]
-    set_values: Optional[Callable] = None   # async (guild_id, values) → bool
-    clear_values: Optional[Callable] = None  # async (guild_id) → bool
-    pre_check: Optional[Callable] = None       # async (interaction, guild_id) → LayoutView|None; None=allow
-    post_save_hook: Optional[Callable] = None  # async (interaction, guild_id, saved_values) → None
+    get_values: Optional[Callable] = None   # async (guild_id) -> list[int | str]
+    set_values: Optional[Callable] = None   # async (guild_id, values) -> bool
+    clear_values: Optional[Callable] = None  # async (guild_id) -> bool
+    pre_check: Optional[Callable] = None       # async (interaction, guild_id) -> LayoutView|None
+    post_save_hook: Optional[Callable] = None  # async (interaction, guild_id, saved_values) -> None
 
     # channel_select only
     channel_types: Optional[list] = None   # list[discord.ChannelType] to filter
@@ -74,31 +89,33 @@ class PanelNode:
     min_values: int = 1
     max_values: int = 25
 
-    # premium gating (scaffolding for cross-bot parity; Codex has no premium today)
-    premium_values: set[str] | None = None
-    premium_max_values: int | None = None
+    # premium gating
+    premium_values: set[str] | None = None  # option values that require premium
+    premium_max_values: int | None = None   # max_values override for premium guilds
 
     # modal_input only
-    modal_title: str = ""           # Modal window title
-    modal_label: str = "Value"      # Text input label
-    modal_placeholder: str = ""     # Input placeholder text
-    modal_min_length: int = 1       # Minimum input length
-    modal_max_length: int = 100     # Maximum input length
-    modal_validator: Optional[Callable] = None  # (str) → (bool, converted_value, error_msg)
-    modal_paragraph: bool = False   # Use paragraph (multiline) text style
-    modal_required: bool = True     # Whether the field is required in Discord modal
+    modal_title: str = ""
+    modal_label: str = "Value"
+    modal_placeholder: str = ""
+    modal_min_length: int = 1
+    modal_max_length: int = 100
+    modal_validator: Optional[Callable] = None  # (str) -> (bool, converted_value, error_msg)
+    modal_paragraph: bool = False
+    modal_required: bool = True
 
-    # file_upload only
-    schema_validator: Optional[Callable] = None  # (data) → (bool, error_msg)
-    template_data: Optional[Callable] = None     # () → (bytes, filename); returns template file content for download
-
-    # dual_modal_input — second field
+    # dual_modal_input -second field
     modal_label_2: str = ""
     modal_placeholder_2: str = ""
     modal_min_length_2: int = 0
     modal_max_length_2: int = 500
 
     # dict_editor only
+    # dict_get_values: async (guild_id) -> dict[str, Any]  current entries.
+    # dict_set_value:  async (guild_id, key, value) -> bool  add/update one entry.
+    # dict_remove_value: async (guild_id, key) -> bool  delete one entry.
+    # dict_key_label / dict_value_label: TextInput labels for the add/edit modal.
+    # dict_value_validator: sync (raw_str) -> (ok, error_msg, parsed_value).
+    # dict_max_entries: optional cap on the number of entries.
     dict_get_values: Optional[Callable] = None
     dict_set_value: Optional[Callable] = None
     dict_remove_value: Optional[Callable] = None
@@ -107,33 +124,71 @@ class PanelNode:
     dict_value_validator: Optional[Callable] = None
     dict_max_entries: Optional[int] = None
 
-    # Discord permission requirements
+    # file_upload only
+    # template_data: sync (no args) -> (bytes, filename); when set, renders a
+    #   "Download Template" button beside Upload so users can grab a starter file.
+    template_data: Optional[Callable] = None
+
+    # Discord permission requirements (validated by permission_checks.py).
+    # required_channel_perms: discord.Permissions attribute names the bot must
+    #   hold inside any channel selected through this node (channel_select).
+    # requires_role_manage: when True, the bot must hold manage_roles globally
+    #   AND outrank every role assigned through this node (role_select).
     required_channel_perms: list[str] | None = None
     requires_role_manage: bool = False
 
-    # Dashboard grouping per ADMIN_PANEL_STANDARD.md §7.
+    # Dashboard grouping for top-level children (see ADMIN_PANEL_STANDARD.md §7).
+    # "main" renders above the disabled "── Feature Configurations ──" divider in
+    # the dashboard category Select; "feature" renders below.
     category_group: str = "main"
 
-    # Tier-aware label override (premium guilds render premium_label if set).
+    # Tier-aware label override. When the active guild has premium and
+    # premium_label is set, renderers display it instead of `label`.
     premium_label: Optional[str] = None
 
-    # Summary semantics:
-    #   view_only       — read-only "View Status" entries; parent menu shows
-    #                     "View only" instead of misleading "Not configured".
-    #   default_summary — text shown on a menu when nothing under it is
-    #                     customized (e.g. "Using defaults"). When set, the
-    #                     menu reports "N of M customized" once values diverge.
-    #   is_customized   — async (guild_id) -> bool. For leaf nodes that have a
-    #                     baked-in default, returns True only when the user has
-    #                     diverged from that default. When provided, parent
-    #                     menus count customizations via this predicate rather
-    #                     than the "values is non-empty" fallback.
+    # file_upload only — optional sync (parsed) -> (ok, error_msg) validator run
+    # against an uploaded payload before it is persisted.
+    schema_validator: Optional[Callable] = None
+
+    # paginated_list only — a generic, scrollable list of items with an optional
+    # per-item action. The engine paginates: each page shows up to
+    # ``list_page_size`` items, so the per-item action Select never exceeds
+    # Discord's 25-option cap regardless of total list length.
+    list_get_items: Optional[Callable] = None          # async (guild_id) -> list[Any]; full list
+    list_format_line: Optional[Callable] = None        # sync (item, abs_index) -> str; display line
+    list_item_value: Optional[Callable] = None         # sync (item) -> str; stable id for the action select
+    list_item_option_label: Optional[Callable] = None  # sync (item, abs_index) -> str; <=100-char select label
+    list_page_size: int = 10                           # items per page (must be <= 25)
+    list_action_label: Optional[str] = None            # e.g. "Delete"; None => browse-only
+    list_action: Optional[Callable] = None             # async (guild_id, value) -> bool; act on chosen item
+    list_action_confirm_line: Optional[Callable] = None  # sync (item) -> str; confirm-step text
+    list_count: Optional[Callable] = None              # async (guild_id) -> int; efficient summary count
+
+    # grouped_paginated_select only — a single-value leaf chosen via a two-step
+    # picker: pick a group, then pick an item within it (the item step reuses the
+    # list_* formatter fields above + build_paginated_list_view). get_values /
+    # set_values keep the normal single-value leaf contract.
+    group_get_groups: Optional[Callable] = None        # sync () -> list[(group_value, group_label)]
+    group_get_items: Optional[Callable] = None         # sync (group_value) -> list[item]
+
+    # action only — a leaf that runs an arbitrary handler (no value contract).
+    on_run: Optional[Callable] = None                  # async (interaction, ctx) -> None
+    summary_builder: Optional[Callable] = None         # sync (node, ...) -> str; overview summary
+    mod_allowed: bool = False                           # whether mod-tier may run this action
+
+    # Dashboard summary overrides (consumed by some overview renderers).
     view_only: bool = False
-    default_summary: Optional[str] = None
+    default_summary: str = ""
     is_customized: Optional[Callable] = None
 
+    # Per-node view timeout override (seconds).
+    timeout_override: Optional[float] = None
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
+    # Async description override: async (guild) -> str, resolved at render time.
+    async_description: Optional[Callable] = None
+
+
+# -- Helpers -------------------------------------------------------------------
 
 DASHBOARD_FEATURE_SEPARATOR_VALUE = "__feature_sep__"
 
@@ -145,84 +200,164 @@ def _effective_label(node: "PanelNode", is_premium: bool) -> str:
     return node.label
 
 
-def _child_summary(kind: str, values: list, *, child: "PanelNode | None" = None) -> str:
+def _get_default_option_value(node: PanelNode) -> str | None:
+    """Get the default value from an option_select node by scanning for '(Default)' in labels."""
+    if not node.options:
+        return None
+    for opt in node.options:
+        if "(Default)" in opt[1]:
+            return str(opt[0])
+    return None
+
+
+def _option_label(node: PanelNode, value: str) -> str:
+    """Look up the human-readable label for an option value, stripping '(Default)' suffix."""
+    if not node.options:
+        return value
+    for opt in node.options:
+        if str(opt[0]) == value:
+            return opt[1].replace(" (Default)", "").replace(" (Premium)", "").replace("💎 ", "").strip()
+    return value
+
+
+def _child_summary(node: PanelNode, values: list, guild: discord.Guild | None = None) -> str:
     """Return a short human-readable summary of a child node's current value."""
+    kind = node.kind
     n = len(values)
     if kind == "role_select":
         return f"{n} role(s) assigned" if n else "Not assigned"
     if kind == "channel_select":
-        return "Channel configured" if n else "Not set"
+        is_category_only = (
+            node.channel_types is not None
+            and len(node.channel_types) == 1
+            and node.channel_types[0] == discord.ChannelType.category
+        )
+        noun = "category" if is_category_only else "channel"
+        if not n:
+            return "Not set"
+        if guild is None:
+            return f"{noun.capitalize()} configured"
+        names = []
+        for cid in values:
+            ch = guild.get_channel(int(cid))
+            if ch is None:
+                names.append(f"Unknown ({cid})")
+            elif is_category_only:
+                names.append(ch.name)
+            else:
+                names.append(f"#{ch.name}")
+        return ", ".join(names)
     if kind == "option_select":
         if not n:
             return "Not set"
-        return str(values[0]) if n == 1 else f"{n} selected"
+        default_val = _get_default_option_value(node)
+        if n == 1 and default_val is not None and str(values[0]) == default_val:
+            return "Default"
+        label = _option_label(node, str(values[0])) if n == 1 else f"{n} selected"
+        return label
     if kind == "modal_input":
         return str(values[0]) if values else "Not set"
-    if kind == "file_upload":
-        return "Custom JSON active" if values else "Default layout"
     if kind == "dual_modal_input":
         val1 = values[0] if len(values) > 0 else ""
         return str(val1) if val1 else "Not set"
     if kind == "menu":
-        if child is not None and child.view_only:
-            return "View only"
-        if child is not None and child.children:
-            total = len(child.children)
-            if child.default_summary:
-                return child.default_summary if n == 0 else f"{n} of {total} customized"
-            if n == 0:
-                return "Not configured"
-            return f"{n} of {total} configured"
-        # Stub (no children)
-        if child is not None and child.default_summary:
-            return "Customized" if n else child.default_summary
-        return "Configured" if n else "Not configured"
+        # Single-child menus pass a pre-formatted display string
+        if n == 1 and len(node.children) == 1:
+            return str(values[0])
+        if n:
+            # Sentinel for "all values stored but all match defaults"
+            if n == 1 and values[0] == "__defaults__":
+                return "Default settings"
+            return f"{n} setting(s) customized"
+        return "Not configured"
+    if kind == "paginated_list":
+        return f"{n} item(s)" if n else "Empty"
+    if kind == "grouped_paginated_select":
+        return str(values[0]) if values else "Not set"
+    if kind == "action":
+        return ""
     return f"{n} configured" if n else "Not set"
 
 
-# ── Generic view builders ─────────────────────────────────────────────────────
+# -- Generic view builders -----------------------------------------------------
 
 def build_menu_view(
     node: PanelNode,
     summary_map: dict[str, list],
     on_select: Callable[[discord.Interaction, str], Awaitable[None]],
     on_cancel: Callable[[discord.Interaction], Awaitable[None]],
-    is_premium: bool = False,
+    locked_keys: set[str] | None = None,
+    toggle_state: bool | None = None,
+    on_toggle: Callable[[discord.Interaction], Awaitable[None]] | None = None,
     back_label: str = "Done",
+    preamble_items: list[discord.ui.Item] | None = None,
+    extra_buttons: list[discord.ui.Button] | None = None,
+    description_override: str | None = None,
+    guild_id: int | None = None,
+    guild: discord.Guild | None = None,
+    is_premium: bool = False,
+    breadcrumb: str | None = None,
 ) -> discord.ui.LayoutView:
     """Build an overview menu view for a PanelNode with kind="menu".
 
     Args:
-        node:        The menu PanelNode to render.
-        summary_map: Pre-fetched {child_key: current_values_list} for all children.
-        on_select:   Async callback (interaction, child_key) — navigate into child.
-        on_cancel:   Async callback (interaction) — close / Done / Back.
-        is_premium:  Whether the active guild has premium (drives _effective_label).
-        back_label:  Label for the cancel button. "Done" closes; "Back" returns
-                     to the parent (caller decides via `on_cancel`).
+        node:            The menu PanelNode to render.
+        summary_map:     Pre-fetched {child_key: current_values_list} for all children.
+        on_select:       Async callback (interaction, child_key) -navigate into child.
+        on_cancel:       Async callback (interaction) -close / back.
+        locked_keys:     Set of child keys that should show a lock icon.
+        toggle_state:    Current enabled state for the feature toggle (None = no toggle).
+        on_toggle:       Async callback (interaction) -toggle enable/disable.
+        back_label:      Label for the back/close button (e.g. "Back", "Close Panel", "Done").
+        preamble_items:  Optional items inserted after header, before description.
+        extra_buttons:   Optional buttons appended to the final ActionRow.
+        breadcrumb:      Optional path string ("A > B > C") rendered under the header per §1.
     """
     builder = AdminLayoutBuilder()
+    _locked = locked_keys or set()
 
-    builder.add_header(f"## {_effective_label(node, is_premium)}")
+    # Header with optional toggle status
+    node_label = _effective_label(node, is_premium)
+    if toggle_state is not None:
+        status = "Enabled" if toggle_state else "Disabled"
+        header_text = f"## {node_label} -{status}"
+    else:
+        header_text = f"## {node_label}"
+    if breadcrumb:
+        header_text = f"{header_text}\nPath: {breadcrumb}"
+    builder.add_header(header_text)
 
-    # Read-only description / context block (#4d0eb3 accent)
-    desc_text = node.description
-    if node.description_builder is not None:
+    # Optional preamble (e.g. setup guide)
+    if preamble_items:
+        for item in preamble_items:
+            builder.add_item(item)
+
+    if description_override is not None:
+        desc_text = description_override
+    elif node.description_builder is not None and guild_id is not None:
         try:
-            desc_text = node.description_builder(None)
+            desc_text = node.description_builder(guild_id)
         except Exception:
-            pass
+            desc_text = node.description
+    else:
+        desc_text = node.description
+    # Read-only block: tier-fixed / derived / non-configurable context (description).
+    # This is the "what this setting does" + premium-tier breakdown.
     if desc_text:
         builder.add_item(readonly_container(discord.ui.TextDisplay(desc_text)))
 
-    # Editable block: per-child summaries + navigation select.
-    child_lines = [
-        f"- **{_effective_label(child, is_premium)}:** "
-        f"{_child_summary(child.kind, summary_map.get(key, []), child=child)}"
-        for key, child in node.children.items()
-    ]
+    # Editable block: admin-settable child summaries.
+    # Each line shows the current value of a configurable child the user can edit.
+    child_lines = []
+    for key, child in node.children.items():
+        prefix = "\U0001f512 " if key in _locked else ""
+        child_label = _effective_label(child, is_premium)
+        child_lines.append(
+            f"- **{prefix}{child_label}:** {_child_summary(child, summary_map.get(key, []), guild)}"
+        )
 
     if child_lines or node.children:
+        # Visual separator between read-only context and editable summaries.
         if desc_text:
             builder.add_separator()
 
@@ -233,14 +368,18 @@ def build_menu_view(
             editable_items.append(discord.ui.TextDisplay(
                 "Select a category below to configure it."
             ))
-            options = [
-                discord.SelectOption(
-                    label=_effective_label(child, is_premium),
+            options = []
+            for key, child in node.children.items():
+                child_label = _effective_label(child, is_premium)
+                options.append(discord.SelectOption(
+                    label=f"\U0001f512 {child_label}" if key in _locked else child_label,
                     value=key,
-                    description=_child_summary(child.kind, summary_map.get(key, []), child=child),
-                )
-                for key, child in node.children.items()
-            ]
+                    description=(
+                        "Locked - configure prerequisite first"
+                        if key in _locked
+                        else _child_summary(child, summary_map.get(key, []), guild)
+                    ),
+                ))
             select = discord.ui.Select(
                 placeholder="Select a category...",
                 custom_id=cid("editor", "select", node.key),
@@ -254,17 +393,33 @@ def build_menu_view(
             select_row = discord.ui.ActionRow()
             select_row.add_item(select)
             editable_items.append(select_row)
-
         builder.add_item(editable_container(*editable_items))
 
+    # Action row: optional toggle button + Done button
+    row = discord.ui.ActionRow()
+
+    if on_toggle is not None and toggle_state is not None:
+        toggle_btn = discord.ui.Button(
+            label="Disable" if toggle_state else "Enable",
+            style=discord.ButtonStyle.danger if toggle_state else discord.ButtonStyle.success,
+            custom_id=cid("editor", "toggle", node.key),
+        )
+        toggle_btn.callback = on_toggle
+        row.add_item(toggle_btn)
+
+    back_style = discord.ButtonStyle.danger if back_label == "Close Panel" else discord.ButtonStyle.secondary
     done_btn = discord.ui.Button(
         label=back_label,
-        style=discord.ButtonStyle.secondary,
-        custom_id=cid("editor", "back" if back_label == "Back" else "done", node.key),
+        style=back_style,
+        custom_id=cid("editor", "done", node.key),
     )
     done_btn.callback = on_cancel
-    row = discord.ui.ActionRow()
     row.add_item(done_btn)
+
+    if extra_buttons:
+        for btn in extra_buttons:
+            row.add_item(btn)
+
     builder.add_item(row)
 
     return builder.build()
@@ -290,11 +445,11 @@ def build_select_view(
     node_label = _effective_label(node, is_premium)
     builder.add_header(f"## {node_label}")
 
-    # Read-only description (#4d0eb3 accent)
+    # Read-only description block (#4d0eb3 accent)
     desc_text = node.description or f"Select values for **{node_label}**."
     builder.add_item(readonly_container(discord.ui.TextDisplay(desc_text)))
 
-    # Build current-value text + select component
+    # Current value display (editable block, no accent)
     if node.kind == "role_select":
         if current_values:
             mentions = [f"<@&{int(rid)}>" for rid in current_values]
@@ -303,11 +458,26 @@ def build_select_view(
             current_text = "*No roles currently assigned.*"
 
     elif node.kind == "channel_select":
+        is_category_only = (
+            node.channel_types is not None
+            and len(node.channel_types) == 1
+            and node.channel_types[0] == discord.ChannelType.category
+        )
+        noun = "category" if is_category_only else "channel"
         if current_values:
-            parts = [f"<#{int(cid_)}>" for cid_ in current_values]
-            current_text = f"**Current channel:** {', '.join(parts)}"
+            parts = []
+            for _cid in current_values:
+                ch = guild.get_channel(int(_cid))
+                if ch is None:
+                    parts.append(f"Unknown ({_cid})")
+                elif is_category_only:
+                    parts.append(ch.name)
+                else:
+                    parts.append(ch.mention)
+            label = f"Current {noun}" if len(parts) == 1 else f"Current {noun}s"
+            current_text = f"**{label}:** {', '.join(parts)}"
         else:
-            current_text = "*No channel currently set.*"
+            current_text = f"*No {noun} currently set.*"
 
     elif node.kind == "option_select":
         if current_values:
@@ -322,7 +492,7 @@ def build_select_view(
     # Build the select component
     if node.kind == "role_select":
         component = discord.ui.RoleSelect(
-            placeholder=f"Select roles for {node_label}...",
+            placeholder=f"Select roles for {node.label}...",
             custom_id=cid("editor", "select", node.key),
             min_values=node.min_values,
             max_values=node.max_values,
@@ -340,7 +510,7 @@ def build_select_view(
         if is_premium and node.premium_max_values is not None:
             effective_max = node.premium_max_values
         select_kwargs = dict(
-            placeholder=f"Select channel for {node_label}...",
+            placeholder=f"Select channel for {node.label}...",
             custom_id=cid("editor", "select", node.key),
             min_values=node.min_values,
             max_values=effective_max,
@@ -351,7 +521,7 @@ def build_select_view(
         component = discord.ui.ChannelSelect(**select_kwargs)
 
         async def _channel_cb(interaction: discord.Interaction):
-            channel_ids = [int(cid_) for cid_ in interaction.data.get("values", [])]
+            channel_ids = [int(cid) for cid in interaction.data.get("values", [])]
             await on_save(interaction, channel_ids)
 
         component.callback = _channel_cb
@@ -394,11 +564,11 @@ def build_select_view(
     select_row = discord.ui.ActionRow()
     select_row.add_item(component)
     builder.add_item(editable_container(
-        discord.ui.TextDisplay(current_text or f"**Edit {node_label}:**"),
+        discord.ui.TextDisplay(current_text or f"**Edit {node.label}:**"),
         select_row,
     ))
 
-    # Back + optional Clear row at root
+    # Back + optional Clear row
     back_style = discord.ButtonStyle.danger if back_label == "Close" else discord.ButtonStyle.secondary
     back_btn = discord.ui.Button(
         label=back_label,
@@ -424,7 +594,7 @@ def build_select_view(
     return builder.build()
 
 
-# ── Modal input support ───────────────────────────────────────────────────────
+# -- Modal input support -------------------------------------------------------
 
 class PanelInputModal(discord.ui.Modal):
     """Generic single-field modal used by build_modal_trigger_view."""
@@ -474,8 +644,10 @@ def build_modal_trigger_view(
 
     Shows the current value and a button that opens a modal for editing.
     on_save receives (button_interaction, modal_interaction, raw_value).
+
     When `attempted` is supplied (after a validation failure), the modal opens
-    pre-filled with that value instead of the current one.
+    pre-filled with that value instead of the current one so the user can
+    correct their input without retyping.
     """
     builder = AdminLayoutBuilder()
 
@@ -491,7 +663,7 @@ def build_modal_trigger_view(
     )
 
     set_btn = discord.ui.Button(
-        label=f"Set {node_label}",
+        label=f"Set {node.label}",
         style=discord.ButtonStyle.primary,
         custom_id=cid("editor", "set", node.key),
     )
@@ -506,9 +678,8 @@ def build_modal_trigger_view(
             modal_default = current_values[0]
         else:
             modal_default = ""
-
         modal = PanelInputModal(
-            title=node.modal_title or f"Set {node_label}",
+            title=node.modal_title or f"Set {node.label}",
             label=node.modal_label or "Value",
             placeholder=node.modal_placeholder or "",
             min_length=node.modal_min_length,
@@ -553,7 +724,7 @@ def build_modal_trigger_view(
     return builder.build()
 
 
-# ── Dual-field modal input support ───────────────────────────────────────────
+# -- Dual-field modal input support --------------------------------------------
 
 class _PanelDualInputModal(discord.ui.Modal):
     """Two-field modal used by build_dual_modal_trigger_view."""
@@ -605,6 +776,177 @@ class _PanelDualInputModal(discord.ui.Modal):
         )
 
 
+def _compact_category_summary(
+    cat_node: PanelNode,
+    cat_summaries: dict[str, str | dict[str, str]],
+    toggle: bool | None,
+) -> str:
+    """Build a one-line compact summary for a category."""
+    # Count configured leaf values
+    configured = 0
+    total = 0
+    for child_key, child_node in cat_node.children.items():
+        val = cat_summaries.get(child_key, "Not configured")
+        if isinstance(val, dict):
+            for sub_val in val.values():
+                total += 1
+                if sub_val not in ("Not configured", "Not set", "Not assigned"):
+                    configured += 1
+        else:
+            total += 1
+            if val not in ("Not configured", "Not set", "Not assigned"):
+                configured += 1
+
+    if configured == 0:
+        return "Not configured"
+    return f"{configured} of {total} configured"
+
+
+def build_overview_view(
+    root_node: PanelNode,
+    deep_summary: dict[str, dict[str, str | dict[str, str]]],
+    toggle_states: dict[str, bool | None],
+    locked_keys: set[str],
+    on_category_select: Callable[[discord.Interaction, str], Awaitable[None]],
+    preamble_items: list[discord.ui.Item] | None = None,
+    extra_buttons: list[discord.ui.Button] | None = None,
+    compact: bool = True,
+    title_override: str | None = None,
+    footer_text: str | None = None,
+    is_premium: bool = False,
+) -> discord.ui.LayoutView:
+    """Build the persistent overview view (Message 1) showing all settings.
+
+    Args:
+        root_node:          The MAIN_PANEL PanelNode.
+        deep_summary:       {cat_key: {child_key: summary_str | {sub_key: str}}}
+        toggle_states:      {cat_key: bool | None}
+        locked_keys:        Set of category keys that are locked.
+        on_category_select: Async callback (interaction, cat_key).
+        preamble_items:     Optional items inserted after header (e.g. setup guide).
+        extra_buttons:      Optional buttons appended to the action row.
+        compact:            If True, show one-line summaries per category (default).
+        title_override:     If set, replaces root_node.label as the header text.
+        footer_text:        If non-empty, rendered at the bottom of the view.
+    """
+    builder = AdminLayoutBuilder()
+    _locked = locked_keys or set()
+
+    header_text = title_override if title_override is not None else root_node.label
+    builder.add_header(f"## {header_text}")
+
+    # Read-only setup guide (preamble_items) \u2014 only shown when toggled on
+    if preamble_items:
+        builder.add_item(readonly_container(*preamble_items))
+
+    # Read-only config details \u2014 current state summary
+    detail_items: list[discord.ui.Item] = []
+    if compact:
+        lines = []
+        for cat_key, cat_node in root_node.children.items():
+            cat_summaries = deep_summary.get(cat_key, {})
+            lock_prefix = "\U0001f512 " if cat_key in _locked else ""
+            toggle = toggle_states.get(cat_key)
+
+            summary = _compact_category_summary(cat_node, cat_summaries, toggle)
+            cat_label = _effective_label(cat_node, is_premium)
+            if toggle is not None:
+                status = "Enabled" if toggle else "Disabled"
+                lines.append(f"**{lock_prefix}{cat_label}** - {status} ({summary})")
+            else:
+                lines.append(f"**{lock_prefix}{cat_label}** - {summary}")
+
+        detail_items.append(discord.ui.TextDisplay("\n".join(lines)))
+    else:
+        for cat_key, cat_node in root_node.children.items():
+            cat_summaries = deep_summary.get(cat_key, {})
+            lock_prefix = "\U0001f512 " if cat_key in _locked else ""
+
+            toggle = toggle_states.get(cat_key)
+            cat_label = _effective_label(cat_node, is_premium)
+            if toggle is not None:
+                status = "Enabled" if toggle else "Disabled"
+                header = f"**{lock_prefix}{cat_label}** - {status}"
+            else:
+                header = f"**{lock_prefix}{cat_label}**"
+
+            lines = [header]
+            for child_key, child_node in cat_node.children.items():
+                val = cat_summaries.get(child_key, "Not configured")
+                child_label_2 = _effective_label(child_node, is_premium)
+                if isinstance(val, dict):
+                    lines.append(f"  {child_label_2}:")
+                    for sub_key, sub_node in child_node.children.items():
+                        sub_val = val.get(sub_key, "Not configured")
+                        sub_label = _effective_label(sub_node, is_premium)
+                        lines.append(f"    \u2022 {sub_label}: {sub_val}")
+                else:
+                    lines.append(f"  \u2022 {child_label_2}: {val}")
+
+            detail_items.append(discord.ui.TextDisplay("\n".join(lines)))
+
+    if detail_items:
+        builder.add_item(readonly_container(*detail_items))
+
+    builder.add_text("Select a category below to configure it.")
+
+    # Category select dropdown — inject a disabled-style "── Feature
+    # Configurations ──" divider between main and feature groups per
+    # ADMIN_PANEL_STANDARD.md §1 / §7.
+    options: list[discord.SelectOption] = []
+    prev_group: str | None = None
+    for key, child in root_node.children.items():
+        group = getattr(child, "category_group", "main")
+        if group == "feature" and prev_group == "main":
+            options.append(discord.SelectOption(
+                label="── Feature Configurations ──",
+                value=DASHBOARD_FEATURE_SEPARATOR_VALUE,
+                description="(divider — not selectable)",
+            ))
+        child_label = _effective_label(child, is_premium)
+        options.append(discord.SelectOption(
+            label=f"\U0001f512 {child_label}" if key in _locked else child_label,
+            value=key,
+            description=child.description[:100] if child.description else None,
+        ))
+        prev_group = group
+    select = discord.ui.Select(
+        placeholder="Select a category...",
+        custom_id=cid("dash", "select"),
+        options=options,
+    )
+
+    async def _select_cb(interaction: discord.Interaction):
+        from .base import build_notice_layout
+        chosen = interaction.data["values"][0]
+        if chosen == DASHBOARD_FEATURE_SEPARATOR_VALUE:
+            await interaction.response.send_message(
+                view=build_notice_layout(
+                    "Pick a category",
+                    "That line is a divider — choose an actual category.",
+                ),
+                ephemeral=True,
+            )
+            return
+        await on_category_select(interaction, chosen)
+
+    select.callback = _select_cb
+    builder.add_select(select)
+
+    # Action row for extra buttons (e.g. setup guide toggle)
+    if extra_buttons:
+        row = discord.ui.ActionRow()
+        for btn in extra_buttons:
+            row.add_item(btn)
+        builder.add_item(row)
+
+    if footer_text:
+        builder.add_separator()
+        builder.add_text(footer_text)
+
+    return builder.build()
+
+
 def build_dual_modal_trigger_view(
     node: PanelNode,
     current_values: list,
@@ -614,16 +956,20 @@ def build_dual_modal_trigger_view(
     back_label: str = "Back",
     is_premium: bool = False,
 ) -> discord.ui.LayoutView:
-    """Build a trigger view for a PanelNode with kind="dual_modal_input"."""
+    """Build a trigger view for a PanelNode with kind="dual_modal_input".
+
+    Shows both current values and a button that opens a two-field modal.
+    on_save receives (button_interaction, modal_interaction, val1, val2).
+    current_values is expected to be a 2-element list [field_1, field_2].
+    """
     builder = AdminLayoutBuilder()
 
-    node_label = _effective_label(node, is_premium)
-    builder.add_header(f"## {node_label}")
+    builder.add_header(f"## {_effective_label(node, is_premium)}")
 
     val1 = current_values[0] if len(current_values) > 0 else ""
     val2 = current_values[1] if len(current_values) > 1 else ""
 
-    desc_text = node.description or f"Set values for **{node_label}**."
+    desc_text = node.description or f"Set values for **{node.label}**."
     builder.add_item(readonly_container(discord.ui.TextDisplay(desc_text)))
 
     if val1 or val2:
@@ -647,7 +993,7 @@ def build_dual_modal_trigger_view(
             await on_save(bi, mi, raw1, raw2)
 
         modal = _PanelDualInputModal(
-            title=node.modal_title or f"Set {node_label}",
+            title=node.modal_title or f"Set {node.label}",
             label=node.modal_label or "Field 1",
             placeholder=node.modal_placeholder or "",
             min_length=node.modal_min_length,
@@ -685,282 +1031,7 @@ def build_dual_modal_trigger_view(
     return builder.build()
 
 
-# ── File upload modal + status view ──────────────────────────────────────────
-
-class PanelFileUploadModal(discord.ui.Modal):
-    """Modal with a single file upload field for panel file_upload nodes."""
-
-    def __init__(self, *, title: str, node_key: str, on_submit_callback: Callable):
-        super().__init__(title=title)
-        self._callback = on_submit_callback
-        self.upload_label = discord.ui.Label(
-            text="JSON File",
-            component=discord.ui.FileUpload(
-                custom_id=cid("modal", "upload", node_key),
-                min_values=1,
-                max_values=1,
-            ),
-        )
-        self.add_item(self.upload_label)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        await self._callback(interaction, self.upload_label.component.values[0])
-
-
-def build_file_upload_status_view(
-    node: PanelNode,
-    current_values: list,
-    guild: discord.Guild,
-    on_back: Callable[[discord.Interaction], Awaitable[None]],
-    on_clear: Optional[Callable[[discord.Interaction], Awaitable[None]]] = None,
-    back_label: str = "Back",
-    on_upload: Optional[Callable] = None,
-    is_premium: bool = False,
-) -> discord.ui.LayoutView:
-    """Build a status view for a PanelNode with kind="file_upload"."""
-    builder = AdminLayoutBuilder()
-
-    node_label = _effective_label(node, is_premium)
-    builder.add_header(f"## {node_label}")
-
-    if node.description:
-        builder.add_item(readonly_container(discord.ui.TextDisplay(node.description)))
-
-    if current_values:
-        current_text = "**Custom JSON:** ✅ Active"
-    else:
-        current_text = "**Custom JSON:** ⬜ Not set — using default layout"
-
-    btn_row = discord.ui.ActionRow()
-
-    if on_upload is not None:
-        upload_btn = discord.ui.Button(
-            label="Upload JSON",
-            style=discord.ButtonStyle.primary,
-            custom_id=cid("editor", "upload", node.key),
-        )
-
-        async def upload_btn_cb(bi: discord.Interaction):
-            async def _on_submit(mi, attachment):
-                await on_upload(bi, mi, attachment)
-
-            modal = PanelFileUploadModal(
-                title=f"Upload {node_label}",
-                node_key=node.key,
-                on_submit_callback=_on_submit,
-            )
-            await bi.response.send_modal(modal)
-
-        upload_btn.callback = upload_btn_cb
-        btn_row.add_item(upload_btn)
-
-    if node.template_data is not None:
-        import io
-        template_btn = discord.ui.Button(
-            label="Download Template",
-            style=discord.ButtonStyle.secondary,
-            custom_id=cid("editor", "template", node.key),
-        )
-
-        async def template_btn_cb(ti: discord.Interaction):
-            template_bytes, filename = node.template_data()
-            await ti.response.send_message(
-                file=discord.File(io.BytesIO(template_bytes), filename=filename),
-                ephemeral=True,
-            )
-
-        template_btn.callback = template_btn_cb
-        btn_row.add_item(template_btn)
-
-    if on_clear is not None:
-        clear_btn = discord.ui.Button(
-            label="Clear",
-            style=discord.ButtonStyle.danger,
-            custom_id=cid("editor", "clear", node.key),
-            disabled=(len(current_values) == 0),
-        )
-        clear_btn.callback = on_clear
-        btn_row.add_item(clear_btn)
-
-    # Editable block: current payload + upload/template/clear buttons.
-    builder.add_item(editable_container(
-        discord.ui.TextDisplay(current_text),
-        btn_row,
-    ))
-
-    back_style = discord.ButtonStyle.danger if back_label == "Close" else discord.ButtonStyle.secondary
-    back_btn = discord.ui.Button(
-        label=back_label,
-        style=back_style,
-        custom_id=cid("editor", "back", node.key),
-    )
-    back_btn.callback = on_back
-    back_row = discord.ui.ActionRow()
-    back_row.add_item(back_btn)
-    builder.add_item(back_row)
-
-    return builder.build()
-
-
-# ── Overview (Dashboard / Message 1) ─────────────────────────────────────────
-
-_UNCONFIGURED_STRINGS = {"Not configured", "Not set", "Not assigned", "Default", "View only"}
-
-
-def _compact_category_summary(
-    cat_node: PanelNode,
-    cat_summaries: dict[str, str | dict[str, str]],
-    toggle: bool | None,
-) -> str:
-    """One-line compact summary of how many child values are configured."""
-    configured = 0
-    total = 0
-    for child_key, child_node in cat_node.children.items():
-        if getattr(child_node, "view_only", False):
-            continue
-        val = cat_summaries.get(child_key, "Not configured")
-        if isinstance(val, dict):
-            for sub_key, sub_val in val.items():
-                sub_node = child_node.children.get(sub_key) if child_node.children else None
-                if sub_node is not None and getattr(sub_node, "view_only", False):
-                    continue
-                total += 1
-                if sub_val not in _UNCONFIGURED_STRINGS:
-                    configured += 1
-        else:
-            total += 1
-            if val not in _UNCONFIGURED_STRINGS:
-                configured += 1
-    if total == 0:
-        return ""
-    if configured == 0:
-        return "Not configured"
-    return f"{configured} of {total} configured"
-
-
-def build_overview_view(
-    root_node: PanelNode,
-    deep_summary: dict[str, dict[str, str | dict[str, str]]],
-    toggle_states: dict[str, bool | None],
-    locked_keys: set[str],
-    on_category_select: Callable[[discord.Interaction, str], Awaitable[None]],
-    preamble_items: list[discord.ui.Item] | None = None,
-    extra_buttons: list[discord.ui.Button] | None = None,
-    compact: bool = True,
-    title_override: str | None = None,
-    footer_text: str | None = None,
-    is_premium: bool = False,
-) -> discord.ui.LayoutView:
-    """Build the persistent overview view (Message 1) per ADMIN_PANEL_STANDARD.md §1."""
-    from .base import build_notice_layout
-
-    builder = AdminLayoutBuilder()
-    _locked = locked_keys or set()
-
-    header_text = title_override if title_override is not None else root_node.label
-    builder.add_header(f"## {header_text}")
-
-    if preamble_items:
-        builder.add_item(readonly_container(*preamble_items))
-
-    detail_items: list[discord.ui.Item] = []
-    if compact:
-        lines = []
-        for cat_key, cat_node in root_node.children.items():
-            cat_summaries = deep_summary.get(cat_key, {})
-            lock_prefix = "\U0001f512 " if cat_key in _locked else ""
-            toggle = toggle_states.get(cat_key)
-            summary = _compact_category_summary(cat_node, cat_summaries, toggle)
-            cat_label = _effective_label(cat_node, is_premium)
-            if toggle is not None:
-                status = "Enabled" if toggle else "Disabled"
-                lines.append(f"**{lock_prefix}{cat_label}** - {status} ({summary})")
-            else:
-                lines.append(f"**{lock_prefix}{cat_label}** - {summary}")
-        detail_items.append(discord.ui.TextDisplay("\n".join(lines)))
-    else:
-        for cat_key, cat_node in root_node.children.items():
-            cat_summaries = deep_summary.get(cat_key, {})
-            lock_prefix = "\U0001f512 " if cat_key in _locked else ""
-            toggle = toggle_states.get(cat_key)
-            cat_label = _effective_label(cat_node, is_premium)
-            if toggle is not None:
-                status = "Enabled" if toggle else "Disabled"
-                header = f"**{lock_prefix}{cat_label}** - {status}"
-            else:
-                header = f"**{lock_prefix}{cat_label}**"
-            cat_lines = [header]
-            for child_key, child_node in cat_node.children.items():
-                val = cat_summaries.get(child_key, "Not configured")
-                child_label = _effective_label(child_node, is_premium)
-                if isinstance(val, dict):
-                    cat_lines.append(f"  {child_label}:")
-                    for sub_key, sub_node in child_node.children.items():
-                        sub_val = val.get(sub_key, "Not configured")
-                        sub_label = _effective_label(sub_node, is_premium)
-                        cat_lines.append(f"    • {sub_label}: {sub_val}")
-                else:
-                    cat_lines.append(f"  • {child_label}: {val}")
-            detail_items.append(discord.ui.TextDisplay("\n".join(cat_lines)))
-
-    if detail_items:
-        builder.add_item(readonly_container(*detail_items))
-
-    builder.add_text("Select a category below to configure it.")
-
-    options: list[discord.SelectOption] = []
-    prev_group: str | None = None
-    for key, child in root_node.children.items():
-        group = getattr(child, "category_group", "main")
-        if group == "feature" and prev_group == "main":
-            options.append(discord.SelectOption(
-                label="── Feature Configurations ──",
-                value=DASHBOARD_FEATURE_SEPARATOR_VALUE,
-                description="(divider — not selectable)",
-            ))
-        child_label = _effective_label(child, is_premium)
-        options.append(discord.SelectOption(
-            label=f"\U0001f512 {child_label}" if key in _locked else child_label,
-            value=key,
-            description=child.description[:100] if child.description else None,
-        ))
-        prev_group = group
-    select = discord.ui.Select(
-        placeholder="Select a category...",
-        custom_id=cid("dash", "select"),
-        options=options,
-    )
-
-    async def _select_cb(interaction: discord.Interaction):
-        chosen = interaction.data["values"][0]
-        if chosen == DASHBOARD_FEATURE_SEPARATOR_VALUE:
-            await interaction.response.send_message(
-                view=build_notice_layout(
-                    "Pick a category",
-                    "That line is a divider — choose an actual category.",
-                ),
-                ephemeral=True,
-            )
-            return
-        await on_category_select(interaction, chosen)
-
-    select.callback = _select_cb
-    builder.add_select(select)
-
-    if extra_buttons:
-        row = discord.ui.ActionRow()
-        for btn in extra_buttons:
-            row.add_item(btn)
-        builder.add_item(row)
-
-    if footer_text:
-        builder.add_separator()
-        builder.add_text(footer_text)
-
-    return builder.build()
-
-
-# ── Dict Editor (scaffolded for cross-bot parity) ────────────────────────────
+# -- Dict Editor --------------------------------------------------------------
 
 def build_dict_editor_view(
     node: PanelNode,
@@ -973,7 +1044,21 @@ def build_dict_editor_view(
     back_label: str = "Back",
     is_premium: bool = False,
 ) -> discord.ui.LayoutView:
-    """Build a view for a PanelNode with kind="dict_editor"."""
+    """Build a view for a PanelNode with kind="dict_editor".
+
+    Renders the current key->value map as bullet lines and exposes Add /
+    Edit / Remove / Back controls. Edit and Remove use a select dropdown of
+    existing keys; the orchestrator opens a dual-modal for Add/Edit submission.
+
+    Args:
+        node:           The dict_editor PanelNode.
+        current_values: Current {key: value} mapping persisted in storage.
+        on_add:         Async (interaction) - open add modal.
+        on_edit:        Async (interaction, target_key) - open edit modal pre-filled.
+        on_remove:      Async (interaction, target_key) - delete entry.
+        on_back:        Async (interaction) - leave editor.
+        back_label:     "Back" or "Close" depending on parent context.
+    """
     builder = AdminLayoutBuilder()
 
     builder.add_header(f"## {_effective_label(node, is_premium)}")
@@ -989,6 +1074,7 @@ def build_dict_editor_view(
     else:
         current_text = "*No entries configured.*"
 
+    # Add button
     add_disabled = (
         node.dict_max_entries is not None
         and len(current_values) >= node.dict_max_entries
@@ -1002,19 +1088,20 @@ def build_dict_editor_view(
     add_btn.callback = on_add
 
     editor_items: list[discord.ui.Item] = [discord.ui.TextDisplay(current_text)]
+
     add_row = discord.ui.ActionRow()
     add_row.add_item(add_btn)
     editor_items.append(add_row)
 
     if current_values:
-        entry_options = [
+        edit_options = [
             discord.SelectOption(label=str(k)[:100], value=str(k))
             for k in list(current_values.keys())[:25]
         ]
         edit_select = discord.ui.Select(
             placeholder="Edit entry...",
             custom_id=cid("editor", "dict_edit", node.key),
-            options=entry_options,
+            options=edit_options,
             min_values=1,
             max_values=1,
         )
@@ -1024,10 +1111,14 @@ def build_dict_editor_view(
 
         edit_select.callback = _edit_cb
 
+        remove_options = [
+            discord.SelectOption(label=str(k)[:100], value=str(k))
+            for k in list(current_values.keys())[:25]
+        ]
         remove_select = discord.ui.Select(
             placeholder="Remove entry...",
             custom_id=cid("editor", "dict_remove", node.key),
-            options=entry_options,
+            options=remove_options,
             min_values=1,
             max_values=1,
         )
@@ -1055,5 +1146,351 @@ def build_dict_editor_view(
     )
     back_btn.callback = on_back
     builder.add_action_row(back_btn)
+
+    return builder.build()
+
+
+# -- File Upload --------------------------------------------------------------
+
+class PanelFileUploadModal(discord.ui.Modal):
+    """Modal with a single file upload field for panel file_upload nodes."""
+
+    upload_label = discord.ui.Label(
+        text="File",
+        component=discord.ui.FileUpload(
+            custom_id=cid("modal", "upload"),
+            min_values=1,
+            max_values=1,
+        ),
+    )
+
+    def __init__(self, *, title: str, on_submit_callback: Callable):
+        super().__init__(title=title)
+        self._callback = on_submit_callback
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await self._callback(interaction, self.upload_label.component.values[0])
+
+
+def build_file_upload_view(
+    node: PanelNode,
+    current_values: list,
+    guild: discord.Guild,
+    on_back: Callable[[discord.Interaction], Awaitable[None]],
+    on_clear: Optional[Callable[[discord.Interaction], Awaitable[None]]] = None,
+    back_label: str = "Back",
+    on_upload: Optional[Callable] = None,
+    is_premium: bool = False,
+) -> discord.ui.LayoutView:
+    """Build a status view for a PanelNode with kind="file_upload".
+
+    Shows whether a custom payload is active and provides Upload / Download
+    Template (if `node.template_data`) / Clear / Back buttons.
+
+    Args:
+        node:           The file_upload PanelNode.
+        current_values: List with one element (raw payload) if active, else empty.
+        guild:          The Discord guild.
+        on_back:        Async callback (interaction) to navigate back.
+        on_clear:       Optional async callback to clear stored payload.
+        back_label:     Label for the back button ("Back" or "Close").
+        on_upload:      Optional async (button_interaction, modal_interaction, attachment).
+    """
+    builder = AdminLayoutBuilder()
+
+    builder.add_header(f"## {_effective_label(node, is_premium)}")
+
+    if node.description:
+        builder.add_item(readonly_container(discord.ui.TextDisplay(node.description)))
+
+    if current_values:
+        current_text = "**Custom payload:** Active"
+    else:
+        current_text = "**Custom payload:** Not set - using default"
+
+    btn_row = discord.ui.ActionRow()
+
+    if on_upload is not None:
+        upload_btn = discord.ui.Button(
+            label=f"Upload {node.label}",
+            style=discord.ButtonStyle.primary,
+            custom_id=cid("editor", "upload", node.key),
+        )
+
+        async def upload_btn_cb(bi: discord.Interaction):
+            async def _on_submit(mi, attachment):
+                await on_upload(bi, mi, attachment)
+
+            modal = PanelFileUploadModal(
+                title=f"Upload {node.label}"[:45],
+                on_submit_callback=_on_submit,
+            )
+            await bi.response.send_modal(modal)
+
+        upload_btn.callback = upload_btn_cb
+        btn_row.add_item(upload_btn)
+
+    if node.template_data is not None:
+        import io
+
+        template_btn = discord.ui.Button(
+            label="Download Template",
+            style=discord.ButtonStyle.secondary,
+            custom_id=cid("editor", "template", node.key),
+        )
+
+        async def template_btn_cb(ti: discord.Interaction):
+            template_bytes, filename = node.template_data()
+            await ti.response.send_message(
+                file=discord.File(io.BytesIO(template_bytes), filename=filename),
+                ephemeral=True,
+            )
+
+        template_btn.callback = template_btn_cb
+        btn_row.add_item(template_btn)
+
+    if on_clear is not None:
+        clear_btn = discord.ui.Button(
+            label="Clear",
+            style=discord.ButtonStyle.danger,
+            custom_id=cid("editor", "clear", node.key),
+            disabled=(len(current_values) == 0),
+        )
+        clear_btn.callback = on_clear
+        btn_row.add_item(clear_btn)
+
+    # Editable block: current payload status + upload/template/clear buttons
+    builder.add_item(editable_container(
+        discord.ui.TextDisplay(current_text),
+        btn_row,
+    ))
+
+    back_style = discord.ButtonStyle.danger if back_label == "Close" else discord.ButtonStyle.secondary
+    back_btn = discord.ui.Button(
+        label=back_label,
+        style=back_style,
+        custom_id=cid("editor", "back", node.key),
+    )
+    back_btn.callback = on_back
+    back_row = discord.ui.ActionRow()
+    back_row.add_item(back_btn)
+    builder.add_item(back_row)
+
+    return builder.build()
+
+
+# -- Paginated list -----------------------------------------------------------
+
+def build_paginated_list_view(
+    node: PanelNode,
+    page_items: list,
+    page: int,
+    total: int,
+    guild: discord.Guild,
+    on_prev: Callable[[discord.Interaction], Awaitable[None]],
+    on_next: Callable[[discord.Interaction], Awaitable[None]],
+    on_pick: Callable[[discord.Interaction, str], Awaitable[None]],
+    on_back: Callable[[discord.Interaction], Awaitable[None]],
+    back_label: str = "Back",
+    is_premium: bool = False,
+) -> discord.ui.LayoutView:
+    """Build a paginated list view for a PanelNode with kind="paginated_list".
+
+    ``page_items`` is the already-sliced window for the current ``page`` (0-based);
+    ``total`` is the full item count. When ``node.list_action_label`` is set and the
+    page is non-empty, a per-item Select (bounded to the page, so never > 25 options)
+    dispatches the chosen item's value to ``on_pick``.
+    """
+    builder = AdminLayoutBuilder()
+
+    node_label = _effective_label(node, is_premium)
+    builder.add_header(f"## {node_label}")
+
+    if node.description:
+        builder.add_item(readonly_container(discord.ui.TextDisplay(node.description)))
+
+    page_size = max(1, node.list_page_size)
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    start = page * page_size
+
+    if total == 0:
+        body_text = "*The list is empty.*"
+    else:
+        lines = [
+            node.list_format_line(item, start + offset)
+            for offset, item in enumerate(page_items)
+        ]
+        end = start + len(page_items)
+        lines.append(f"\n*Showing {start + 1}–{end} of {total}* (page {page + 1}/{total_pages})")
+        body_text = "\n".join(lines)
+
+    editable_items: list[discord.ui.Item] = [discord.ui.TextDisplay(body_text)]
+
+    # Per-item action select (bounded to the current page -> never exceeds 25).
+    if node.list_action_label and page_items:
+        options = [
+            discord.SelectOption(
+                label=node.list_item_option_label(item, start + offset)[:100],
+                value=str(node.list_item_value(item)),
+            )
+            for offset, item in enumerate(page_items)
+        ]
+        action_select = discord.ui.Select(
+            placeholder=f"{node.list_action_label}…",
+            custom_id=cid("editor", "list_action", node.key),
+            options=options,
+            min_values=1,
+            max_values=1,
+        )
+
+        async def _action_cb(interaction: discord.Interaction):
+            await on_pick(interaction, interaction.data["values"][0])
+
+        action_select.callback = _action_cb
+        action_row = discord.ui.ActionRow()
+        action_row.add_item(action_select)
+        editable_items.append(action_row)
+
+    builder.add_item(editable_container(*editable_items))
+
+    # Navigation + back row.
+    nav_row = discord.ui.ActionRow()
+
+    prev_btn = discord.ui.Button(
+        label="◀ Prev",
+        style=discord.ButtonStyle.secondary,
+        custom_id=cid("editor", "list_prev", node.key),
+        disabled=(page <= 0),
+    )
+    prev_btn.callback = on_prev
+    nav_row.add_item(prev_btn)
+
+    next_btn = discord.ui.Button(
+        label="Next ▶",
+        style=discord.ButtonStyle.secondary,
+        custom_id=cid("editor", "list_next", node.key),
+        disabled=(page >= total_pages - 1),
+    )
+    next_btn.callback = on_next
+    nav_row.add_item(next_btn)
+
+    back_style = discord.ButtonStyle.danger if back_label == "Close" else discord.ButtonStyle.secondary
+    back_btn = discord.ui.Button(
+        label=back_label,
+        style=back_style,
+        custom_id=cid("editor", "back", node.key),
+    )
+    back_btn.callback = on_back
+    nav_row.add_item(back_btn)
+
+    builder.add_item(nav_row)
+
+    return builder.build()
+
+
+def build_confirm_view(
+    title: str,
+    body: str,
+    on_confirm: Callable[[discord.Interaction], Awaitable[None]],
+    on_cancel: Callable[[discord.Interaction], Awaitable[None]],
+    *,
+    confirm_label: str = "Confirm",
+    cancel_label: str = "Cancel",
+    confirm_style: discord.ButtonStyle = discord.ButtonStyle.danger,
+    key: str = "confirm",
+) -> discord.ui.LayoutView:
+    """Build a generic Confirm/Cancel prompt (orange notice accent).
+
+    Used by destructive panel flows (e.g. paginated_list item actions) to require
+    an explicit confirmation before acting.
+    """
+    builder = AdminLayoutBuilder()
+    builder.add_header(f"## {title}")
+    builder.add_item(notice_container(discord.ui.TextDisplay(body)))
+
+    confirm_btn = discord.ui.Button(
+        label=confirm_label,
+        style=confirm_style,
+        custom_id=cid("confirm", "save", key),
+    )
+    confirm_btn.callback = on_confirm
+    cancel_btn = discord.ui.Button(
+        label=cancel_label,
+        style=discord.ButtonStyle.secondary,
+        custom_id=cid("confirm", "cancel", key),
+    )
+    cancel_btn.callback = on_cancel
+    row = discord.ui.ActionRow()
+    row.add_item(confirm_btn)
+    row.add_item(cancel_btn)
+    builder.add_item(row)
+
+    return builder.build()
+
+
+# -- Grouped paginated select -------------------------------------------------
+
+def build_grouped_region_view(
+    node: PanelNode,
+    regions: list[tuple[str, str]],
+    current_label: str,
+    on_pick_region: Callable[[discord.Interaction, str], Awaitable[None]],
+    on_back: Callable[[discord.Interaction], Awaitable[None]],
+    back_label: str = "Back",
+    is_premium: bool = False,
+) -> discord.ui.LayoutView:
+    """Build the group-picker step for a PanelNode with kind="grouped_paginated_select".
+
+    ``regions`` is a list of ``(value, label)``; picking one dispatches the value
+    to ``on_pick_region`` (which then renders the paginated item step via
+    ``build_paginated_list_view``). ``current_label`` is a human string for the
+    currently-saved value (shown for context), or "" when nothing is set.
+    """
+    builder = AdminLayoutBuilder()
+
+    node_label = _effective_label(node, is_premium)
+    builder.add_header(f"## {node_label}")
+
+    desc_text = node.description or f"Select a value for **{node_label}**."
+    builder.add_item(readonly_container(discord.ui.TextDisplay(desc_text)))
+
+    current_text = (
+        f"**Current:** {current_label}" if current_label
+        else "*Nothing currently set.*"
+    )
+
+    options = [
+        discord.SelectOption(label=label[:100], value=value)
+        for value, label in regions[:25]
+    ]
+    component = discord.ui.Select(
+        placeholder="Select a region...",
+        custom_id=cid("editor", "group_select", node.key),
+        min_values=1,
+        max_values=1,
+        options=options,
+    )
+
+    async def _region_cb(interaction: discord.Interaction):
+        await on_pick_region(interaction, interaction.data["values"][0])
+
+    component.callback = _region_cb
+    select_row = discord.ui.ActionRow()
+    select_row.add_item(component)
+    builder.add_item(editable_container(
+        discord.ui.TextDisplay(current_text),
+        select_row,
+    ))
+
+    back_style = discord.ButtonStyle.danger if back_label == "Close" else discord.ButtonStyle.secondary
+    back_btn = discord.ui.Button(
+        label=back_label,
+        style=back_style,
+        custom_id=cid("editor", "back", node.key),
+    )
+    back_btn.callback = on_back
+    back_row = discord.ui.ActionRow()
+    back_row.add_item(back_btn)
+    builder.add_item(back_row)
 
     return builder.build()
