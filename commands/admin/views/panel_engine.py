@@ -80,6 +80,11 @@ class PanelNode:
     clear_values: Optional[Callable] = None  # async (guild_id) -> bool
     pre_check: Optional[Callable] = None       # async (interaction, guild_id) -> LayoutView|None
     post_save_hook: Optional[Callable] = None  # async (interaction, guild_id, saved_values) -> None
+    # role/channel/option_select only — optional async (guild, values) -> error_str | None,
+    # run on save (after permission checks, before set_values). Return an error string to
+    # reject the selection with a notice; None to allow. For validating a selection against
+    # live guild state (e.g. "this channel must sit inside the configured category").
+    value_validator: Optional[Callable] = None
 
     # channel_select only
     channel_types: Optional[list] = None   # list[discord.ChannelType] to filter
@@ -174,7 +179,10 @@ class PanelNode:
     # action only — a leaf that runs an arbitrary handler (no value contract).
     on_run: Optional[Callable] = None                  # async (interaction, ctx) -> None
     summary_builder: Optional[Callable] = None         # sync (node, ...) -> str; overview summary
-    mod_allowed: bool = False                           # whether mod-tier may run this action
+    # Tri-state mod access: True/False are explicit; None inherits from the nearest
+    # ancestor (root default: admin-only). A menu's True cascades to its children; a
+    # child's False overrides. Resolved by auth.effective_mod_allowed.
+    mod_allowed: Optional[bool] = None
 
     # Dashboard summary overrides (consumed by some overview renderers).
     view_only: bool = False
@@ -186,6 +194,32 @@ class PanelNode:
 
     # Async description override: async (guild) -> str, resolved at render time.
     async_description: Optional[Callable] = None
+
+
+@dataclass
+class ActionContext:
+    """Context handed to an ``action``-kind node's handler.
+
+    The engine dispatches ``kind="action"`` nodes to ``node.on_run(cog, interaction,
+    guild, ctx)``. ``ctx`` carries everything a bot-specific handler needs to render
+    into the shared Message-2 surface and chain back-navigation, without the engine
+    knowing the handler's internals:
+
+        session:          the active PanelSession (synced timeout / msg2 tracking)
+        parent_node:      the menu this action was opened from (for Back), or None
+        grandparent_node: the parent's parent (for multi-level Back chains)
+        edit:             True to replace the current msg2; False to open a fresh one
+        refresh_parent:   async () -> None; refresh the overview (msg1) after a change
+        is_premium:       whether the guild has premium (already resolved)
+        back_label:       "Back" / "Close" per the §1 navigation table
+    """
+    session: Optional[object] = None
+    parent_node: Optional["PanelNode"] = None
+    grandparent_node: Optional["PanelNode"] = None
+    edit: bool = False
+    refresh_parent: Optional[Callable] = None
+    is_premium: bool = False
+    back_label: str = "Back"
 
 
 # -- Helpers -------------------------------------------------------------------
@@ -225,7 +259,15 @@ def _child_summary(node: PanelNode, values: list, guild: discord.Guild | None = 
     kind = node.kind
     n = len(values)
     if kind == "role_select":
-        return f"{n} role(s) assigned" if n else "Not assigned"
+        if not n:
+            return "Not assigned"
+        if guild is None:
+            return f"{n} role(s) assigned"
+        names = []
+        for rid in values:
+            role = guild.get_role(int(rid))
+            names.append(f"@{role.name}" if role is not None else f"Unknown ({rid})")
+        return ", ".join(names)
     if kind == "channel_select":
         is_category_only = (
             node.channel_types is not None

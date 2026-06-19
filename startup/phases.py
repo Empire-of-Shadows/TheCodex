@@ -1,14 +1,14 @@
 """
 Startup orchestration helpers (shared sibling-pattern across EoS bots).
 
-Provides the unified startup-phase logging used by every Empire of Shadows bot so
+Provides the unified startup-phase timing used by every Empire of Shadows bot so
 their boot logs read identically:
     - `startup_phase(name)`  → "🔄 Starting phase: …" / "✅ Completed phase: … in …s"
     - `log_startup_summary()` → "📈 Startup Performance Summary:" + table
-    - `log_all_commands(bot)` → "📝 Registered Prefix Commands …" / "⚡ Registered Slash Commands …"
 
-This module is intentionally dependency-light (stdlib `logging` + `tabulate`) so the
-exact same file can be dropped into each bot regardless of its logger API.
+Command logging lives in `startup/sync.py` (`log_all_commands`). This module is
+intentionally dependency-light (stdlib `logging` + `tabulate`) so the exact same file
+can be dropped into each bot regardless of its logger API.
 """
 
 import logging
@@ -22,7 +22,6 @@ __all__ = [
     "startup_metrics",
     "startup_phase",
     "log_startup_summary",
-    "log_all_commands",
 ]
 
 logger = logging.getLogger(__name__)

@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional
 from collections import defaultdict
 import aiohttp
 import discord
-from utils.bot import bot, TOKEN, s
+from startup.bot import bot, TOKEN, s
 from storage.cache import GuildCacheManager
 from storage.config_manager import get_config, GuildConfig
 from storage.database_manager import db_manager

@@ -30,7 +30,7 @@ TIMEZONE_NAME = "America/Chicago"
 SIMILARITY_THRESHOLD = 80
 
 # Logging indent helper
-s = " " * 10
+s = " " * 5
 
 # Expose the handler if needed in codex.py
 __all__ = [

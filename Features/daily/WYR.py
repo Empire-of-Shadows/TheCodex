@@ -9,7 +9,7 @@ from discord.ext import commands, tasks
 from discord import app_commands
 from dotenv import load_dotenv
 
-from utils.bot import s
+from startup.bot import s
 from utils.logger import get_logger, PerformanceLogger
 from storage.database_manager import db_manager
 from storage.config_manager import get_config, get_guild_config_manager

@@ -19,24 +19,34 @@ Message pattern:
 """
 
 import time
+import logging
 from collections.abc import Awaitable, Callable
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 
-from storage.audit_log import get_audit_logger
-from storage.config_manager import get_config_manager
-from storage.setup_gatekeeper import setup_gatekeeper
-from commands.premium.premium_manager import get_premium_manager_sync
-from utilities.logger_setup import get_logger
-
-from .panel_branding import OVERVIEW_FOOTER, SETUP_GUIDE_TEXT
+# All bot-specific backends (config, audit, premium, cache invalidation, panel-role
+# resolution, branding text, mod-tier set) are reached through this per-bot seam, so
+# this engine file stays byte-identical across every bot. Each bot ships its own
+# admin/bindings.py wiring these to its real backend.
+from .bindings import (
+    MOD_ALLOWED_CATEGORIES,
+    OVERVIEW_FOOTER,
+    SETUP_GUIDE_TEXT,
+    audit_log_entry,
+    get_setting,
+    set_setting,
+    invalidate_caches,
+    is_premium,
+    resolve_panel_role,
+)
 from .permission_checks import check_channel_permissions, check_role_permissions
-from .role_auth import MOD_ALLOWED_CATEGORIES, get_panel_role
-from .panel_configs import MAIN_PANEL, _assert_channel_in_category
+from .auth import effective_mod_allowed
+from .panel_configs import MAIN_PANEL
 from .views.panel_engine import (
     PanelNode,
+    ActionContext,
     PanelInputModal,
     build_menu_view,
     build_overview_view,
@@ -61,7 +71,7 @@ from .views.base import (
 )
 from .views.panel_views import PanelSession
 
-logger = get_logger("AdminCog")
+logger = logging.getLogger("AdminCog")
 
 
 class AdminCog(commands.Cog):
@@ -93,8 +103,8 @@ class AdminCog(commands.Cog):
     )
 
     def _invalidate_guild_caches(self, guild_id: int) -> None:
-        """Invalidate setup gatekeeper cache after any settings change."""
-        setup_gatekeeper.invalidate(guild_id)
+        """Invalidate per-guild caches after any settings change (bot-specific)."""
+        invalidate_caches(guild_id)
 
     @staticmethod
     def _resolve_section(node: PanelNode, parent_node: PanelNode | None = None) -> str:
@@ -125,12 +135,10 @@ class AdminCog(commands.Cog):
         user-visible save from appearing successful.
         """
         try:
-            al = await get_audit_logger()
-            await al.log(
+            await audit_log_entry(
                 guild_id=int(guild_id),
                 actor_id=int(interaction.user.id),
                 actor_name=str(interaction.user),
-                source="discord",
                 section=section or self._resolve_section(node, parent_node),
                 key=node.key,
                 old_value=old_value,
@@ -141,9 +149,9 @@ class AdminCog(commands.Cog):
             logger.debug(f"Audit log write skipped for {node.key}: {e}")
 
     @staticmethod
-    def _is_premium(guild_id: int) -> bool:
-        pm = get_premium_manager_sync()
-        return pm.is_premium(guild_id) if pm else False
+    async def _is_premium(guild_id: int) -> bool:
+        """Whether the guild has premium (via the bot's bindings; canonical async)."""
+        return await is_premium(guild_id)
 
     # -- Master Panel (Message 1 -Overview) ------------------------------------
 
@@ -171,9 +179,7 @@ class AdminCog(commands.Cog):
         admin_id = interaction.user.id
 
         # Resolve panel access tier. Gate invocation; mods see a restricted overview.
-        cm = await get_config_manager()
-        cfg = await cm.get_config(guild.id)
-        panel_role = get_panel_role(interaction.user, cfg)
+        panel_role = await resolve_panel_role(interaction.user, guild.id)
         if panel_role == "none":
             await interaction.response.send_message(
                 view=build_notice_layout(
@@ -192,13 +198,14 @@ class AdminCog(commands.Cog):
         )
 
         # Fetch setup guide visibility state
-        guide_state = {"hidden": bool(await cm.get_setting("hide_setup_guide", guild.id, default=False))}
+        guide_state = {"hidden": bool(await get_setting("hide_setup_guide", guild.id, default=False))}
 
         # Config details toggle (compact by default, not persisted)
         details_state = {"expanded": False}
 
         # Shared session for synced timeout across both messages
         session = PanelSession(interaction)
+        session.panel_role = panel_role  # let nav/save handlers gate by tier
 
         async def on_toggle_guide(toggle_interaction: discord.Interaction):
             if not self._check_cooldown(admin_id, "setup_guide_toggle"):
@@ -211,8 +218,7 @@ class AdminCog(commands.Cog):
             new_hidden = not guide_state["hidden"]
             guide_state["hidden"] = new_hidden
 
-            cfg = await get_config_manager()
-            await cfg.set_setting("hide_setup_guide", new_hidden, guild.id)
+            await set_setting("hide_setup_guide", new_hidden, guild.id)
 
             layout = await _build_overview()
             await toggle_interaction.response.edit_message(view=layout)
@@ -234,8 +240,8 @@ class AdminCog(commands.Cog):
             if not child:
                 return
 
-            # Mod role may only open game-tuning categories.
-            if panel_role == "mod" and child_key not in MOD_ALLOWED_CATEGORIES:
+            # Mod role may only open categories whose effective mod_allowed is True.
+            if panel_role == "mod" and not effective_mod_allowed(MAIN_PANEL, child):
                 notice = build_notice_layout(
                     "Admin Only",
                     "This section is restricted to server admins. "
@@ -292,8 +298,8 @@ class AdminCog(commands.Cog):
             locked = await self._compute_locked_keys(MAIN_PANEL, guild.id)
             if panel_role == "mod":
                 locked = set(locked) | {
-                    k for k in MAIN_PANEL.children
-                    if k not in MOD_ALLOWED_CATEGORIES
+                    k for k, child in MAIN_PANEL.children.items()
+                    if not effective_mod_allowed(MAIN_PANEL, child)
                 }
 
             # Preamble (Setup Guide) is wrapped in a readonly_container by build_overview_view;
@@ -323,7 +329,7 @@ class AdminCog(commands.Cog):
                 extra_buttons=[guide_btn, details_btn],
                 compact=not details_state["expanded"],
                 footer_text=OVERVIEW_FOOTER or None,
-                is_premium=self._is_premium(guild.id),
+                is_premium=await self._is_premium(guild.id),
             )
             session.register_view(layout)
             return layout
@@ -374,12 +380,22 @@ class AdminCog(commands.Cog):
                 back_label="Done",
                 guild_id=guild.id,
                 guild=guild,
-                is_premium=self._is_premium(guild.id),
+                is_premium=await self._is_premium(guild.id),
             )
 
         async def on_child_select(child_interaction: discord.Interaction, child_key: str):
             child = category_node.children.get(child_key)
             if not child:
+                return
+
+            # Mod gate: a child may opt out of mod access even inside a mod-allowed category.
+            if session.panel_role == "mod" and not effective_mod_allowed(MAIN_PANEL, child):
+                notice = build_notice_layout(
+                    "Admin Only", "This setting is restricted to server admins."
+                )
+                refreshed = await _build_category_view()
+                await child_interaction.response.edit_message(view=refreshed)
+                await child_interaction.followup.send(view=notice, ephemeral=True)
                 return
 
             # Lock check
@@ -469,7 +485,7 @@ class AdminCog(commands.Cog):
             back_label="Done",
             guild_id=guild.id,
             guild=guild,
-            is_premium=self._is_premium(guild.id),
+            is_premium=await self._is_premium(guild.id),
         )
         # Send as new followup (message 2)
         session.register_view(layout)
@@ -530,6 +546,56 @@ class AdminCog(commands.Cog):
         elif node.kind == "grouped_paginated_select":
             await self._show_grouped_paginated_select(interaction, node, guild, parent_node, grandparent_node, edit, back_label, refresh_parent, session)
 
+        elif node.kind == "action":
+            await self._show_action(interaction, node, guild, parent_node, grandparent_node, edit, back_label, refresh_parent, session)
+
+    # -- Action nodes (bot-specific flows behind one extension hook) ------------
+
+    async def _show_action(
+        self, interaction, node, guild, parent_node, grandparent_node, edit, back_label, refresh_parent, session=None,
+    ):
+        """Dispatch an ``action``-kind node to its bot-specific handler.
+
+        ``action`` is the single extension point: any interactive flow that doesn't
+        fit the generic (guild_id, values) leaf contract (premium activation, bulk
+        reset/delete, bespoke multi-step editors) lives in a per-bot module and is
+        attached to a node as ``on_run``. The engine just builds the ActionContext
+        and hands off — it never needs to know what the handler does.
+
+        Handler contract:  async def on_run(cog, interaction, guild, ctx: ActionContext)
+        """
+        if node.on_run is None:
+            logger.warning(f"action node {node.key!r} has no on_run handler")
+            return
+        # Defense in depth: mods cannot run an action whose effective mod_allowed is False.
+        if getattr(session, "panel_role", "admin") == "mod" and not effective_mod_allowed(MAIN_PANEL, node):
+            await interaction.response.send_message(
+                view=build_notice_layout("Admin Only", "This action is restricted to server admins."),
+                ephemeral=True,
+            )
+            return
+        ctx = ActionContext(
+            session=session,
+            parent_node=parent_node,
+            grandparent_node=grandparent_node,
+            edit=edit,
+            refresh_parent=refresh_parent,
+            is_premium=await self._is_premium(guild.id),
+            back_label=back_label,
+        )
+        try:
+            await node.on_run(self, interaction, guild, ctx)
+        except Exception:
+            logger.exception("action handler failed for %s", node.key)
+            try:
+                notice = build_notice_layout("Something went wrong", f"Could not open **{node.label}**.")
+                if interaction.response.is_done():
+                    await interaction.followup.send(view=notice, ephemeral=True)
+                else:
+                    await interaction.response.send_message(view=notice, ephemeral=True)
+            except Exception:
+                pass
+
     # -- Node Kind Handlers ----------------------------------------------------
     # -- Menu nodes (on message 2, e.g. counting_roles sub-menu) ---------------
 
@@ -567,13 +633,23 @@ class AdminCog(commands.Cog):
                 back_label=back_label,
                 guild_id=guild.id,
                 guild=guild,
-                is_premium=self._is_premium(guild.id),
+                is_premium=await self._is_premium(guild.id),
                 breadcrumb=breadcrumb,
             )
 
         async def on_select(sel_interaction: discord.Interaction, child_key: str):
             child = node.children.get(child_key)
             if not child:
+                return
+
+            # Mod gate (inherited): block a mod from a child that opts out of mod access.
+            if getattr(session, "panel_role", "admin") == "mod" and not effective_mod_allowed(MAIN_PANEL, child):
+                notice = build_notice_layout(
+                    "Admin Only", "This setting is restricted to server admins."
+                )
+                refreshed = await _build_current_view()
+                await sel_interaction.response.edit_message(view=refreshed)
+                await sel_interaction.followup.send(view=notice, ephemeral=True)
                 return
 
             # Lock check
@@ -672,7 +748,7 @@ class AdminCog(commands.Cog):
             back_label=back_label,
             guild_id=guild.id,
             guild=guild,
-            is_premium=self._is_premium(guild.id),
+            is_premium=await self._is_premium(guild.id),
             breadcrumb=breadcrumb,
         )
         if session:
@@ -693,7 +769,7 @@ class AdminCog(commands.Cog):
         and `node.requires_role_manage` before persisting.
         """
         current_values = list(await node.get_values(guild.id)) if node.get_values else []
-        premium = self._is_premium(guild.id)
+        premium = await self._is_premium(guild.id)
 
         async def on_save(save_interaction: discord.Interaction, values: list):
             if not self._check_cooldown(save_interaction.user.id, node.key):
@@ -706,7 +782,7 @@ class AdminCog(commands.Cog):
             await save_interaction.response.defer(ephemeral=True)
 
             # Premium value check
-            if node.premium_values and not self._is_premium(guild.id):
+            if node.premium_values and not await self._is_premium(guild.id):
                 blocked = [v for v in values if str(v) in node.premium_values]
                 if blocked:
                     notice = build_premium_layout(
@@ -719,7 +795,7 @@ class AdminCog(commands.Cog):
 
             # Channel count check for non-premium
             if node.kind == "channel_select" and node.premium_max_values is not None:
-                if not self._is_premium(guild.id) and len(values) > node.max_values:
+                if not await self._is_premium(guild.id) and len(values) > node.max_values:
                     notice = build_premium_layout(
                         "Premium Required",
                         f"Free servers can select up to **{node.max_values}** channel(s).\n"
@@ -749,18 +825,15 @@ class AdminCog(commands.Cog):
                         )
                         return
 
-            if node.kind == "channel_select" and values and node.key in ("game_lobby", "win_feed"):
-                cm = await get_config_manager()
-                cfg = await cm.get_config(guild.id)
-                cat_id = cfg.channels.get("game_category_id")
-                if cat_id:
-                    err = await _assert_channel_in_category(guild, int(values[0]), int(cat_id))
-                    if err:
-                        notice = build_notice_layout(
-                            "Channel not in Game Category", err,
-                        )
-                        await save_interaction.followup.send(view=notice, ephemeral=True)
-                        return
+            # Value-level validation against live guild state (e.g. channel-in-category).
+            if node.value_validator and values:
+                err = await node.value_validator(guild, values)
+                if err:
+                    await save_interaction.followup.send(
+                        view=build_notice_layout("Invalid Selection", err),
+                        ephemeral=True,
+                    )
+                    return
 
             old_vals = list(await node.get_values(guild.id)) if node.get_values else []
             try:
@@ -880,7 +953,7 @@ class AdminCog(commands.Cog):
                         retry_layout = build_modal_trigger_view(
                             node, new_vals, guild, on_save, on_back, on_clear_fn, back_label,
                             attempted=raw_value,
-                            is_premium=self._is_premium(guild.id),
+                            is_premium=await self._is_premium(guild.id),
                         )
                         await button_interaction.edit_original_response(view=retry_layout)
                     except discord.HTTPException as http_exc:
@@ -927,7 +1000,7 @@ class AdminCog(commands.Cog):
                     action="clear" if cleared else "set",
                     parent_node=parent_node,
                 )
-                new_layout = build_modal_trigger_view(node, new_vals, guild, on_save, on_back, on_clear_fn, back_label, is_premium=self._is_premium(guild.id))
+                new_layout = build_modal_trigger_view(node, new_vals, guild, on_save, on_back, on_clear_fn, back_label, is_premium=await self._is_premium(guild.id))
                 try:
                     await button_interaction.edit_original_response(view=new_layout)
                 except discord.HTTPException as http_exc:
@@ -979,7 +1052,7 @@ class AdminCog(commands.Cog):
                         old_value=old_vals, new_value=[],
                         action="clear", parent_node=parent_node,
                     )
-                    new_layout = build_modal_trigger_view(node, [], guild, on_save, on_back, on_clear_fn, back_label, is_premium=self._is_premium(guild.id))
+                    new_layout = build_modal_trigger_view(node, [], guild, on_save, on_back, on_clear_fn, back_label, is_premium=await self._is_premium(guild.id))
                     await clear_interaction.edit_original_response(view=new_layout)
                     if refresh_parent:
                         await refresh_parent()
@@ -991,7 +1064,7 @@ class AdminCog(commands.Cog):
 
             on_clear_fn = on_clear
 
-        layout = build_modal_trigger_view(node, current_values, guild, on_save, on_back, on_clear_fn, back_label, is_premium=self._is_premium(guild.id))
+        layout = build_modal_trigger_view(node, current_values, guild, on_save, on_back, on_clear_fn, back_label, is_premium=await self._is_premium(guild.id))
         if session:
             session.register_view(layout)
         await self._send_or_edit(interaction, layout, edit)
@@ -1029,7 +1102,7 @@ class AdminCog(commands.Cog):
                     old_value=old_vals, new_value=[val1, val2],
                     action="set", parent_node=parent_node,
                 )
-                new_layout = build_dual_modal_trigger_view(node, new_vals, guild, on_save, on_back, back_label, is_premium=self._is_premium(guild.id))
+                new_layout = build_dual_modal_trigger_view(node, new_vals, guild, on_save, on_back, back_label, is_premium=await self._is_premium(guild.id))
                 try:
                     await button_interaction.edit_original_response(view=new_layout)
                 except discord.HTTPException as http_exc:
@@ -1056,7 +1129,7 @@ class AdminCog(commands.Cog):
                     view=create_empty_layout(f"{node.label} configuration closed.")
                 )
 
-        layout = build_dual_modal_trigger_view(node, current_values, guild, on_save, on_back, back_label, is_premium=self._is_premium(guild.id))
+        layout = build_dual_modal_trigger_view(node, current_values, guild, on_save, on_back, back_label, is_premium=await self._is_premium(guild.id))
         if session:
             session.register_view(layout)
         await self._send_or_edit(interaction, layout, edit)
@@ -1095,7 +1168,7 @@ class AdminCog(commands.Cog):
                 )
                 new_layout = build_file_upload_view(
                     node, new_vals, guild, on_back, on_clear_fn, back_label, on_upload=on_upload,
-                    is_premium=self._is_premium(guild.id),
+                    is_premium=await self._is_premium(guild.id),
                 )
                 try:
                     await button_interaction.edit_original_response(view=new_layout)
@@ -1146,7 +1219,7 @@ class AdminCog(commands.Cog):
                     )
                     new_layout = build_file_upload_view(
                         node, [], guild, on_back, on_clear_fn, back_label, on_upload=on_upload,
-                        is_premium=self._is_premium(guild.id),
+                        is_premium=await self._is_premium(guild.id),
                     )
                     try:
                         await clear_interaction.edit_original_response(view=new_layout)
@@ -1164,7 +1237,7 @@ class AdminCog(commands.Cog):
 
         layout = build_file_upload_view(
             node, current_values, guild, on_back, on_clear_fn, back_label, on_upload=on_upload,
-            is_premium=self._is_premium(guild.id),
+            is_premium=await self._is_premium(guild.id),
         )
         if session:
             session.register_view(layout)
@@ -1197,7 +1270,7 @@ class AdminCog(commands.Cog):
                 on_remove=on_remove,
                 on_back=on_back,
                 back_label=back_label,
-                is_premium=self._is_premium(guild.id),
+                is_premium=await self._is_premium(guild.id),
             )
 
         async def _persist(button_interaction, modal_interaction, raw_key, raw_value, *, original_key=None):
@@ -1388,7 +1461,7 @@ class AdminCog(commands.Cog):
         """
         page_size = max(1, node.list_page_size)
         page_state = {"page": 0}
-        is_premium = self._is_premium(guild.id)
+        is_premium = await self._is_premium(guild.id)
 
         async def _fetch_items() -> list:
             if node.list_get_items is None:
@@ -1526,7 +1599,7 @@ class AdminCog(commands.Cog):
         """
         page_size = max(1, node.list_page_size)
         state: dict = {"region": None, "page": 0}
-        is_premium = self._is_premium(guild.id)
+        is_premium = await self._is_premium(guild.id)
 
         async def _build_region_layout() -> discord.ui.LayoutView:
             regions = list(node.group_get_groups()) if node.group_get_groups else []
@@ -1725,7 +1798,7 @@ class AdminCog(commands.Cog):
                 # Refresh parent menu view
                 new_summary = await self._gather_summaries(parent_menu, guild.id)
                 locked = await self._compute_locked_keys(parent_menu, guild.id)
-                new_layout = build_menu_view(parent_menu, new_summary, on_select, on_cancel, locked, guild_id=guild.id, guild=guild, is_premium=self._is_premium(guild.id))
+                new_layout = build_menu_view(parent_menu, new_summary, on_select, on_cancel, locked, guild_id=guild.id, guild=guild, is_premium=await self._is_premium(guild.id))
                 try:
                     await sel_interaction.edit_original_response(view=new_layout)
                 except discord.HTTPException as http_exc:

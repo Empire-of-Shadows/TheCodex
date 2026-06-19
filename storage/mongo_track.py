@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from datetime import datetime, timezone
 from pymongo import AsyncMongoClient
 
-from utils.bot import s
+from startup.bot import s
 from utils.logger import get_logger, PerformanceLogger
 
 load_dotenv()

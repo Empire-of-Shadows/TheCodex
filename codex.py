@@ -25,11 +25,10 @@ load_dotenv(Path(__file__).parent / "docker" / ".env")
 
 import discord
 
-from utils.bot import bot, TOKEN, s  # noqa: E402,F401
+from startup.bot import bot, TOKEN, s  # noqa: E402,F401
 from utils.logger import get_logger, setup_application_logging  # noqa: E402
-from utils.sync import load_cogs, attach_databases  # noqa: E402
-from utils.startup import (  # noqa: E402
-    log_all_commands,
+from startup.sync import load_cogs, attach_databases, log_all_commands  # noqa: E402
+from startup.phases import (  # noqa: E402
     log_startup_summary,
     startup_phase,
 )

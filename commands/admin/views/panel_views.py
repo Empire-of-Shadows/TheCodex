@@ -43,6 +43,9 @@ class PanelSession:
     def __init__(self, original_interaction: discord.Interaction, timeout: float = 300.0):
         self.original_interaction = original_interaction
         self.admin_id: int = original_interaction.user.id
+        # Caller's resolved tier ("admin" | "mod" | "none"); set at panel open so
+        # navigation/save handlers can gate by effective mod access without re-resolving.
+        self.panel_role: str = "admin"
         self.msg2_message: discord.Message | None = None
         self.msg2_view: discord.ui.LayoutView | None = None
         self._timeout = timeout
