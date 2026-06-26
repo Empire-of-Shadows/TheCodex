@@ -74,7 +74,7 @@ class DropsActions:
     async def get_drops_stats(guild_id: int) -> Dict[str, Any]:
         """Query updates_totals for guild-specific stats."""
         try:
-            from storage.database_manager import db_manager
+            from storage.manager import db_manager
             totals_col = db_manager.get_collection_manager('updates_totals')
 
             stats = {}

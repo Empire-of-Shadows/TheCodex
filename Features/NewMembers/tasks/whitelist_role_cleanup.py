@@ -3,7 +3,7 @@ from discord.ext import commands, tasks
 from datetime import datetime, timezone
 from typing import List
 
-from storage.database_manager import db_manager
+from storage.manager import db_manager
 from utils.logger import get_logger
 from storage.config_manager import get_config
 

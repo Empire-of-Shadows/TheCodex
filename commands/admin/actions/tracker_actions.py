@@ -78,7 +78,7 @@ class TrackerActions:
     async def get_boost_stats(guild_id: int) -> Dict[str, Any]:
         """Count active boosters and total boost events from DB."""
         try:
-            from storage.database_manager import db_manager
+            from storage.manager import db_manager
             boosts_col = db_manager.get_collection_manager('serverdata_boosts')
             events_col = db_manager.get_collection_manager('serverdata_boost_events')
 

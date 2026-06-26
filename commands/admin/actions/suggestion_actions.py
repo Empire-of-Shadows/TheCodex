@@ -15,7 +15,7 @@ import discord
 
 from utils.logger import get_logger
 from storage.config_manager import get_config, get_guild_config_manager
-from storage.database_manager import db_manager
+from storage.manager import db_manager
 
 logger = get_logger("SuggestionActions")
 
