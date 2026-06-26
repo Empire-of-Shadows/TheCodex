@@ -228,7 +228,7 @@ ACCOUNT_AGE_REQUIREMENT_DAYS = 90  # Must match joining.py
 
 ### Issue: Commands not showing up
 - **Solution**: Restart bot to sync slash commands
-- **Check**: Run `python codex.py` and verify cog loading logs
+- **Check**: Run `python Codex.py` and verify cog loading logs
 
 ### Issue: Role not being assigned
 - **Check**: Bot has `Manage Roles` permission

@@ -8,7 +8,7 @@ metadata:
 Standardizing startup + logging across the Empire of Shadows bots so their boot
 sequences and logs read identically. **TheCodex is the structural baseline.**
 
-Canonical layout (every bot): main file stays at repo root (`codex.py`, `Host.py`); a
+Canonical layout (every bot): main file stays at repo root (`Codex.py`, `Host.py`); a
 **`startup/` package** holds `bot.py`, `sync.py`, `phases.py`:
 - `startup/bot.py` — bot instance, TOKEN, intents, `s = " " * 5` (standardized indent).
 - `startup/sync.py` — cog loading (parallel + priority phase) + `attach_databases()`

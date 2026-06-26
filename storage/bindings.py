@@ -9,7 +9,7 @@ do not edit it here.
 Template: ``EmpireSystems/storage_engine/bindings_reference.py``.
 Reference adoption: ``FunEngagement/TheDecree/storage/bindings.py``.
 
-Env note: ``MONGO_URI`` is loaded by the entrypoint (``codex.py`` loads ``docker/.env`` /
+Env note: ``MONGO_URI`` is loaded by the entrypoint (``Codex.py`` loads ``docker/.env`` /
 ``.env.local`` before importing ``storage.manager``), so reading it here at import time is
 safe — same ordering the pre-migration ``db_manager = DatabaseManager()`` relied on.
 """
