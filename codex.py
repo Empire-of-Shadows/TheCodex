@@ -21,7 +21,10 @@ from pathlib import Path
 
 # Load env from docker/.env before any other imports read env vars
 from dotenv import load_dotenv
-load_dotenv(Path(__file__).parent / "docker" / ".env")
+_env_dir = Path(__file__).parent / "docker"
+load_dotenv(_env_dir / ".env")
+# Dev override: docker/.env.local (gitignored, never deployed) wins locally.
+load_dotenv(_env_dir / ".env.local", override=True)
 
 import discord
 
