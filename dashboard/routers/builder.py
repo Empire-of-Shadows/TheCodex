@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from dashboard import db
 from dashboard.auth.panel_role import require_guild_admin
-from utils.logger import get_logger
+from storage.logging import get_logger
 
 # Make project-root feature modules importable (Features.* lives above dashboard/).
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))

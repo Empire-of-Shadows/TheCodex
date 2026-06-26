@@ -7,7 +7,7 @@ All read/write goes through storage.config_manager.py.
 import json
 from typing import Any, Dict
 
-from utils.logger import get_logger
+from storage.logging import get_logger
 from storage.config_manager import get_config, get_guild_config_manager
 
 logger = get_logger("NewMemberActions")

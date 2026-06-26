@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from utils.logger import get_logger
+from storage.logging import get_logger
 
 logger = get_logger("ColorSetActions")
 
