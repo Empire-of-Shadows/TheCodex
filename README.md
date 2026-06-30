@@ -115,5 +115,5 @@ A companion **web dashboard** lets admins build and preview guide pages with a d
 This bot is developed for the **Empire of Shadows** community and is not available for external use at this time. See [LICENSE](./LICENSE) for details.
 
 <div align="center">
-<sub>Built for the Empire of Shadows community</sub>
+<sub>Part of the **Empire of Shadows** ecosystem · `Informatinal/TheCodex`</sub>
 </div>
