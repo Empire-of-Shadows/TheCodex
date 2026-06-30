@@ -6,9 +6,9 @@ from typing import Dict, Optional, List
 import discord
 from discord.ext import commands
 
-from utils.logger import get_logger, PerformanceLogger, log_context
+from storage.logging import get_logger, PerformanceLogger, log_context
 from storage.config_manager import get_config
-from storage.database_manager import db_manager
+from storage.manager import db_manager
 from dotenv import load_dotenv
 
 load_dotenv()

@@ -33,6 +33,8 @@ import SimulationCanvas from "../components/builder/SimulationCanvas";
 import PropertyPanel from "../components/builder/PropertyPanel";
 import ValidationErrors from "../components/builder/ValidationErrors";
 import DocsPanel from "../components/builder/DocsPanel";
+import ConfirmDialog from "../components/ConfirmDialog";
+import { formatError } from "../utils/formatError";
 
 let _nextId = 1;
 function uid(): string {
@@ -377,6 +379,8 @@ export default function BuilderPage() {
   const [simPageId, setSimPageId] = useState<string | null>(null);
   const [simBreadcrumbs, setSimBreadcrumbs] = useState<string[]>([]);
   const [showDocs, setShowDocs] = useState(false);
+  const [pendingNav, setPendingNav] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [panelWidth, setPanelWidth] = useState(320);
   const [canvasWidth, setCanvasWidth] = useState(520);
   const [guild, setGuild] = useState<Guild | null>(null);
@@ -390,10 +394,17 @@ export default function BuilderPage() {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
-  const pushToast = useCallback((msg: string, type: "success" | "error" | "info" = "info", duration = 3000) => {
+  const dismissToast = useCallback((id: number) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  const pushToast = useCallback((msg: string, type: "success" | "error" | "info" = "info", duration?: number) => {
     const id = Date.now() + Math.random();
     setToasts((prev) => [...prev, { id, msg, type }]);
-    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), duration);
+    const effective = duration ?? (type === "error" ? 10000 : 3000);
+    if (effective > 0) {
+      setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), effective);
+    }
   }, []);
 
   // ── Panel resize ──────────────────────────────────────────────────────
@@ -932,7 +943,10 @@ export default function BuilderPage() {
 
   const navigateAway = useCallback(
     (path: string) => {
-      if (dirty && !window.confirm("You have unsaved changes. Leave anyway?")) return;
+      if (dirty) {
+        setPendingNav(path);
+        return;
+      }
       navigate(path);
     },
     [dirty, navigate]
@@ -943,6 +957,7 @@ export default function BuilderPage() {
   const save = async () => {
     if (!guildId) return;
     setSaving(true);
+    setSaveState("saving");
     try {
       if (mode === "guide") {
         let pagesWithCurrent = pages;
@@ -978,8 +993,13 @@ export default function BuilderPage() {
         setSavedSigs((prev) => ({ ...prev, welcome: currentWelcomeSig }));
         pushToast("Welcome saved!", "success");
       }
-    } catch (err: any) {
-      pushToast(err.message || "Save failed", "error");
+      setSaveState("saved");
+      setTimeout(() => setSaveState((s) => (s === "saved" ? "idle" : s)), 1500);
+    } catch (err: unknown) {
+      console.error("Save failed", err);
+      pushToast(formatError(err, "Save failed"), "error");
+      setSaveState("error");
+      setTimeout(() => setSaveState((s) => (s === "error" ? "idle" : s)), 3000);
     } finally {
       setSaving(false);
     }
@@ -1085,8 +1105,26 @@ export default function BuilderPage() {
           <button className="btn btn-secondary" onClick={() => fileInputRef.current?.click()} style={{ fontSize: 12 }}>
             Import JSON
           </button>
-          <button className="btn btn-success" onClick={save} disabled={saving || errors.length > 0 || !dirty}>
-            {saving ? "Saving..." : dirty ? "Save •" : "Saved"}
+          {dirty && (
+            <span className="dirty-badge" role="status" aria-live="polite">
+              Unsaved changes
+            </span>
+          )}
+          <button
+            className={`btn btn-success save-btn save-btn--${saveState}`}
+            onClick={save}
+            disabled={saving || errors.length > 0 || !dirty}
+            title="Save (Ctrl+S)"
+          >
+            {saveState === "saving"
+              ? "Saving…"
+              : saveState === "saved"
+                ? "Saved ✓"
+                : saveState === "error"
+                  ? "Retry"
+                  : dirty
+                    ? "Save"
+                    : "Saved"}
           </button>
         </div>
       </header>
@@ -1221,10 +1259,39 @@ export default function BuilderPage() {
       {toasts.length > 0 && (
         <div className="toast-stack">
           {toasts.map((t) => (
-            <div key={t.id} className={`toast ${t.type}`}>{t.msg}</div>
+            <div
+              key={t.id}
+              className={`toast ${t.type}`}
+              role={t.type === "error" ? "alert" : "status"}
+            >
+              <span className="toast-msg">{t.msg}</span>
+              <button
+                type="button"
+                className="toast-close"
+                aria-label="Dismiss notification"
+                onClick={() => dismissToast(t.id)}
+              >
+                ×
+              </button>
+            </div>
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={pendingNav !== null}
+        title="Unsaved changes"
+        message="You have unsaved changes. Leave this page anyway?"
+        confirmLabel="Leave"
+        cancelLabel="Stay"
+        destructive
+        onConfirm={() => {
+          const path = pendingNav;
+          setPendingNav(null);
+          if (path) navigate(path);
+        }}
+        onCancel={() => setPendingNav(null)}
+      />
     </div>
   );
 }

@@ -1,41 +1,80 @@
 """Dashboard API routes — user info and guild listing."""
 
 import asyncio
-import logging
 import time
+from collections import defaultdict
 
 import httpx
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
-from dashboard.auth.dependencies import get_current_user
+from dashboard.auth.dependencies import get_current_user, require_guild_manage
+from dashboard.auth.panel_role import resolve_panel_role
 from dashboard.config import BOT_TOKEN, DISCORD_API_BASE, MANAGE_GUILD_PERMISSION
 from dashboard import db
+from storage.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger("dashboard.routers.dashboard")
 
 router = APIRouter(tags=["dashboard"])
 
-# Simple TTL cache for Discord API results to avoid 429s
+_DISCORD_TIMEOUT = httpx.Timeout(10.0, connect=5.0)
+
+# Simple TTL caches for Discord API results to avoid 429s.
 _bot_guilds_cache: dict[str, object] = {"ids": set(), "ts": 0.0}
 _bot_id_cache: dict[str, object] = {"id": None, "ts": 0.0}
 _CACHE_TTL = 300  # 5 minutes
 
+# Per-resource async locks so concurrent requests share one Discord fetch.
+_bot_guilds_lock = asyncio.Lock()
+_bot_id_lock = asyncio.Lock()
+_channels_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+_roles_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+
+
+_ADMIN_PROBE_LIMIT = 25
+
 
 @router.get("/me")
 async def me(session: dict = Depends(get_current_user)):
-    """Return the current user's info."""
+    """Return the current user's info plus panel-access flags.
+
+    Mirrors TheHost: probe configured panel roles across bot-present session
+    guilds. admin = MANAGE_GUILD anywhere OR an admin role anywhere; mod = a mod
+    role anywhere (`resolve_panel_role` only returns "mod" when the user is not
+    admin on that guild, so MANAGE_GUILD never grants mod).
+    """
     user = session["user_data"]
+    can_manage_any = any(
+        (int(g.get("permissions", 0)) & MANAGE_GUILD_PERMISSION) == MANAGE_GUILD_PERMISSION
+        for g in session.get("guilds", [])
+    )
+
+    bot_guild_ids = await _fetch_bot_guild_ids()
+    candidate_ids = [
+        g["id"] for g in session.get("guilds", []) if g["id"] in bot_guild_ids
+    ][:_ADMIN_PROBE_LIMIT]
+    results = await asyncio.gather(
+        *(resolve_panel_role(session, gid) for gid in candidate_ids),
+        return_exceptions=True,
+    )
+    roles = [r for r in results if isinstance(r, str)]
+    can_access_admin_any = can_manage_any or any(r == "admin" for r in roles)
+    can_access_mod_any = any(r == "mod" for r in roles)
+
     return {
         "id": user["id"],
         "username": user.get("username"),
         "global_name": user.get("global_name"),
         "avatar": user.get("avatar"),
         "discriminator": user.get("discriminator"),
+        "can_access_admin_any": can_access_admin_any,
+        "can_access_mod_any": can_access_mod_any,
+        "can_access_settings_any": can_access_admin_any or can_access_mod_any,
     }
 
 
 async def _fetch_bot_guild_ids() -> set[str]:
-    """Fetch the set of guild IDs the bot is currently in (cached)."""
+    """Fetch the set of guild IDs the bot is currently in (cached, single-flight)."""
     if not BOT_TOKEN:
         return set()
 
@@ -43,37 +82,43 @@ async def _fetch_bot_guild_ids() -> set[str]:
     if _bot_guilds_cache["ids"] and now - _bot_guilds_cache["ts"] < _CACHE_TTL:
         return _bot_guilds_cache["ids"]
 
-    guild_ids: set[str] = set()
-    headers = {"Authorization": f"Bot {BOT_TOKEN}"}
-    after = "0"
+    async with _bot_guilds_lock:
+        # Double-check after acquiring lock.
+        now = time.monotonic()
+        if _bot_guilds_cache["ids"] and now - _bot_guilds_cache["ts"] < _CACHE_TTL:
+            return _bot_guilds_cache["ids"]
 
-    async with httpx.AsyncClient() as client:
-        while True:
-            url = f"{DISCORD_API_BASE}/users/@me/guilds?limit=200&after={after}"
-            resp = await client.get(url, headers=headers)
-            if resp.status_code == 429:
-                retry_after = float(resp.headers.get("Retry-After", "2"))
-                logger.info("Bot guilds rate-limited, retrying in %.1fs", retry_after)
-                await asyncio.sleep(retry_after)
+        guild_ids: set[str] = set()
+        headers = {"Authorization": f"Bot {BOT_TOKEN}"}
+        after = "0"
+
+        async with httpx.AsyncClient(timeout=_DISCORD_TIMEOUT) as client:
+            while True:
+                url = f"{DISCORD_API_BASE}/users/@me/guilds?limit=200&after={after}"
                 resp = await client.get(url, headers=headers)
-            if resp.status_code != 200:
-                logger.warning("Failed to fetch bot guilds: %s", resp.status_code)
-                return _bot_guilds_cache["ids"] or guild_ids
-            guilds = resp.json()
+                if resp.status_code == 429:
+                    retry_after = float(resp.headers.get("Retry-After", "2"))
+                    logger.info("Bot guilds rate-limited, retrying in %.1fs", retry_after)
+                    await asyncio.sleep(retry_after)
+                    resp = await client.get(url, headers=headers)
+                if resp.status_code != 200:
+                    logger.warning("Failed to fetch bot guilds: %s", resp.status_code)
+                    return _bot_guilds_cache["ids"] or guild_ids
+                guilds = resp.json()
 
-            if not guilds:
-                break
+                if not guilds:
+                    break
 
-            for g in guilds:
-                guild_ids.add(g["id"])
+                for g in guilds:
+                    guild_ids.add(g["id"])
 
-            if len(guilds) < 200:
-                break
-            after = guilds[-1]["id"]
+                if len(guilds) < 200:
+                    break
+                after = guilds[-1]["id"]
 
-    _bot_guilds_cache["ids"] = guild_ids
-    _bot_guilds_cache["ts"] = now
-    return guild_ids
+        _bot_guilds_cache["ids"] = guild_ids
+        _bot_guilds_cache["ts"] = now
+        return guild_ids
 
 
 async def _guild_ids_with_config(guild_ids: list[str]) -> set[str]:
@@ -90,34 +135,53 @@ async def _guild_ids_with_config(guild_ids: list[str]) -> set[str]:
 
 @router.get("/guilds")
 async def guilds(session: dict = Depends(get_current_user)):
-    """Return guilds where the user has MANAGE_GUILD permission, with bot status."""
-    manageable = []
-    for guild in session.get("guilds", []):
-        perms = int(guild.get("permissions", 0))
-        if (perms & MANAGE_GUILD_PERMISSION) == MANAGE_GUILD_PERMISSION:
-            manageable.append({
-                "id": guild["id"],
-                "name": guild["name"],
-                "icon": guild.get("icon"),
-            })
+    """Return guilds the user can manage as admin or mod, with bot status + role.
 
-    if not manageable:
-        return manageable
+    Includes every session guild where the user holds MANAGE_GUILD (admin, shown
+    even when the bot is absent so they can invite it) or a configured admin/mod
+    role. Each entry carries its resolved `panel_role`.
+    """
+    session_guilds = session.get("guilds", [])
+    if not session_guilds:
+        return []
 
-    guild_ids = [g["id"] for g in manageable]
-
+    all_ids = [g["id"] for g in session_guilds]
     bot_guild_ids, configured_ids = await asyncio.gather(
-        _fetch_bot_guild_ids(), _guild_ids_with_config(guild_ids)
+        _fetch_bot_guild_ids(), _guild_ids_with_config(all_ids)
     )
 
-    for g in manageable:
-        bot_present = g["id"] in bot_guild_ids
-        has_config = g["id"] in configured_ids
-        g["bot_in_guild"] = bot_present
-        g["has_config"] = has_config
-        g["setup_required"] = not bot_present and not has_config
+    # Resolve panel roles only for bot-present guilds (role config can't exist
+    # otherwise), so the fan-out stays bounded.
+    probe_targets = [gid for gid in all_ids if gid in bot_guild_ids]
+    role_results = await asyncio.gather(
+        *(resolve_panel_role(session, gid) for gid in probe_targets),
+        return_exceptions=True,
+    )
+    panel_roles = {
+        gid: (r if isinstance(r, str) else "none")
+        for gid, r in zip(probe_targets, role_results)
+    }
 
-    return manageable
+    out: list[dict] = []
+    for guild in session_guilds:
+        gid = guild["id"]
+        perms = int(guild.get("permissions", 0))
+        has_manage = (perms & MANAGE_GUILD_PERMISSION) == MANAGE_GUILD_PERMISSION
+        panel_role = panel_roles.get(gid, "none")
+        if not has_manage and panel_role == "none":
+            continue
+        bot_present = gid in bot_guild_ids
+        out.append({
+            "id": gid,
+            "name": guild["name"],
+            "icon": guild.get("icon"),
+            "bot_in_guild": bot_present,
+            "has_config": gid in configured_ids,
+            "setup_required": not bot_present,
+            "panel_role": panel_role if panel_role != "none" else ("admin" if has_manage else "none"),
+        })
+
+    return out
 
 
 @router.get("/bot-invite-url")
@@ -130,20 +194,25 @@ async def bot_invite_url():
     if _bot_id_cache["id"] and now - _bot_id_cache["ts"] < _CACHE_TTL:
         bot_id = _bot_id_cache["id"]
     else:
-        async with httpx.AsyncClient() as client:
-            headers = {"Authorization": f"Bot {BOT_TOKEN}"}
-            resp = await client.get(f"{DISCORD_API_BASE}/users/@me", headers=headers)
-            if resp.status_code == 429:
-                retry_after = float(resp.headers.get("Retry-After", "2"))
-                logger.info("Bot user rate-limited, retrying in %.1fs", retry_after)
-                await asyncio.sleep(retry_after)
-                resp = await client.get(f"{DISCORD_API_BASE}/users/@me", headers=headers)
-            if resp.status_code != 200:
-                logger.warning("Failed to fetch bot user info: %s", resp.status_code)
-                return {"url": None}
-            bot_id = resp.json()["id"]
-            _bot_id_cache["id"] = bot_id
-            _bot_id_cache["ts"] = now
+        async with _bot_id_lock:
+            now = time.monotonic()
+            if _bot_id_cache["id"] and now - _bot_id_cache["ts"] < _CACHE_TTL:
+                bot_id = _bot_id_cache["id"]
+            else:
+                async with httpx.AsyncClient(timeout=_DISCORD_TIMEOUT) as client:
+                    headers = {"Authorization": f"Bot {BOT_TOKEN}"}
+                    resp = await client.get(f"{DISCORD_API_BASE}/users/@me", headers=headers)
+                    if resp.status_code == 429:
+                        retry_after = float(resp.headers.get("Retry-After", "2"))
+                        logger.info("Bot user rate-limited, retrying in %.1fs", retry_after)
+                        await asyncio.sleep(retry_after)
+                        resp = await client.get(f"{DISCORD_API_BASE}/users/@me", headers=headers)
+                    if resp.status_code != 200:
+                        logger.warning("Failed to fetch bot user info: %s", resp.status_code)
+                        return {"url": None}
+                    bot_id = resp.json()["id"]
+                    _bot_id_cache["id"] = bot_id
+                    _bot_id_cache["ts"] = now
 
     permissions = 8
     url = (
@@ -157,83 +226,116 @@ async def bot_invite_url():
 
 # ── Channel & Role endpoints ─────────────────────────────────────────────
 
-_channels_cache: dict[str, object] = {}  # guild_id -> {"data": [...], "ts": float}
-_roles_cache: dict[str, object] = {}
+_channels_cache: dict[str, dict] = {}  # guild_id -> {"data": [...], "ts": float}
+_roles_cache: dict[str, dict] = {}
 _RESOURCE_CACHE_TTL = 60  # 60 seconds
 
 
-async def _require_guild_access(guild_id: str, session: dict) -> None:
-    """Verify the user has MANAGE_GUILD for this guild."""
-    for guild in session.get("guilds", []):
-        if guild["id"] == guild_id:
-            perms = int(guild.get("permissions", 0))
-            if (perms & MANAGE_GUILD_PERMISSION) == MANAGE_GUILD_PERMISSION:
-                return
-    from fastapi import HTTPException
-    raise HTTPException(status_code=403, detail="No access to this guild")
-
-
 @router.get("/guilds/{guild_id}/channels")
-async def guild_channels(guild_id: str, session: dict = Depends(get_current_user)):
+async def guild_channels(
+    guild_id: str,
+    _session: dict = Depends(require_guild_manage),
+):
     """Return text channels for a guild (filtered, cached 60s)."""
-    await _require_guild_access(guild_id, session)
-
     now = time.monotonic()
     cached = _channels_cache.get(guild_id)
     if cached and now - cached["ts"] < _RESOURCE_CACHE_TTL:
         return cached["data"]
 
-    headers = {"Authorization": f"Bot {BOT_TOKEN}"}
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(f"{DISCORD_API_BASE}/guilds/{guild_id}/channels", headers=headers)
-        if resp.status_code == 429:
-            retry_after = float(resp.headers.get("Retry-After", "2"))
-            await asyncio.sleep(retry_after)
-            resp = await client.get(f"{DISCORD_API_BASE}/guilds/{guild_id}/channels", headers=headers)
-        if resp.status_code != 200:
-            logger.warning("Failed to fetch channels for guild %s: %s", guild_id, resp.status_code)
-            return []
+    async with _channels_locks[guild_id]:
+        now = time.monotonic()
+        cached = _channels_cache.get(guild_id)
+        if cached and now - cached["ts"] < _RESOURCE_CACHE_TTL:
+            return cached["data"]
 
-    # Filter to text channels (type 0) and sort by position
-    channels = [
-        {"id": ch["id"], "name": ch["name"], "type": ch["type"], "position": ch.get("position", 0)}
-        for ch in resp.json()
-        if ch["type"] == 0  # GUILD_TEXT
-    ]
-    channels.sort(key=lambda c: c["position"])
+        if not BOT_TOKEN:
+            raise HTTPException(status_code=503, detail="Bot token not configured")
 
-    _channels_cache[guild_id] = {"data": channels, "ts": now}
-    return channels
+        headers = {"Authorization": f"Bot {BOT_TOKEN}"}
+        async with httpx.AsyncClient(timeout=_DISCORD_TIMEOUT) as client:
+            resp = await client.get(
+                f"{DISCORD_API_BASE}/guilds/{guild_id}/channels", headers=headers
+            )
+            if resp.status_code == 429:
+                retry_after = float(resp.headers.get("Retry-After", "2"))
+                await asyncio.sleep(retry_after)
+                resp = await client.get(
+                    f"{DISCORD_API_BASE}/guilds/{guild_id}/channels", headers=headers
+                )
+            if resp.status_code != 200:
+                logger.warning(
+                    "Failed to fetch channels for guild %s: %s",
+                    guild_id,
+                    resp.status_code,
+                )
+                return []
+
+        channels = [
+            {
+                "id": ch["id"],
+                "name": ch["name"],
+                "type": ch["type"],
+                "position": ch.get("position", 0),
+            }
+            for ch in resp.json()
+            if ch["type"] == 0  # GUILD_TEXT
+        ]
+        channels.sort(key=lambda c: c["position"])
+
+        _channels_cache[guild_id] = {"data": channels, "ts": now}
+        return channels
 
 
 @router.get("/guilds/{guild_id}/roles")
-async def guild_roles(guild_id: str, session: dict = Depends(get_current_user)):
+async def guild_roles(
+    guild_id: str,
+    _session: dict = Depends(require_guild_manage),
+):
     """Return assignable roles for a guild (filtered, cached 60s)."""
-    await _require_guild_access(guild_id, session)
-
     now = time.monotonic()
     cached = _roles_cache.get(guild_id)
     if cached and now - cached["ts"] < _RESOURCE_CACHE_TTL:
         return cached["data"]
 
-    headers = {"Authorization": f"Bot {BOT_TOKEN}"}
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(f"{DISCORD_API_BASE}/guilds/{guild_id}/roles", headers=headers)
-        if resp.status_code == 429:
-            retry_after = float(resp.headers.get("Retry-After", "2"))
-            await asyncio.sleep(retry_after)
-            resp = await client.get(f"{DISCORD_API_BASE}/guilds/{guild_id}/roles", headers=headers)
-        if resp.status_code != 200:
-            logger.warning("Failed to fetch roles for guild %s: %s", guild_id, resp.status_code)
-            return []
+    async with _roles_locks[guild_id]:
+        now = time.monotonic()
+        cached = _roles_cache.get(guild_id)
+        if cached and now - cached["ts"] < _RESOURCE_CACHE_TTL:
+            return cached["data"]
 
-    # Filter out @everyone (position 0) and managed/bot roles
-    roles = [
-        {"id": r["id"], "name": r["name"], "color": r.get("color", 0), "position": r.get("position", 0)}
-        for r in resp.json()
-        if r.get("position", 0) > 0 and not r.get("managed", False)
-    ]
-    roles.sort(key=lambda r: r["position"])
+        if not BOT_TOKEN:
+            raise HTTPException(status_code=503, detail="Bot token not configured")
 
-    _roles_cache[guild_id] = {"data": roles, "ts": now}
-    return roles
+        headers = {"Authorization": f"Bot {BOT_TOKEN}"}
+        async with httpx.AsyncClient(timeout=_DISCORD_TIMEOUT) as client:
+            resp = await client.get(
+                f"{DISCORD_API_BASE}/guilds/{guild_id}/roles", headers=headers
+            )
+            if resp.status_code == 429:
+                retry_after = float(resp.headers.get("Retry-After", "2"))
+                await asyncio.sleep(retry_after)
+                resp = await client.get(
+                    f"{DISCORD_API_BASE}/guilds/{guild_id}/roles", headers=headers
+                )
+            if resp.status_code != 200:
+                logger.warning(
+                    "Failed to fetch roles for guild %s: %s",
+                    guild_id,
+                    resp.status_code,
+                )
+                return []
+
+        roles = [
+            {
+                "id": r["id"],
+                "name": r["name"],
+                "color": r.get("color", 0),
+                "position": r.get("position", 0),
+            }
+            for r in resp.json()
+            if r.get("position", 0) > 0 and not r.get("managed", False)
+        ]
+        roles.sort(key=lambda r: r["position"])
+
+        _roles_cache[guild_id] = {"data": roles, "ts": now}
+        return roles

@@ -9,6 +9,7 @@ Error messages use human-readable paths:
   Page "Getting Started" → Action Row #1 → Button "Click Here" — target is required for navigate buttons.
 """
 
+import json
 import re
 from typing import Any, Dict, List, Set, Tuple
 
@@ -25,6 +26,12 @@ _MAX_DEPTH = 5  # TODO: make configurable via guild config (config.guide["max_de
 _VALID_BUTTON_STYLES = {"primary", "secondary", "success", "danger", "link"}
 _VALID_GUIDE_ACTIONS = {"navigate", "channel", "role"}
 
+# Hard ceiling on the serialized payload. Per-field limits bound a well-formed
+# guide; this stops megabytes of junk in unrecognised keys from being stored
+# verbatim. Guides nest deeper than welcome layouts, so the cap is larger.
+_MAX_GUIDE_BYTES = 256 * 1024
+_ALLOWED_TOP_LEVEL = {"accent_color", "pages"}
+
 
 def validate_guide_schema(data: Any) -> Tuple[bool, str]:
 	"""Validate a complete guide JSON config.
@@ -33,6 +40,17 @@ def validate_guide_schema(data: Any) -> Tuple[bool, str]:
 	"""
 	if not isinstance(data, dict):
 		return False, "Top-level value must be a JSON object."
+
+	try:
+		size = len(json.dumps(data, default=str))
+	except (TypeError, ValueError):
+		return False, "Payload is not JSON-serializable."
+	if size > _MAX_GUIDE_BYTES:
+		return False, f"Guide payload is too large ({size} bytes; max {_MAX_GUIDE_BYTES})."
+
+	unknown = set(data) - _ALLOWED_TOP_LEVEL
+	if unknown:
+		return False, f"Unknown top-level field(s): {', '.join(sorted(unknown))}."
 
 	# Optional accent_color
 	if "accent_color" in data:

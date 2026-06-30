@@ -11,7 +11,7 @@ Color Tiers have been replaced by the Color Set system (color_views.py).
 
 import discord
 
-from .base import AdminLayoutBuilder
+from .base import AdminLayoutBuilder, readonly_container
 
 
 # ── Tier Names ────────────────────────────────────────────────────────────
@@ -45,10 +45,8 @@ def build_embed_status_view(stats: dict, guild: discord.Guild) -> discord.ui.Lay
     builder = AdminLayoutBuilder()
 
     builder.add_header("## Embed Configuration Status")
-    builder.add_text(f"**Server:** {guild.name}")
 
     # ── Role Tier Mapping ──────────────────────────────────────────────────
-    builder.add_separator()
     tier_roles: dict = stats.get("tier_roles", {})
     mapping_lines = []
     for t in TIER_NAMES:
@@ -57,14 +55,12 @@ def build_embed_status_view(stats: dict, guild: discord.Guild) -> discord.ui.Lay
             names = []
             for rid in role_ids:
                 role = guild.get_role(rid)
-                names.append(f"@{role.name}" if role else f"Unknown ({rid})")
+                names.append(f"<@&{rid}>" if role else f"Unknown ({rid})")
             mapping_lines.append(f"- **{TIER_LABELS[t]}:** {', '.join(names)}")
         else:
             mapping_lines.append(f"- **{TIER_LABELS[t]}:** *Not assigned*")
-    builder.add_text("**Role Tier Mapping**\n" + "\n".join(mapping_lines))
 
     # ── Description Limits ─────────────────────────────────────────────────
-    builder.add_separator()
     default_limit = stats.get("default_limit", 500)
     tier_limits: dict = stats.get("tier_limits", {})
     limit_lines = [f"**Default:** {default_limit} characters"]
@@ -73,11 +69,10 @@ def build_embed_status_view(stats: dict, guild: discord.Guild) -> discord.ui.Lay
             limit_lines.append(f"- **{TIER_LABELS[t]}:** {tier_limits[t]} characters")
     if len(limit_lines) == 1:
         limit_lines.append("*No tier-specific limits set*")
-    builder.add_text("**Description Limits**\n" + "\n".join(limit_lines))
 
     # ── Color Sets ─────────────────────────────────────────────────────────
-    builder.add_separator()
     color_sets: list = stats.get("color_sets", [])
+    cs_text = ""
     if color_sets:
         cs_lines = []
         for cs in color_sets:
@@ -88,24 +83,33 @@ def build_embed_status_view(stats: dict, guild: discord.Guild) -> discord.ui.Lay
                 else:
                     tid = str(a.get("target_id", ""))
                     role = guild.get_role(int(tid)) if tid.isdigit() else None
-                    assign_parts.append(f"@{role.name}" if role else f"role:{tid}")
+                    assign_parts.append(f"<@&{tid}>" if role else f"role:{tid}")
             assign_str = ", ".join(assign_parts) if assign_parts else "Unassigned"
             cs_lines.append(f"- **{cs['name']}** — {cs['color_count']} color(s) · {assign_str}")
-        builder.add_text("**Color Sets**\n" + "\n".join(cs_lines))
+        cs_text = "\n".join(cs_lines)
     else:
-        builder.add_text("**Color Sets**\n*No color sets configured*")
+        cs_text = "*No color sets configured*"
 
     # ── Feature Access ─────────────────────────────────────────────────────
-    builder.add_separator()
     feature_access: dict = stats.get("feature_access", {})
+    fa_text = ""
     if feature_access:
         feat_lines = []
         for key, tier_names in feature_access.items():
             label = _FEATURE_LABEL_MAP.get(key, key)
             tiers_str = ", ".join(TIER_LABELS.get(t, t) for t in tier_names)
             feat_lines.append(f"- **{label}:** {tiers_str}")
-        builder.add_text("**Feature Access**\n" + "\n".join(feat_lines))
+        fa_text = "\n".join(feat_lines)
     else:
-        builder.add_text("**Feature Access**\n*No features configured*")
+        fa_text = "*No features configured*"
+
+    body = (
+        f"**Server:** {guild.name}\n\n"
+        f"**Role Tier Mapping**\n" + "\n".join(mapping_lines) + "\n\n"
+        f"**Description Limits**\n" + "\n".join(limit_lines) + "\n\n"
+        f"**Color Sets**\n" + cs_text + "\n\n"
+        f"**Feature Access**\n" + fa_text
+    )
+    builder.add_item(readonly_container(discord.ui.TextDisplay(body)))
 
     return builder.build()

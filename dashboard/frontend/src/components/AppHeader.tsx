@@ -1,5 +1,11 @@
 import type { ReactNode } from "react";
+import { NavLink } from "react-router-dom";
 import type { User } from "../api/types";
+import { EcosystemNav } from "./EcosystemNav";
+
+function navClass({ isActive }: { isActive: boolean }) {
+  return "nav-button" + (isActive ? " active" : "");
+}
 
 interface AppHeaderProps {
   user?: User | null;
@@ -33,7 +39,20 @@ export default function AppHeader({
           <img src="/brand/logo-mark.png" alt="" />
           <span className="app-header__title-text">{title}</span>
         </h1>
-        {left}
+        {/* Builder passes its own `left` (back button + guild badge); elsewhere
+            show the primary nav. */}
+        {left ?? (user && (
+          <nav className="nav-links" style={{ marginLeft: 8 }}>
+            <NavLink to="/dashboard" className={navClass}>Stats</NavLink>
+            <NavLink to="/me/privacy" className={navClass}>Privacy</NavLink>
+            {user.can_access_settings_any && (
+              <NavLink to="/settings" className={navClass}>Settings</NavLink>
+            )}
+          </nav>
+        ))}
+      </div>
+      <div style={{ marginLeft: "auto", marginRight: 12 }}>
+        <EcosystemNav />
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         {right}

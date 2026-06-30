@@ -17,7 +17,13 @@ from typing import Callable, Awaitable, Optional
 
 import discord
 
-from .base import create_unique_id, AdminLayoutBuilder, create_empty_layout
+from .base import (
+    AdminLayoutBuilder,
+    cid,
+    create_empty_layout,
+    readonly_container,
+    editable_container,
+)
 from Features.ce_utilities.color_normalizer import color_int_to_hex
 
 
@@ -114,13 +120,15 @@ class ColorAddModal(discord.ui.Modal, title="Add Colors"):
 
 def build_default_color_setup_view(
     on_set_default: Callable[[discord.Interaction], Awaitable[None]],
+    on_back: Optional[Callable[[discord.Interaction], Awaitable[None]]] = None,
 ) -> discord.ui.LayoutView:
     """Forced first-time setup view shown before any Color Tier settings are accessible.
 
     Args:
         on_set_default: Opens the DefaultColorModal to capture the color.
+        on_back: Optional. When provided, render a Back button beside
+            Set Default Color that returns to the parent group menu.
     """
-    unique_id = create_unique_id()
     builder = AdminLayoutBuilder()
 
     builder.add_header("## Color Tiers — Setup Required")
@@ -135,10 +143,20 @@ def build_default_color_setup_view(
     set_btn = discord.ui.Button(
         label="Set Default Color",
         style=discord.ButtonStyle.green,
-        custom_id=f"cs_setdefault_{unique_id}",
+        custom_id=cid("editor", "set", "default_color"),
     )
     set_btn.callback = on_set_default
-    builder.add_action_row(set_btn)
+
+    if on_back is not None:
+        back_btn = discord.ui.Button(
+            label="Back",
+            style=discord.ButtonStyle.secondary,
+            custom_id=cid("editor", "back", "color_sets_setup"),
+        )
+        back_btn.callback = on_back
+        builder.add_action_row(set_btn, back_btn)
+    else:
+        builder.add_action_row(set_btn)
 
     return builder.build()
 
@@ -163,9 +181,8 @@ def build_color_sets_menu(
         on_create:          Callback for the "Create Color Set" button.
         on_select_set:      Async callback (interaction, set_id) when a set is selected.
         on_change_default:  Callback to open the change-default-color modal.
-        on_cancel:          Callback for the "Done" button.
+        on_cancel:          Callback for the "Back" button (returns to parent group).
     """
-    unique_id = create_unique_id()
     builder = AdminLayoutBuilder()
 
     builder.add_header("## Color Sets")
@@ -210,7 +227,7 @@ def build_color_sets_menu(
         ]
         select = discord.ui.Select(
             placeholder="Select a color set...",
-            custom_id=f"cs_select_{unique_id}",
+            custom_id=cid("editor", "select", "color_sets"),
             options=options,
         )
 
@@ -223,21 +240,21 @@ def build_color_sets_menu(
     create_btn = discord.ui.Button(
         label="Create Color Set",
         style=discord.ButtonStyle.green,
-        custom_id=f"cs_create_{unique_id}",
+        custom_id=cid("editor", "create", "color_sets"),
     )
     create_btn.callback = on_create
 
     change_default_btn = discord.ui.Button(
         label="Change Default Color",
         style=discord.ButtonStyle.secondary,
-        custom_id=f"cs_chgdefault_{unique_id}",
+        custom_id=cid("editor", "set", "default_color"),
     )
     change_default_btn.callback = on_change_default
 
     done_btn = discord.ui.Button(
-        label="Done",
+        label="Back",
         style=discord.ButtonStyle.secondary,
-        custom_id=f"cs_done_{unique_id}",
+        custom_id=cid("editor", "back", "color_sets"),
     )
     done_btn.callback = on_cancel
 
@@ -272,7 +289,6 @@ def build_color_set_detail(
         on_delete_set:        Triggers deletion confirmation.
         on_back:              Returns to the menu.
     """
-    unique_id = create_unique_id()
     builder = AdminLayoutBuilder()
 
     set_name = color_set.get("name", "Unknown")
@@ -328,7 +344,7 @@ def build_color_set_detail(
         ]
         remove_select = discord.ui.Select(
             placeholder="Remove a color...",
-            custom_id=f"cs_remove_{unique_id}",
+            custom_id=cid("editor", "remove", "color_set_color"),
             options=remove_options,
         )
 
@@ -362,7 +378,7 @@ def build_color_set_detail(
         ]
         rm_assign_select = discord.ui.Select(
             placeholder="Remove an assignment...",
-            custom_id=f"cs_rma_{unique_id}",
+            custom_id=cid("editor", "remove", "color_set_all"),
             options=rm_assign_options,
         )
 
@@ -382,35 +398,35 @@ def build_color_set_detail(
     assign_tier_btn = discord.ui.Button(
         label="Assign to Tier",
         style=discord.ButtonStyle.primary,
-        custom_id=f"cs_tier_{unique_id}",
+        custom_id=cid("editor", "assign", "color_set_tier"),
     )
     assign_tier_btn.callback = on_assign_tier
 
     assign_role_btn = discord.ui.Button(
         label="Assign to Role",
         style=discord.ButtonStyle.primary,
-        custom_id=f"cs_role_{unique_id}",
+        custom_id=cid("editor", "assign", "color_set_role"),
     )
     assign_role_btn.callback = on_assign_role
 
     add_colors_btn = discord.ui.Button(
         label="Add Colors",
         style=discord.ButtonStyle.secondary,
-        custom_id=f"cs_add_{unique_id}",
+        custom_id=cid("editor", "add", "color_set_colors"),
     )
     add_colors_btn.callback = on_add_colors
 
     delete_btn = discord.ui.Button(
         label="Delete Set",
         style=discord.ButtonStyle.danger,
-        custom_id=f"cs_del_{unique_id}",
+        custom_id=cid("editor", "remove", "color_set"),
     )
     delete_btn.callback = on_delete_set
 
     back_btn = discord.ui.Button(
         label="Back",
         style=discord.ButtonStyle.secondary,
-        custom_id=f"cs_back_{unique_id}",
+        custom_id=cid("editor", "back", "color_set"),
     )
     back_btn.callback = on_back
 
@@ -431,7 +447,6 @@ def build_role_assign_view(
         on_role_selected: Callback (interaction, role_id) when a role is chosen.
         on_back:          Returns to the detail view.
     """
-    unique_id = create_unique_id()
     builder = AdminLayoutBuilder()
 
     builder.add_header(f"## Assign to Role — {color_set_name}")
@@ -446,7 +461,7 @@ def build_role_assign_view(
 
     role_select = discord.ui.RoleSelect(
         placeholder="Select a role to assign this set to...",
-        custom_id=f"cs_rolesel_{unique_id}",
+        custom_id=cid("editor", "select", "color_set_role"),
         min_values=1,
         max_values=1,
     )
@@ -462,7 +477,7 @@ def build_role_assign_view(
     back_btn = discord.ui.Button(
         label="Back",
         style=discord.ButtonStyle.secondary,
-        custom_id=f"cs_back_{unique_id}",
+        custom_id=cid("editor", "back", "color_set"),
     )
     back_btn.callback = on_back
     builder.add_action_row(back_btn)
@@ -485,7 +500,6 @@ def build_tier_assign_view(
         on_tier_selected: Callback (interaction, tier_key) when a tier is chosen.
         on_back:          Returns to the detail view.
     """
-    unique_id = create_unique_id()
     builder = AdminLayoutBuilder()
 
     builder.add_header(f"## Assign to Tier — {color_set_name}")
@@ -507,7 +521,7 @@ def build_tier_assign_view(
     ]
     tier_select = discord.ui.Select(
         placeholder="Select a tier...",
-        custom_id=f"cs_tiersel_{unique_id}",
+        custom_id=cid("editor", "select", "color_set_tier"),
         options=options,
         min_values=1,
         max_values=1,
@@ -522,7 +536,7 @@ def build_tier_assign_view(
     back_btn = discord.ui.Button(
         label="Back",
         style=discord.ButtonStyle.secondary,
-        custom_id=f"cs_back_{unique_id}",
+        custom_id=cid("editor", "back", "color_set"),
     )
     back_btn.callback = on_back
     builder.add_action_row(back_btn)
@@ -542,7 +556,6 @@ def build_delete_confirm_view(
         on_confirm: Proceed with the deletion.
         on_cancel:  Abort and return to the detail view.
     """
-    unique_id = create_unique_id()
     builder = AdminLayoutBuilder()
 
     builder.add_header("## Confirm Deletion")
@@ -555,14 +568,14 @@ def build_delete_confirm_view(
     confirm_btn = discord.ui.Button(
         label="Delete",
         style=discord.ButtonStyle.danger,
-        custom_id=f"cs_confirm_{unique_id}",
+        custom_id=cid("confirm", "remove", "color_set"),
     )
     confirm_btn.callback = on_confirm
 
     cancel_btn = discord.ui.Button(
         label="Cancel",
         style=discord.ButtonStyle.secondary,
-        custom_id=f"cs_cfcancel_{unique_id}",
+        custom_id=cid("confirm", "back", "color_set"),
     )
     cancel_btn.callback = on_cancel
 

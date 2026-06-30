@@ -9,7 +9,7 @@ from typing import Any, Dict
 
 import discord
 
-from utils.logger import get_logger
+from storage.logging import get_logger
 from storage.config_manager import get_config, get_guild_config_manager
 
 logger = get_logger("DropsActions")
@@ -74,7 +74,7 @@ class DropsActions:
     async def get_drops_stats(guild_id: int) -> Dict[str, Any]:
         """Query updates_totals for guild-specific stats."""
         try:
-            from storage.database_manager import db_manager
+            from storage.manager import db_manager
             totals_col = db_manager.get_collection_manager('updates_totals')
 
             stats = {}
@@ -141,7 +141,7 @@ class DropsActions:
         user_role_ids = {role.id for role in member.roles}
 
         # Check admin roles
-        if user_role_ids & set(config.roles["admin"]):
+        if user_role_ids & set(config.roles["admin_role_ids"]):
             return True
 
         # Check drops manager role

@@ -1,0 +1,158 @@
+{
+  "accent_color": "#4d0eb3",
+  "components": [
+    {
+      "type": "text",
+      "content": "# {random_greeting}\n\nHey {member}, you just stepped into the shadows. Welcome to the Empire."
+    },
+    {
+      "type": "separator"
+    },
+    {
+      "type": "section",
+      "content": [
+        {"type": "text", "content": "**Soul #{member_count}**"},
+        {"type": "text", "content": "You're now part of something custom-built from the ground up. No generic bots, no cookie-cutter setups — everything here was coded for this community."},
+        {"type": "text", "content": "Grab some roles, drop an intro, and make yourself at home, **{member_name}**."}
+      ],
+      "accessory": {
+        "type": "thumbnail",
+        "media": "member_avatar",
+        "description": "Your avatar"
+      }
+    },
+    {
+      "type": "container",
+      "accent_color": "#5865F2",
+      "components": [
+        {
+          "type": "text",
+          "content": "## What We Offer\n\nThis isn't just another Discord server. Here's what's waiting for you:"
+        },
+        {
+          "type": "separator"
+        },
+        {
+          "type": "text",
+          "content": "**Games** — UNO, Tic-Tac-Toe, Hangman right here in Discord\n**Daily Polls** — Would You Rather every morning with leaderboards\n**Free Drops** — Prime Gaming loot & free game alerts, never miss a deal\n**Leveling** — XP from chatting, reacting, and hanging in voice\n**Music** — Self-hosted bots with a web dashboard, zero paywalls\n**Voice Hubs** — Create your own private voice channel on the fly"
+        },
+        {
+          "type": "action_row",
+          "buttons": [
+            {
+              "style": "primary",
+              "label": "Server Guide",
+              "emoji": "\ud83d\udcdc",
+              "action": "open_guide"
+            },
+            {
+              "style": "success",
+              "label": "Getting Started",
+              "emoji": "\ud83d\ude80",
+              "action": "getting_started"
+            },
+            {
+              "style": "secondary",
+              "label": "Browse Free Drops",
+              "emoji": "\ud83c\udfae",
+              "action": "browse_drops"
+            },
+            {
+              "style": "danger",
+              "label": "Server Rules",
+              "emoji": "\ud83d\udee1\ufe0f",
+              "action": "server_rules"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "separator"
+    },
+    {
+      "type": "section",
+      "content": [
+        {"type": "text", "content": "**Check out our website** for more about the Empire, or share the invite with a friend."}
+      ],
+      "accessory": {
+        "type": "button",
+        "style": "link",
+        "label": "eosofficial.club",
+        "emoji": "\ud83c\udf10",
+        "url": "https://eosofficial.club"
+      }
+    },
+    {
+      "type": "action_row",
+      "select": {
+        "placeholder": "Explore the server...",
+        "options": [
+          {
+            "label": "Server Info & Stats",
+            "action": "server_info",
+            "description": "Members, channels, boosts, and more",
+            "emoji": "\ud83d\udcca"
+          },
+          {
+            "label": "Channel List",
+            "action": "channel_list",
+            "description": "See what's where",
+            "emoji": "\ud83d\udcdd"
+          },
+          {
+            "label": "Role Overview",
+            "action": "role_info",
+            "description": "Available roles and who has what",
+            "emoji": "\ud83c\udfa8"
+          },
+          {
+            "label": "Submit a Suggestion",
+            "action": "suggest",
+            "description": "Your ideas shape the server",
+            "emoji": "\ud83d\udca1"
+          }
+        ]
+      }
+    },
+    {
+      "type": "media_gallery",
+      "items": [
+        {
+          "media": "https://imgur.com/gallery/welcome-banner-Hdtv2kC#8Kcu7Ut",
+          "description": "Empire of Shadows banner"
+        },
+        {
+          "media": "https://YOUR_SCREENSHOT_URL_HERE",
+          "description": "Community vibes"
+        }
+      ]
+    },
+    {
+      "type": "container",
+      "accent_color": "#FEE75C",
+      "spoiler": true,
+      "components": [
+        {
+          "type": "text",
+          "content": "## You Found a Secret\n\nNot everyone clicks the hidden stuff. You're already fitting in.\n\nHere's a tip: try `/play uno` in the game lobby. Chaos included."
+        },
+        {
+          "type": "action_row",
+          "buttons": [
+            {
+              "style": "link",
+              "label": "Invite a Friend",
+              "emoji": "\ud83d\udc8c",
+              "url": "https://discord.gg/xx86YEhaYF"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "content": "Welcome to **{guild_name}** \u2014 {voice_active} voice channels are live right now. Come on home, we are waiting."
+    }
+  ]
+}

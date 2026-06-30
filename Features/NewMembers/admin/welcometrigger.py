@@ -5,7 +5,7 @@ from typing import Optional
 
 from Features.NewMembers.joining import guild_handler
 from Features.NewMembers.welcome_schema import validate_welcome_schema
-from utils.logger import get_logger
+from storage.logging import get_logger
 from storage.config_manager import get_config
 
 logger = get_logger("WelcomeTrigger")
@@ -29,8 +29,8 @@ def has_welcome_permissions_app():
 
         # Check for admin or moderator roles from config
         user_role_ids = {role.id for role in getattr(user, "roles", [])}
-        admin_set = set(guild_config.roles["admin"])
-        mod_set = set(guild_config.roles["moderator"])
+        admin_set = set(guild_config.roles["admin_role_ids"])
+        mod_set = set(guild_config.roles["mod_role_ids"])
 
         return bool(user_role_ids & (admin_set | mod_set))
 
@@ -162,9 +162,9 @@ class WelcomeGroup(commands.GroupCog, name="welcome", description="Welcome syste
 
         # Build dynamic role list
         role_mentions = ["• `Administrator` permission"]
-        for role_id in guild_config.roles["admin"]:
+        for role_id in guild_config.roles["admin_role_ids"]:
             role_mentions.append(f"• <@&{role_id}>")
-        for role_id in guild_config.roles["moderator"]:
+        for role_id in guild_config.roles["mod_role_ids"]:
             role_mentions.append(f"• <@&{role_id}>")
 
         if len(role_mentions) == 1:

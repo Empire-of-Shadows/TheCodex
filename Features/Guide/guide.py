@@ -13,9 +13,9 @@ import discord
 from discord.ext import commands
 from rapidfuzz import fuzz
 
-from utils.bot import bot
-from utils.logger import get_logger, PerformanceLogger
-from storage.database_manager import db_manager
+from startup.bot import bot
+from storage.logging import get_logger, PerformanceLogger
+from storage.manager import db_manager
 from Features.Guide.guide_store import guide_store
 from Features.Guide.guide_renderer import GuideRenderer
 from Features.Guide.guide_actions import (
@@ -113,6 +113,8 @@ class SearchEngine:
 		if not guild_index:
 			return []
 
+		# Cap query length so a pathological input can't drive unbounded scoring.
+		query = (query or "")[:200]
 		query_lower = query.lower()
 		query_words = set(query_lower.split())
 		query_keywords = self._extract_keywords(query_lower)

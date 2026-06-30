@@ -9,7 +9,7 @@ from discord.ext import commands, tasks
 from Features.ce_utilities.helpers.embed_config_loader import EmbedConfigLoader
 from Features.ce_utilities.helpers.embed import EditEmbedModal
 from Features.ce_utilities.helpers.embed_modal import EmbedModal, get_max_description_length, get_allowed_colors, get_default_color
-from utils.logger import get_logger, log_context, log_performance
+from storage.logging import get_logger, log_context, log_performance
 from storage.config_manager import get_config
 
 logger = get_logger("CreateEmbed")
@@ -34,7 +34,7 @@ async def is_admin_check(interaction: Interaction) -> bool:
 
     guild_config = await get_config(interaction.guild.id)
     user_role_ids = {role.id for role in interaction.user.roles}
-    admin_set = set(guild_config.roles["admin"])
+    admin_set = set(guild_config.roles["admin_role_ids"])
 
     return bool(user_role_ids & admin_set)
 
@@ -54,10 +54,10 @@ def has_embed_permissions():
         guild_config = await get_config(interaction.guild.id)
         user_role_ids = {role.id for role in interaction.user.roles}
 
-        if user_role_ids & set(guild_config.roles["admin"]):
+        if user_role_ids & set(guild_config.roles["admin_role_ids"]):
             return True
 
-        if user_role_ids & set(guild_config.roles["moderator"]):
+        if user_role_ids & set(guild_config.roles["mod_role_ids"]):
             return True
 
         tier_role_ids = set(guild_config.get_all_tier_role_ids())

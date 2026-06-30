@@ -1,5 +1,6 @@
 .idea/
 /log/
+/logs/
 **/would_you_rather_questions/
 bot_permissions.csv
 storage/logs/
@@ -22,3 +23,6 @@ tsconfig.tsbuildinfo
 
 # Environment
 .env
+.env.local
+.env.*.local
+/docker/

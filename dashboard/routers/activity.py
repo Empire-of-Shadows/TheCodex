@@ -1,18 +1,20 @@
 """User activity API — aggregates WYR, Suggestions, Tag Tracker, Boost data."""
 
 import asyncio
-import logging
 from datetime import datetime, timezone
 
 import httpx
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from dashboard.auth.dependencies import get_current_user
 from dashboard.config import BOT_TOKEN, DISCORD_API_BASE
 from dashboard.routers.dashboard import _fetch_bot_guild_ids
 from dashboard import db
+from storage.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger("dashboard.routers.activity")
+
+_TAG_TIMEOUT = httpx.Timeout(2.0, connect=2.0)
 
 router = APIRouter(tags=["activity"])
 
@@ -111,60 +113,83 @@ async def _get_suggestions_activity(user_id: int, guild_ids: list[int]) -> dict:
     }
 
 
+async def _check_tag_role(gid: int, user_id: str, role_id: str) -> bool | None:
+    """Discord member lookup for tag-tracker role membership. Returns None on failure."""
+    if not BOT_TOKEN:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=_TAG_TIMEOUT) as client:
+            resp = await client.get(
+                f"{DISCORD_API_BASE}/guilds/{gid}/members/{user_id}",
+                headers={"Authorization": f"Bot {BOT_TOKEN}"},
+            )
+        if resp.status_code == 200:
+            member = resp.json()
+            return str(role_id) in [str(r) for r in member.get("roles", [])]
+    except httpx.HTTPError as e:
+        logger.debug("Tag tracker API call failed for guild %s: %s", gid, e)
+    return None
+
+
 async def _get_tag_status(
     user_id: str, guild_ids: list[int], guild_name_map: dict[int, str]
 ) -> list[dict]:
-    """Check tag tracker status for each guild (max 5)."""
-    results = []
+    """Check tag tracker status for each guild (max 5). One config query, parallel role checks."""
     check_ids = guild_ids[:5]
+    if not check_ids:
+        return []
 
+    cursor = db.guild_config().find(
+        {"guild_id": {"$in": check_ids}},
+        {"guild_id": 1, "tag_tracker": 1},
+    )
+    configs: dict[int, dict] = {doc["guild_id"]: doc async for doc in cursor}
+
+    # First pass: gather active tag configs and queue role-check tasks.
+    entries: list[dict] = []
+    role_tasks: list[asyncio.Future] = []
     for gid in check_ids:
-        config_doc = await db.guild_config().find_one(
-            {"guild_id": gid},
-            {"tag_tracker": 1},
-        )
+        config_doc = configs.get(gid)
         if not config_doc:
             continue
-
         tt = config_doc.get("tag_tracker", {})
         if not tt.get("enabled"):
             continue
-
         server_tag = tt.get("server_tag")
         role_id = tt.get("role_id")
         if not server_tag:
             continue
-
-        has_role = None
-        if role_id and BOT_TOKEN:
-            try:
-                async with httpx.AsyncClient(timeout=2.0) as client:
-                    resp = await client.get(
-                        f"{DISCORD_API_BASE}/guilds/{gid}/members/{user_id}",
-                        headers={"Authorization": f"Bot {BOT_TOKEN}"},
-                    )
-                    if resp.status_code == 200:
-                        member = resp.json()
-                        has_role = str(role_id) in [str(r) for r in member.get("roles", [])]
-            except Exception:
-                logger.debug("Tag tracker API call failed for guild %s", gid)
-
-        results.append({
+        entries.append({
             "guild_id": str(gid),
             "guild_name": guild_name_map.get(gid, "Unknown"),
             "server_tag": server_tag,
-            "has_role": has_role,
+            "has_role": None,
+            "_role_id": role_id,
+            "_gid": gid,
         })
+        if role_id and BOT_TOKEN:
+            role_tasks.append(asyncio.ensure_future(_check_tag_role(gid, user_id, role_id)))
+        else:
+            role_tasks.append(asyncio.ensure_future(asyncio.sleep(0, result=None)))
 
-    return results
+    role_results = await asyncio.gather(*role_tasks, return_exceptions=False)
+    for entry, has_role in zip(entries, role_results):
+        entry["has_role"] = has_role
+        entry.pop("_role_id", None)
+        entry.pop("_gid", None)
+
+    return entries
 
 
 async def _get_boost_status(user_id: int, guild_ids: list[int], guild_name_map: dict[int, str]) -> dict:
-    """Check boost status for the user across guilds."""
+    """Check boost status for the user across guilds.
+
+    The Boosts collection only holds active boosters — the tracker deletes the
+    doc when a member stops boosting — so presence in the collection means active.
+    """
     cursor = db.serverdata_boosts().find({
         "user_id": user_id,
         "guild_id": {"$in": guild_ids},
-        "is_active": True,
     })
     boosts = []
     async for doc in cursor:
@@ -199,6 +224,15 @@ async def user_activity(
     session_guilds = {g["id"]: g["name"] for g in session.get("guilds", [])}
 
     if guild_id:
+        # Scope to a single guild ONLY if the user is actually in it. Without
+        # this check any authenticated user could pass an arbitrary guild_id and
+        # drive bot-token Discord lookups (and read that guild's configured
+        # server_tag / tag-tracker state) for servers they don't belong to.
+        if guild_id not in session_guilds:
+            raise HTTPException(
+                status_code=404,
+                detail="You are not a member of this guild (or session is stale).",
+            )
         target_ids = [int(guild_id)]
         guild_name_map = {int(guild_id): session_guilds.get(guild_id, "Unknown")}
     else:

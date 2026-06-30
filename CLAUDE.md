@@ -2,6 +2,41 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Changelog Requirements
+
+**IMPORTANT**: When making any user-facing changes, you MUST update `CHANGELOG.md` using plain language that community members can understand.
+
+### What to Document
+- New guides, FAQ answers, or shortcuts
+- Changes to how search or navigation works
+- Bug fixes that affect people asking the bot questions
+- Changes to commands or settings
+
+### How to Write Changelog Entries
+Write entries as if explaining to a server member, not a programmer:
+- **DO**: "The guide now understands more ways of asking the same question"
+- **DON'T**: "Lowered the RapidFuzz match threshold and added query normalization"
+
+- **DO**: "Added a shortcut so typing `rules` jumps straight to the server rules"
+- **DON'T**: "Registered a new entry in the shortcut map"
+
+- **DO**: "Fixed broken back-navigation when browsing nested guide sections"
+- **DON'T**: "Fixed breadcrumb stack pop on nested section traversal"
+
+### Changelog Format
+```markdown
+## [Unreleased] - [Date]
+
+### Added
+- Brief, plain-language description of new feature
+
+### Changed
+- What changed and how it affects users
+
+### Fixed
+- What was broken and that it's now working
+```
+
 ## Development Status
 
 This project has no real users and no production data. As a result:

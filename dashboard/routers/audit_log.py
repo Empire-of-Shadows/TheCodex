@@ -13,6 +13,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from dashboard import db
 from dashboard.auth.dependencies import get_current_user
 from dashboard.auth.panel_role import require_panel_access
+from storage.logging import get_logger
+
+logger = get_logger("dashboard.routers.audit_log")
 
 router = APIRouter(tags=["audit_log"])
 

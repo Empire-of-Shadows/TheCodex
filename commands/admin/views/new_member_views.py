@@ -7,7 +7,7 @@ Panel views for managing New Members configuration.
 import discord
 from typing import Callable, Awaitable, Dict, Any, Optional
 
-from .base import AdminLayoutBuilder, create_unique_id
+from .base import AdminLayoutBuilder, cid, readonly_container, editable_container
 
 
 def build_new_member_status_view(
@@ -40,26 +40,20 @@ def build_new_member_status_view(
         role_display = "Not configured"
 
     builder.add_header("## New Members Status")
-    builder.add_text(f"**Server:** {guild.name}")
-    builder.add_separator()
-
-    builder.add_text(
+    builder.add_item(readonly_container(discord.ui.TextDisplay(
+        f"**Server:** {guild.name}\n"
         f"**Account Age Requirement:** {age} days\n"
         f"**Auto-Kick New Accounts:** {'Enabled' if auto_kick else 'Disabled'}\n"
         f"**Welcome Messages:** {'Enabled' if welcome_enabled else 'Disabled'}\n"
         f"**Welcome Channel:** {welcome_display}\n"
         f"**Whitelist System:** {'Enabled' if whitelist_enabled else 'Disabled'}\n"
-        f"**Whitelist Role:** {role_display}"
-    )
-    builder.add_separator()
-
-    builder.add_text(
+        f"**Whitelist Role:** {role_display}\n\n"
         f"**Whitelist Stats:**\n"
         f"- Active entries: {stats.get('active', 0)}\n"
         f"- Inactive entries: {stats.get('inactive', 0)}\n"
         f"- Total entries: {stats.get('total', 0)}\n"
         f"- Roles currently assigned: {stats.get('role_assigned', 0)}"
-    )
+    )))
 
     return builder.build()
 
@@ -94,30 +88,25 @@ def build_nm_whitelist_role_view(
     on_create_role: Callable[[discord.Interaction], Awaitable[None]],
 ) -> discord.ui.LayoutView:
     """Build the NM Whitelist Role select view with a Create Role button."""
-    unique_id = create_unique_id()
     builder = AdminLayoutBuilder()
 
     builder.add_header("## New Members — Whitelist Role")
 
-    if current_values:
-        names = []
-        for rid in current_values:
-            role = guild.get_role(int(rid))
-            names.append(role.mention if role else f"Unknown ({rid})")
-        builder.add_text(f"**Currently assigned:** {', '.join(names)}")
-    else:
-        builder.add_text("*No role currently assigned.*")
-
-    builder.add_separator()
-    builder.add_text(
+    builder.add_item(readonly_container(discord.ui.TextDisplay(
         "Role assigned to new members added to the whitelist.\n\n"
         "-# Don't have a dedicated role? Use **Create Role** to create one — "
         "then go to **Server Settings → Roles** to set its color, icon, and position."
-    )
+    )))
+
+    if current_values:
+        mentions = [f"<@&{int(rid)}>" for rid in current_values]
+        current_text = f"**Currently assigned:** {', '.join(mentions)}"
+    else:
+        current_text = "*No role currently assigned.*"
 
     role_select = discord.ui.RoleSelect(
         placeholder="Select a role...",
-        custom_id=f"nm_whitelist_role_select_{unique_id}",
+        custom_id=cid("editor", "select", "nm_whitelist_role"),
         min_values=1,
         max_values=1,
         default_values=[discord.Object(id=int(rid)) for rid in current_values],
@@ -128,12 +117,18 @@ def build_nm_whitelist_role_view(
         await on_save(interaction, role_ids)
 
     role_select.callback = _role_cb
-    builder.add_select(role_select)
+
+    select_row = discord.ui.ActionRow()
+    select_row.add_item(role_select)
+    builder.add_item(editable_container(
+        discord.ui.TextDisplay(current_text),
+        select_row,
+    ))
 
     back_btn = discord.ui.Button(
-        label="Close",
-        style=discord.ButtonStyle.danger,
-        custom_id=f"nm_wr_back_{unique_id}",
+        label="Back",
+        style=discord.ButtonStyle.secondary,
+        custom_id=cid("editor", "back", "nm_whitelist_role"),
     )
     back_btn.callback = on_back
     btn_row = discord.ui.ActionRow()
@@ -143,7 +138,7 @@ def build_nm_whitelist_role_view(
         clear_btn = discord.ui.Button(
             label="Clear",
             style=discord.ButtonStyle.danger,
-            custom_id=f"nm_wr_clear_{unique_id}",
+            custom_id=cid("editor", "clear", "nm_whitelist_role"),
             disabled=(len(current_values) == 0),
         )
         clear_btn.callback = on_clear
@@ -152,7 +147,7 @@ def build_nm_whitelist_role_view(
     create_btn = discord.ui.Button(
         label="Create Role",
         style=discord.ButtonStyle.primary,
-        custom_id=f"nm_wr_create_{unique_id}",
+        custom_id=cid("editor", "create", "nm_whitelist_role"),
     )
     create_btn.callback = on_create_role
     btn_row.add_item(create_btn)
@@ -191,49 +186,50 @@ def build_nm_welcome_channel_view(
     on_create_channel: Callable[[discord.Interaction], Awaitable[None]],
 ) -> discord.ui.LayoutView:
     """Build the NM Welcome Channel select view with a Create Channel button."""
-    unique_id = create_unique_id()
     builder = AdminLayoutBuilder()
 
     builder.add_header("## New Members — Welcome Channel")
 
-    if current_values:
-        names = []
-        for cid in current_values:
-            ch = guild.get_channel(int(cid))
-            names.append(ch.mention if ch else f"Unknown ({cid})")
-        builder.add_text(f"**Currently assigned:** {', '.join(names)}")
-    else:
-        builder.add_text("*No channel currently assigned.*")
-
-    builder.add_separator()
-    builder.add_text(
+    builder.add_item(readonly_container(discord.ui.TextDisplay(
         "Channel where welcome messages are sent when new members join.\n\n"
         "-# Don't have a dedicated channel? Use **Create Channel** to create one — "
         "then set its permissions and category in **Server Settings → Channels**."
-    )
+    )))
+
+    if current_values:
+        mentions = [f"<#{int(_cid)}>" for _cid in current_values]
+        current_text = f"**Currently assigned:** {', '.join(mentions)}"
+    else:
+        current_text = "*No channel currently assigned.*"
 
     channel_select = discord.ui.ChannelSelect(
         placeholder="Select a channel...",
-        custom_id=f"nm_welcome_ch_select_{unique_id}",
+        custom_id=cid("editor", "select", "nm_welcome_channel"),
         channel_types=[discord.ChannelType.text],
         min_values=1,
         max_values=1,
-        default_values=[discord.Object(id=int(cid)) for cid in current_values],
+        default_values=[discord.Object(id=int(_cid)) for _cid in current_values],
     )
 
     async def _channel_cb(interaction: discord.Interaction) -> None:
         channel_ids = [
-            int(cid) for cid in interaction.data.get("resolved", {}).get("channels", {}).keys()
+            int(_cid) for _cid in interaction.data.get("resolved", {}).get("channels", {}).keys()
         ]
         await on_save(interaction, channel_ids)
 
     channel_select.callback = _channel_cb
-    builder.add_select(channel_select)
+
+    select_row = discord.ui.ActionRow()
+    select_row.add_item(channel_select)
+    builder.add_item(editable_container(
+        discord.ui.TextDisplay(current_text),
+        select_row,
+    ))
 
     back_btn = discord.ui.Button(
-        label="Close",
-        style=discord.ButtonStyle.danger,
-        custom_id=f"nm_wc_back_{unique_id}",
+        label="Back",
+        style=discord.ButtonStyle.secondary,
+        custom_id=cid("editor", "back", "nm_welcome_channel"),
     )
     back_btn.callback = on_back
     btn_row = discord.ui.ActionRow()
@@ -243,7 +239,7 @@ def build_nm_welcome_channel_view(
         clear_btn = discord.ui.Button(
             label="Clear",
             style=discord.ButtonStyle.danger,
-            custom_id=f"nm_wc_clear_{unique_id}",
+            custom_id=cid("editor", "clear", "nm_welcome_channel"),
             disabled=(len(current_values) == 0),
         )
         clear_btn.callback = on_clear
@@ -252,7 +248,7 @@ def build_nm_welcome_channel_view(
     create_btn = discord.ui.Button(
         label="Create Channel",
         style=discord.ButtonStyle.primary,
-        custom_id=f"nm_wc_create_{unique_id}",
+        custom_id=cid("editor", "create", "nm_welcome_channel"),
     )
     create_btn.callback = on_create_channel
     btn_row.add_item(create_btn)

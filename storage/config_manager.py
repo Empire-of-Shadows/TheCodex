@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set
 
-from utils.logger import get_logger
+from storage.logging import get_logger
 
 logger = get_logger("GuildConfig")
 
@@ -56,8 +56,8 @@ _LEGACY_FIELDS: tuple = (
 
 def _default_roles() -> Dict[str, Any]:
     return {
-        "admin": [],
-        "moderator": [],
+        "admin_role_ids": [],
+        "mod_role_ids": [],
     }
 
 
@@ -251,15 +251,17 @@ class GuildConfig:
             tiers_stored = stored.get("tiers", {})
             if set(tiers_stored.keys()) & _old_tier_names:
                 tiers_stored = {}
+            # Canonical keys are admin_role_ids / mod_role_ids; fall back to the
+            # legacy admin / moderator names for documents not yet migrated.
             roles = {
-                "admin": stored.get("admin", []),
-                "moderator": stored.get("moderator", []),
+                "admin_role_ids": stored.get("admin_role_ids", stored.get("admin", [])),
+                "mod_role_ids": stored.get("mod_role_ids", stored.get("moderator", [])),
                 "tiers": tiers_stored,
             }
         else:
             roles = {
-                "admin": data.get("admin_role_ids", []),
-                "moderator": data.get("moderator_role_ids", []),
+                "admin_role_ids": data.get("admin_role_ids", []),
+                "mod_role_ids": data.get("moderator_role_ids", []),
                 "tiers": {},
             }
 
@@ -565,11 +567,11 @@ class GuildConfig:
 
     def is_admin_role(self, role_id: int) -> bool:
         """Check if a role ID is an admin role."""
-        return role_id in self.roles["admin"]
+        return role_id in self.roles["admin_role_ids"]
 
     def is_moderator_role(self, role_id: int) -> bool:
         """Check if a role ID is a moderator role."""
-        return role_id in self.roles["moderator"]
+        return role_id in self.roles["mod_role_ids"]
 
     def is_staff_role(self, role_id: int) -> bool:
         """Check if a role ID is admin or moderator."""
@@ -601,6 +603,13 @@ class GuildConfigManager:
         self.db_manager = db_manager
         self._cache: Dict[int, GuildConfig] = {}
         self._cache_time: Dict[int, datetime] = {}
+        # Last time we verified a cached config against the DB's updated_at.
+        # Within _cache_grace_seconds we trust the in-memory copy and skip the
+        # per-call Mongo round-trip (hot paths: member joins, the WYR tick, the
+        # tag loop). Bot-side writes update the cache directly; only external
+        # (dashboard) edits take up to this long to propagate.
+        self._cache_checked: Dict[int, datetime] = {}
+        self._cache_grace_seconds = 30
         self._settings_cache: Dict[int, Dict] = {}
         self._collection = None
         self._initialized = False
@@ -627,11 +636,18 @@ class GuildConfigManager:
 
         if use_cache and guild_id in self._cache:
             # Check if DB has been updated externally (e.g. by dashboard)
+            now = datetime.now(timezone.utc)
             cache_ts = self._cache_time.get(guild_id)
+            last_check = self._cache_checked.get(guild_id)
+            # Within the grace window, trust the in-memory copy and skip the
+            # staleness probe that otherwise made every "cache hit" a DB call.
+            if last_check and (now - last_check).total_seconds() < self._cache_grace_seconds:
+                return self._cache[guild_id]
             if cache_ts:
                 doc_meta = await self._collection.find_one(
                     {"guild_id": guild_id}, projection={"updated_at": 1}
                 )
+                self._cache_checked[guild_id] = now
                 db_updated = doc_meta.get("updated_at") if doc_meta else None
                 if db_updated and isinstance(db_updated, datetime):
                     if db_updated.tzinfo is None:
@@ -664,8 +680,10 @@ class GuildConfigManager:
                 logger.debug(f"Using default config for unconfigured guild {guild_id}")
 
             async with self._cache_lock:
+                now = datetime.now(timezone.utc)
                 self._cache[guild_id] = config
-                self._cache_time[guild_id] = datetime.now(timezone.utc)
+                self._cache_time[guild_id] = now
+                self._cache_checked[guild_id] = now
 
             return config
 
@@ -705,8 +723,10 @@ class GuildConfigManager:
                 logger.info(f"Created config for guild {config.guild_id}")
 
             async with self._cache_lock:
+                saved_at = datetime.now(timezone.utc)
                 self._cache[config.guild_id] = config
-                self._cache_time[config.guild_id] = datetime.now(timezone.utc)
+                self._cache_time[config.guild_id] = saved_at
+                self._cache_checked[config.guild_id] = saved_at
 
             return True
 
@@ -843,15 +863,15 @@ class GuildConfigManager:
         config = await self.get_config(guild_id)
 
         if role_type == "admin":
-            if action == "add" and role_id not in config.roles["admin"]:
-                config.roles["admin"].append(role_id)
-            elif action == "remove" and role_id in config.roles["admin"]:
-                config.roles["admin"].remove(role_id)
+            if action == "add" and role_id not in config.roles["admin_role_ids"]:
+                config.roles["admin_role_ids"].append(role_id)
+            elif action == "remove" and role_id in config.roles["admin_role_ids"]:
+                config.roles["admin_role_ids"].remove(role_id)
         elif role_type == "moderator":
-            if action == "add" and role_id not in config.roles["moderator"]:
-                config.roles["moderator"].append(role_id)
-            elif action == "remove" and role_id in config.roles["moderator"]:
-                config.roles["moderator"].remove(role_id)
+            if action == "add" and role_id not in config.roles["mod_role_ids"]:
+                config.roles["mod_role_ids"].append(role_id)
+            elif action == "remove" and role_id in config.roles["mod_role_ids"]:
+                config.roles["mod_role_ids"].remove(role_id)
         else:
             logger.warning(f"Invalid role type: {role_type}")
             return False
@@ -863,6 +883,7 @@ class GuildConfigManager:
         async with self._cache_lock:
             self._cache.pop(guild_id, None)
             self._cache_time.pop(guild_id, None)
+            self._cache_checked.pop(guild_id, None)
             self._settings_cache.pop(guild_id, None)
             logger.debug(f"Cache invalidated for guild {guild_id}")
 
@@ -871,6 +892,7 @@ class GuildConfigManager:
         async with self._cache_lock:
             self._cache.clear()
             self._cache_time.clear()
+            self._cache_checked.clear()
             self._settings_cache.clear()
             logger.info("All guild config cache cleared")
 
@@ -887,13 +909,13 @@ class GuildConfigManager:
 
     def has_staff_role(self, config: GuildConfig, user_role_ids: Set[int]) -> bool:
         """Check if any of the user's roles are admin or moderator roles."""
-        admin_set = set(config.roles["admin"])
-        mod_set = set(config.roles["moderator"])
+        admin_set = set(config.roles["admin_role_ids"])
+        mod_set = set(config.roles["mod_role_ids"])
         return bool(user_role_ids & (admin_set | mod_set))
 
     def has_admin_role(self, config: GuildConfig, user_role_ids: Set[int]) -> bool:
         """Check if any of the user's roles are admin roles."""
-        admin_set = set(config.roles["admin"])
+        admin_set = set(config.roles["admin_role_ids"])
         return bool(user_role_ids & admin_set)
 
     # ── Typed accessors — Embed Config (async) ───────────────────────────────

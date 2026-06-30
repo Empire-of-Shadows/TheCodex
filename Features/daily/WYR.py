@@ -1,3 +1,4 @@
+import asyncio
 import random
 import logging
 import os
@@ -8,11 +9,10 @@ from discord.ext import commands, tasks
 from discord import app_commands
 from dotenv import load_dotenv
 
-from utils.bot import s
-from utils.logger import get_logger, PerformanceLogger
-from storage.database_manager import db_manager
+from startup.bot import s
+from storage.logging import get_logger, PerformanceLogger
+from storage.manager import db_manager
 from storage.config_manager import get_config, get_guild_config_manager
-from storage.config_manager import get_config_manager
 
 # Load environment variables
 load_dotenv()
@@ -522,11 +522,15 @@ class WYR(commands.Cog):
             logger.error(f"Error getting last post time for guild {guild_id}: {e}", exc_info=True)
             return None
 
+    # Posts for guilds that are due in the same tick run concurrently (bounded),
+    # so 200 servers sharing a 12:00 slot don't serialize into a multi-minute
+    # backlog that pushes the next tick past its window.
+    _POST_CONCURRENCY = 10
+
     @tasks.loop(minutes=1)
     async def wyr_tick(self):
-        """Every minute, check if any guild is due for a WYR post."""
+        """Every minute, post for any guild that is due, with bounded concurrency."""
         try:
-            cm = await get_config_manager()
             config_mgr = await get_guild_config_manager()
             guilds = await config_mgr.get_all_configured_guilds()
 
@@ -542,82 +546,118 @@ class WYR(commands.Cog):
                 self._last_cleanup_date = today_str
                 await self.cleanup_old_mappings()
 
+            # Phase 1 — figure out which guilds are due. Cheap (config + one DB
+            # read each) and sequential so the schedule bookkeeping stays simple.
+            due: list[tuple] = []
             for guild_id in guilds:
                 try:
-                    guild_config = await config_mgr.get_config(guild_id)
-                    if not guild_config.wyr.get("enabled", False) or not guild_config.wyr["channel_id"]:
-                        continue
-
-                    hour = guild_config.wyr["post_hour"]
-                    minute = guild_config.wyr["post_minute"]
-                    tz_name = guild_config.wyr["timezone"]
-                    tz = pytz.timezone(tz_name)
-                    now = datetime.now(tz)
-
-                    today_key = (guild_id, now.strftime("%Y-%m-%d"))
-
-                    # Fast in-memory check — already handled this guild today
-                    if today_key in self._posted_today:
-                        continue
-
-                    scheduled_now = now.hour == hour and now.minute == minute
-                    scheduled_passed = (now.hour > hour) or (now.hour == hour and now.minute >= minute)
-
-                    if not (scheduled_now or scheduled_passed):
-                        continue
-
-                    # Check DB for the last post time — skip if already posted today
-                    last_post = await self.get_last_post_time(guild_id)
-
-                    if last_post:
-                        if last_post.tzinfo is None:
-                            last_post = last_post.replace(tzinfo=timezone.utc)
-                        last_post_local = last_post.astimezone(tz)
-                        if last_post_local.date() == now.date():
-                            self._posted_today.add(today_key)
-                            logger.info(
-                                f"Skipping WYR for guild {guild_id}: already posted today "
-                                f"({last_post_local.strftime('%Y-%m-%d %H:%M')} {tz_name})"
-                            )
-                            continue
-
-                    # First-time setup: allow admin to skip the initial catch-up post
-                    if not last_post and guild_config.wyr.get("skip_initial_post", False):
-                        self._posted_today.add(today_key)
-                        guild_config.wyr["skip_initial_post"] = False
-                        await config_mgr.save_config(guild_config)
-                        logger.info(f"Skipping initial WYR post for guild {guild_id} (skip_initial_post flag)")
-                        continue
-
-                    self._posted_today.add(today_key)
-
-                    if scheduled_now:
-                        logger.info(f"Posting scheduled WYR for guild {guild_id} at {hour:02d}:{minute:02d}")
-                    else:
-                        logger.info(
-                            f"Catch-up WYR post for guild {guild_id} "
-                            f"(scheduled {hour:02d}:{minute:02d}, now {now.strftime('%H:%M')})"
-                        )
-
-                    await self.post_daily_question_for_guild(guild_id, guild_config)
-
+                    decision = await self._evaluate_guild_due(guild_id, config_mgr)
+                    if decision is not None:
+                        due.append(decision)
                 except Exception as guild_error:
                     logger.error(f"Error checking WYR schedule for guild {guild_id}: {guild_error}", exc_info=True)
 
+            if not due:
+                return
+
+            # Phase 2 — post concurrently with a cap. Mark a guild as posted only
+            # on success so transient failures retry next tick.
+            sem = asyncio.Semaphore(self._POST_CONCURRENCY)
+
+            async def _run(guild_id, guild_config, today_key):
+                async with sem:
+                    try:
+                        posted = await self.post_daily_question_for_guild(guild_id, guild_config)
+                    except Exception as e:
+                        logger.error(f"Error posting WYR to guild {guild_id}: {e}", exc_info=True)
+                        posted = False
+                    if posted:
+                        self._posted_today.add(today_key)
+
+            await asyncio.gather(*(_run(*d) for d in due))
+
         except Exception as e:
             logger.error(f"Error in WYR tick loop: {e}", exc_info=True)
+
+    async def _evaluate_guild_due(self, guild_id, config_mgr):
+        """Decide whether a guild should post now.
+
+        Returns (guild_id, guild_config, today_key) if it is due, else None.
+        Guilds already handled today (in-memory or per the DB) and the
+        skip-initial-post case are recorded in `_posted_today` here so they are
+        not reconsidered, but they never enter the posting phase.
+        """
+        guild_config = await config_mgr.get_config(guild_id)
+        if not guild_config.wyr.get("enabled", False) or not guild_config.wyr["channel_id"]:
+            return None
+
+        hour = guild_config.wyr["post_hour"]
+        minute = guild_config.wyr["post_minute"]
+        tz_name = guild_config.wyr["timezone"]
+        tz = pytz.timezone(tz_name)
+        now = datetime.now(tz)
+
+        today_key = (guild_id, now.strftime("%Y-%m-%d"))
+
+        # Fast in-memory check — already handled this guild today
+        if today_key in self._posted_today:
+            return None
+
+        scheduled_now = now.hour == hour and now.minute == minute
+        scheduled_passed = (now.hour > hour) or (now.hour == hour and now.minute >= minute)
+
+        if not (scheduled_now or scheduled_passed):
+            return None
+
+        # Check DB for the last post time — skip if already posted today
+        last_post = await self.get_last_post_time(guild_id)
+
+        if last_post:
+            if last_post.tzinfo is None:
+                last_post = last_post.replace(tzinfo=timezone.utc)
+            last_post_local = last_post.astimezone(tz)
+            if last_post_local.date() == now.date():
+                self._posted_today.add(today_key)
+                logger.info(
+                    f"Skipping WYR for guild {guild_id}: already posted today "
+                    f"({last_post_local.strftime('%Y-%m-%d %H:%M')} {tz_name})"
+                )
+                return None
+
+        # First-time setup: allow admin to skip the initial catch-up post
+        if not last_post and guild_config.wyr.get("skip_initial_post", False):
+            self._posted_today.add(today_key)
+            guild_config.wyr["skip_initial_post"] = False
+            await config_mgr.save_config(guild_config)
+            logger.info(f"Skipping initial WYR post for guild {guild_id} (skip_initial_post flag)")
+            return None
+
+        if scheduled_now:
+            logger.info(f"Posting scheduled WYR for guild {guild_id} at {hour:02d}:{minute:02d}")
+        else:
+            logger.info(
+                f"Catch-up WYR post for guild {guild_id} "
+                f"(scheduled {hour:02d}:{minute:02d}, now {now.strftime('%H:%M')})"
+            )
+
+        return (guild_id, guild_config, today_key)
 
     @wyr_tick.before_loop
     async def before_wyr_tick(self):
         """Wait until bot is ready before starting tick loop."""
         await self.bot.wait_until_ready()
 
-    async def post_daily_question_for_guild(self, guild_id, guild_config):
+    async def post_daily_question_for_guild(self, guild_id, guild_config) -> bool:
         """
         Post a daily WYR question for a single guild using per-guild settings.
+
+        Returns True only if the question was actually posted. The caller marks
+        the guild as "posted today" solely on a True result, so a transient
+        failure (permissions blip, 5xx) is retried on the next tick instead of
+        silently skipping the guild for the whole day.
         """
         if not guild_config.wyr.get("enabled", False):
-            return
+            return False
 
         logger.info(f"Posting scheduled WYR question for guild {guild_id}")
 
@@ -628,12 +668,12 @@ class WYR(commands.Cog):
                 question = await self.get_next_question(category, guild_id=guild_id)
                 if not question:
                     logger.warning(f"No {category} questions available for guild {guild_id} - skipping")
-                    return
+                    return False
 
                 channel = self.bot.get_channel(guild_config.wyr["channel_id"])
                 if not channel:
                     logger.warning(f"WYR channel {guild_config.wyr['channel_id']} not found for guild {guild_id}")
-                    return
+                    return False
 
                 embed = self.create_question_embed(question)
                 has_option3 = bool(question.get("option_3"))
@@ -669,9 +709,11 @@ class WYR(commands.Cog):
 
                 await self.increment_used_count(question["_id"], guild_id)
                 logger.info(f"Posted WYR question {question['_id']} in guild {guild_id}, channel {guild_config.wyr['channel_id']}")
+                return True
 
         except Exception as e:
             logger.error(f"Error posting WYR to guild {guild_id}: {e}", exc_info=True)
+            return False
 
     async def update_user_leaderboard(self, user_id, guild_id, option_chosen):
         """

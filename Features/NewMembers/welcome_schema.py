@@ -8,6 +8,7 @@ Delegates structural component validation to the shared component_validators mod
 Button/select action validation is welcome-specific (validates against VALID_ACTIONS).
 """
 
+import json
 from typing import Any, Tuple
 
 from Features.NewMembers.welcome_actions import VALID_ACTIONS, encode_custom_id
@@ -18,6 +19,13 @@ from utils.component_validators import (
 
 _VALID_BUTTON_STYLES = {"primary", "secondary", "success", "danger", "link"}
 
+# Hard ceiling on the serialized payload. The per-field length/count limits
+# already bound a *well-formed* layout; this stops a caller from smuggling
+# megabytes of junk in unrecognised keys (which would otherwise be stored
+# verbatim) and bloating the guild config document.
+_MAX_WELCOME_BYTES = 64 * 1024
+_ALLOWED_TOP_LEVEL = {"accent_color", "components"}
+
 
 def validate_welcome_schema(data: Any) -> Tuple[bool, str]:
     """Validate a welcome components JSON config dict.
@@ -26,6 +34,17 @@ def validate_welcome_schema(data: Any) -> Tuple[bool, str]:
     """
     if not isinstance(data, dict):
         return False, "Top-level value must be a JSON object."
+
+    try:
+        size = len(json.dumps(data, default=str))
+    except (TypeError, ValueError):
+        return False, "Payload is not JSON-serializable."
+    if size > _MAX_WELCOME_BYTES:
+        return False, f"Welcome payload is too large ({size} bytes; max {_MAX_WELCOME_BYTES})."
+
+    unknown = set(data) - _ALLOWED_TOP_LEVEL
+    if unknown:
+        return False, f"Unknown top-level field(s): {', '.join(sorted(unknown))}."
 
     # Optional accent_color
     if "accent_color" in data:

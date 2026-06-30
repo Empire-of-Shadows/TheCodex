@@ -1,14 +1,19 @@
 """Dashboard configuration - environment variables and constants."""
 
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parent.parent / "docker" / ".env")
 
 
 # Discord OAuth2 - shared GateKeeper bot across the ecosystem
 DASHBOARD_CLIENT_ID = os.getenv("GATEKEEPER_CLIENT_ID", "")
 DASHBOARD_CLIENT_SECRET = os.getenv("GATEKEEPER_CLIENT_SECRET", "")
+if not DASHBOARD_CLIENT_ID:
+    raise RuntimeError("GATEKEEPER_CLIENT_ID environment variable is required")
+if not DASHBOARD_CLIENT_SECRET:
+    raise RuntimeError("GATEKEEPER_CLIENT_SECRET environment variable is required")
 
 # Codex bot token - used to check which guilds the bot is in
 BOT_TOKEN = os.getenv("DISCORD_TOKEN", "")
@@ -28,7 +33,7 @@ if not SECRET_KEY:
 SESSION_COOKIE_NAME = os.getenv("SESSION_COOKIE_NAME", "eos_session")
 SESSION_MAX_AGE_DAYS = int(os.getenv("SESSION_MAX_AGE_DAYS", "30"))
 
-# Cookie domain — set to ".empireofshadows.club" in production for cross-subdomain SSO
+# Cookie domain — set to ".eosofficial.club" in production for cross-subdomain SSO
 COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN", None)
 IS_PRODUCTION = os.getenv("ENVIRONMENT", "development").lower() == "production"
 
@@ -36,14 +41,51 @@ IS_PRODUCTION = os.getenv("ENVIRONMENT", "development").lower() == "production"
 HOST = os.getenv("DASHBOARD_HOST", "0.0.0.0")
 PORT = int(os.getenv("DASHBOARD_PORT", "54002"))
 
-# CORS
+# CORS — filter falsy entries so an unset BASE_URL doesn't leak an empty origin.
 CORS_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:54002",
-    "http://127.0.0.1:54002",
-    os.getenv("BASE_URL", ""),
+    o
+    for o in [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:54002",
+        "http://127.0.0.1:54002",
+        os.getenv("BASE_URL"),
+    ]
+    if o
 ]
 
 # Discord permission flag for MANAGE_GUILD
 MANAGE_GUILD_PERMISSION = 0x20
+
+
+def _validate_config() -> None:
+    """Fail fast on missing/misconfigured environment rather than 500ing later.
+
+    The dashboard cannot function without the bot token (live guild checks) and
+    the Mongo URI. In production, the Secure cookie flag and CORS origin also
+    depend on ENVIRONMENT/BASE_URL being set correctly - a silent wrong default
+    there is a security regression.
+    """
+    required = {
+        "DISCORD_TOKEN": BOT_TOKEN,
+        "MONGO_URI": MONGO_URI,
+    }
+    missing = [name for name, val in required.items() if not val]
+    if missing:
+        raise RuntimeError(
+            f"Missing required environment variables: {', '.join(missing)}"
+        )
+
+    if IS_PRODUCTION:
+        if not os.getenv("BASE_URL"):
+            raise RuntimeError(
+                "BASE_URL must be set in production (used for the CORS origin "
+                "and cookie scope)"
+            )
+        if "localhost" in REDIRECT_URI or "127.0.0.1" in REDIRECT_URI:
+            raise RuntimeError(
+                "GATEKEEPER_REDIRECT_URI still points at localhost in production"
+            )
+
+
+_validate_config()

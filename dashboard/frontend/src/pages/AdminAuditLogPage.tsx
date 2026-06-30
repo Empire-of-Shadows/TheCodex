@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { AuditLogEntry } from "../api/types";
+import { formatError } from "../utils/formatError";
 
 const SECTIONS = [
   "",
@@ -41,12 +42,26 @@ function formatTs(iso: string): string {
 
 export default function AdminAuditLogPage() {
   const { guildId = "" } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const sectionFilter = searchParams.get("section") ?? "";
+  const actorFilter = searchParams.get("actor") ?? "";
+
+  const updateParam = (key: string, value: string) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (value) next.set(key, value);
+        else next.delete(key);
+        return next;
+      },
+      { replace: true },
+    );
+  };
+
   const [entries, setEntries] = useState<AuditLogEntry[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sectionFilter, setSectionFilter] = useState<string>("");
-  const [actorFilter, setActorFilter] = useState<string>("");
 
   const loadFirst = useCallback(async () => {
     setLoading(true);
@@ -56,7 +71,8 @@ export default function AdminAuditLogPage() {
       setEntries(r.entries);
       setNextCursor(r.next_cursor);
     } catch (e) {
-      setError(String(e));
+      console.error("Audit log load failed", e);
+      setError(formatError(e, "Failed to load audit entries."));
     } finally {
       setLoading(false);
     }
@@ -74,7 +90,8 @@ export default function AdminAuditLogPage() {
       setEntries((prev) => [...prev, ...r.entries]);
       setNextCursor(r.next_cursor);
     } catch (e) {
-      setError(String(e));
+      console.error("Audit log loadMore failed", e);
+      setError(formatError(e, "Failed to load more entries."));
     } finally {
       setLoading(false);
     }
@@ -105,7 +122,7 @@ export default function AdminAuditLogPage() {
             Section:{" "}
             <select
               value={sectionFilter}
-              onChange={(e) => setSectionFilter(e.target.value)}
+              onChange={(e) => updateParam("section", e.target.value)}
             >
               {SECTIONS.map((s) => (
                 <option key={s} value={s}>
@@ -120,7 +137,7 @@ export default function AdminAuditLogPage() {
               type="text"
               placeholder="name or id"
               value={actorFilter}
-              onChange={(e) => setActorFilter(e.target.value)}
+              onChange={(e) => updateParam("actor", e.target.value)}
             />
           </label>
           <button onClick={loadFirst} disabled={loading}>

@@ -16,6 +16,9 @@ from fastapi import HTTPException, Request
 from dashboard import db
 from dashboard.auth.signing import unsign_token
 from dashboard.config import SESSION_COOKIE_NAME
+from storage.logging import get_logger
+
+logger = get_logger("dashboard.auth.csrf")
 
 
 def _raw_token(request: Request) -> str | None:
@@ -58,7 +61,8 @@ async def verify_csrf(request: Request) -> None:
         try:
             form = await request.form()
             csrf = form.get("csrf_token")
-        except Exception:
+        except Exception as e:  # malformed multipart / oversized body
+            logger.debug("CSRF form-parse failed: %s", e)
             csrf = None
 
     if not csrf:
@@ -100,7 +104,8 @@ async def csrf_middleware(request: Request, call_next):
         try:
             form = await request.form()
             csrf = form.get("csrf_token")
-        except Exception:
+        except Exception as e:  # malformed multipart / oversized body
+            logger.debug("CSRF form-parse failed: %s", e)
             csrf = None
 
     if not csrf or not await _validate(raw, csrf):

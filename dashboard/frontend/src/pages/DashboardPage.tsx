@@ -1,8 +1,34 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, fetchPublicStats, type PublicStats } from "../api/client";
 import type { User, Guild, UserActivity } from "../api/types";
 import AppHeader from "../components/AppHeader";
+import { formatError } from "../utils/formatError";
+
+function GuildIcon({
+  id,
+  icon,
+  name,
+  size,
+}: {
+  id: string;
+  icon: string | null | undefined;
+  name: string;
+  size: 32 | 96;
+}) {
+  const [broken, setBroken] = useState(false);
+  if (!icon || broken) {
+    return <span className={size === 32 ? "pill-mono" : "guild-icon-fallback"}>{name[0]}</span>;
+  }
+  return (
+    <img
+      src={`https://cdn.discordapp.com/icons/${id}/${icon}.png?size=${size}`}
+      alt=""
+      onError={() => setBroken(true)}
+      loading="lazy"
+    />
+  );
+}
 
 const SIGIL = {
   codex: "/brand/artifact-codex.svg",
@@ -234,23 +260,36 @@ export default function DashboardPage() {
   const [guilds, setGuilds] = useState<Guild[]>([]);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedGuildId, setSelectedGuildId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedGuildId = searchParams.get("guild");
   const [activity, setActivity] = useState<UserActivity | null>(null);
   const [activityLoading, setActivityLoading] = useState(false);
   const [publicStats, setPublicStats] = useState<PublicStats | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
-    Promise.all([api.me(), api.guilds(), api.botInviteUrl(), api.getUserActivity()])
+    Promise.all([
+      api.me(),
+      api.guilds(),
+      api.botInviteUrl(),
+      api.getUserActivity(selectedGuildId ?? undefined),
+    ])
       .then(([u, g, invite, act]) => {
         setUser(u);
         setGuilds(g);
         setInviteUrl(invite.url);
         setActivity(act);
       })
-      .catch(() => navigate("/login"))
+      .catch((e) => {
+        console.error("Dashboard load failed", e);
+        if ((e as Error).message === "Unauthorized") return;
+        setLoadError(formatError(e, "Failed to load dashboard."));
+      })
       .finally(() => setLoading(false));
     fetchPublicStats().then(setPublicStats);
+    // selectedGuildId intentionally excluded so initial mount uses URL once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
 
   const fetchActivity = (guildId?: string) => {
@@ -258,25 +297,64 @@ export default function DashboardPage() {
     api
       .getUserActivity(guildId)
       .then(setActivity)
-      .catch(() => setActivity(null))
+      .catch((e) => {
+        console.error("Activity fetch failed", e);
+        setActivity(null);
+      })
       .finally(() => setActivityLoading(false));
   };
 
   const handleGuildFilter = (guildId: string | null) => {
-    setSelectedGuildId(guildId);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (guildId) next.set("guild", guildId);
+        else next.delete("guild");
+        return next;
+      },
+      { replace: true },
+    );
     fetchActivity(guildId ?? undefined);
   };
 
-  if (loading) return <div className="loading">Loading...</div>;
+  if (loading) {
+    return (
+      <div className="app-layout">
+        <div className="page-skeleton" role="status" aria-busy="true">
+          <div className="skeleton-bar skeleton-bar--lg" />
+          <div className="skeleton-grid">
+            <div className="skeleton-card" />
+            <div className="skeleton-card" />
+            <div className="skeleton-card" />
+            <div className="skeleton-card" />
+          </div>
+          <span className="visually-hidden">Loading dashboard…</span>
+        </div>
+      </div>
+    );
+  }
+  if (loadError) {
+    return (
+      <div className="app-layout">
+        <div className="loading" role="alert" style={{ padding: 32 }}>
+          {loadError}
+        </div>
+      </div>
+    );
+  }
   if (!user) return null;
 
-  const botGuilds = guilds.filter((g) => g.bot_in_guild);
-
   const handleGuildClick = (guild: Guild) => {
-    if (guild.setup_required && inviteUrl) {
-      window.open(`${inviteUrl}&guild_id=${guild.id}`, "_blank");
-    } else {
+    if (guild.setup_required) {
+      // Don't auto-open Discord; just select the guild. An explicit invite
+      // link is shown in the section below for the user to click.
+      handleGuildFilter(guild.id);
+    } else if (guild.panel_role === "admin") {
       navigate(`/builder/${guild.id}`);
+    } else {
+      // Mod-tier (or otherwise non-admin) guild: select it to view activity
+      // rather than opening the admin-only builder.
+      handleGuildFilter(guild.id);
     }
   };
 
@@ -294,17 +372,14 @@ export default function DashboardPage() {
         >
           All Guilds
         </button>
-        {botGuilds.map((g) => (
+        {guilds.map((g) => (
           <button
             key={g.id}
-            className={`guild-pill${selectedGuildId === g.id ? " active" : ""}`}
-            onClick={() => handleGuildFilter(g.id)}
+            className={`guild-pill${selectedGuildId === g.id ? " active" : ""}${g.setup_required ? " guild-pill--setup" : ""}`}
+            onClick={() => (g.bot_in_guild ? handleGuildFilter(g.id) : handleGuildClick(g))}
+            title={g.setup_required ? "Bot not added" : undefined}
           >
-            {g.icon ? (
-              <img src={`https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=32`} alt="" />
-            ) : (
-              <span className="pill-mono">{g.name[0]}</span>
-            )}
+            <GuildIcon id={g.id} icon={g.icon} name={g.name} size={32} />
             {g.name}
           </button>
         ))}
@@ -312,8 +387,12 @@ export default function DashboardPage() {
 
       {/* Activity Cards */}
       {activityLoading ? (
-        <div className="loading" style={{ padding: "32px 24px" }}>
-          Loading activity...
+        <div className="activity-grid" role="status" aria-busy="true">
+          <div className="skeleton-card" />
+          <div className="skeleton-card" />
+          <div className="skeleton-card" />
+          <div className="skeleton-card" />
+          <span className="visually-hidden">Loading activity…</span>
         </div>
       ) : activity ? (
         <div className="activity-grid">
@@ -322,60 +401,76 @@ export default function DashboardPage() {
           <TagTrackerCard tags={activity.tag_tracker} />
           <BoostCard boost={activity.boost} />
         </div>
-      ) : null}
-
-      {/* Admin Section */}
-      {selectedGuildId && (
-        <div className="admin-section">
-          <h3>Admin</h3>
-          <div className="admin-actions">
-            <button className="btn btn-primary" onClick={() => navigate(`/builder/${selectedGuildId}`)}>
-              Edit Guide
-            </button>
-            <button className="btn btn-secondary" onClick={() => navigate(`/builder/${selectedGuildId}`)}>
-              Edit Welcome
-            </button>
-            <button className="btn btn-secondary" onClick={() => navigate(`/admin/guilds/${selectedGuildId}/audit-log`)}>
-              Audit Log
-            </button>
-          </div>
+      ) : (
+        <div className="empty-state" role="status" style={{ padding: "32px 24px" }}>
+          No activity yet — once you use Codex features (WYR, suggestions, tag tracker, boosts), they'll show up here.
         </div>
       )}
 
-      {/* Guild Grid (all guilds view) */}
-      {selectedGuildId === null && (
-        <div style={{ padding: "0 24px 24px" }}>
-          <h2 className="section-title" style={{ margin: "24px 0 16px" }}>Your Servers</h2>
-          {guilds.length === 0 ? (
-            <p style={{ color: "var(--text-muted)" }}>
-              No servers found where you have Manage Server permission.
-            </p>
-          ) : (
-            <div className="guild-grid">
-              {guilds.map((g) => (
-                <div
-                  key={g.id}
-                  className={`card guild-card${g.setup_required ? " guild-card--setup" : ""}`}
-                  onClick={() => handleGuildClick(g)}
-                >
-                  <div className="guild-icon">
-                    {g.icon ? (
-                      <img src={`https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=96`} alt="" />
-                    ) : (
-                      g.name[0]
-                    )}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="guild-name">{g.name}</div>
-                    {g.setup_required && (
-                      <div className="guild-invite-hint">Bot not installed - click to invite</div>
-                    )}
-                  </div>
-                  {g.setup_required && <div className="guild-invite-badge">Invite</div>}
-                </div>
-              ))}
+      {/* Admin Section - gated by the selected guild's panel role */}
+      {(() => {
+        const sel = guilds.find((g) => g.id === selectedGuildId);
+        if (!selectedGuildId || !sel || sel.panel_role === "none") return null;
+        if (sel.setup_required) {
+          return (
+            <div className="admin-section">
+              <h3>Settings</h3>
+              <div className="admin-actions">
+                {inviteUrl ? (
+                  <a
+                    className="btn btn-primary"
+                    href={`${inviteUrl}&guild_id=${sel.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Invite TheCodex
+                  </a>
+                ) : (
+                  <span className="guild-invite-hint">Bot not in this server yet.</span>
+                )}
+              </div>
+              <p className="guild-invite-hint" style={{ marginTop: 8 }}>
+                Bot not in this server yet. Use the link above to add it, then return here.
+              </p>
             </div>
-          )}
+          );
+        }
+        if (sel.panel_role !== "admin") {
+          return (
+            <div className="admin-section">
+              <h3>Moderator</h3>
+              <div className="admin-actions">
+                <span className="guild-invite-hint">Moderator access. Management tools are coming soon.</span>
+              </div>
+            </div>
+          );
+        }
+        return (
+          <div className="admin-section">
+            <h3>Admin</h3>
+            <div className="admin-actions">
+              <button className="btn btn-primary" onClick={() => navigate(`/builder/${selectedGuildId}`)}>
+                Edit Guide
+              </button>
+              <button className="btn btn-secondary" onClick={() => navigate(`/builder/${selectedGuildId}`)}>
+                Edit Welcome
+              </button>
+              <button className="btn btn-secondary" onClick={() => navigate(`/settings/${selectedGuildId}`)}>
+                Settings
+              </button>
+              <button className="btn btn-secondary" onClick={() => navigate(`/settings/${selectedGuildId}/audit-log`)}>
+                Audit Log
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
+      {selectedGuildId === null && guilds.length === 0 && (
+        <div style={{ padding: "0 24px 24px" }}>
+          <p style={{ color: "var(--text-muted)" }}>
+            No servers found where you have Manage Server permission.
+          </p>
         </div>
       )}
     </div>

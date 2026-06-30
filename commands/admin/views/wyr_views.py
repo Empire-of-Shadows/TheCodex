@@ -9,7 +9,7 @@ from typing import Callable, Awaitable, Dict, Any, Optional
 
 import discord
 
-from .base import AdminLayoutBuilder, create_unique_id
+from .base import AdminLayoutBuilder, cid, readonly_container, editable_container
 
 # Archive option labels used by the status view
 _ARCHIVE_LABELS = {60: "1 Hour", 1440: "1 Day", 4320: "3 Days", 10080: "1 Week"}
@@ -47,19 +47,19 @@ def build_wyr_status_view(stats: Dict[str, Any], guild: discord.Guild) -> discor
         ping_display = "Not configured"
 
     builder.add_header("## WYR Configuration Status")
-    builder.add_text(f"**Server:** {guild.name}")
-    builder.add_separator()
-
-    builder.add_text(
-        f"**Channel:** {channel_display}\n"
-        f"**Ping Role:** {ping_display}\n"
-        f"**Post Time:** {hour:02d}:{minute:02d} ({tz})\n"
-        f"**Default Category:** {category}\n"
-        f"**Thread Name Format:** `{name_fmt}`\n"
-        f"**Starter Message:** {starter[:100]}{'...' if len(starter) > 100 else ''}\n"
-        f"**Auto-Archive:** {archive_label}\n"
-        f"**Mapping Cleanup:** {cleanup} days"
-    )
+    builder.add_item(readonly_container(
+        discord.ui.TextDisplay(
+            f"**Server:** {guild.name}\n"
+            f"**Channel:** {channel_display}\n"
+            f"**Ping Role:** {ping_display}\n"
+            f"**Post Time:** {hour:02d}:{minute:02d} ({tz})\n"
+            f"**Default Category:** {category}\n"
+            f"**Thread Name Format:** `{name_fmt}`\n"
+            f"**Starter Message:** {starter[:100]}{'...' if len(starter) > 100 else ''}\n"
+            f"**Auto-Archive:** {archive_label}\n"
+            f"**Mapping Cleanup:** {cleanup} days"
+        ),
+    ))
 
     return builder.build()
 
@@ -92,7 +92,7 @@ def build_wyr_ping_role_view(
     on_back: Callable[[discord.Interaction], Awaitable[None]],
     on_clear: Optional[Callable[[discord.Interaction], Awaitable[None]]],
     on_create_role: Callable[[discord.Interaction], Awaitable[None]],
-    back_label: str = "Close",
+    back_label: str = "Back",
 ) -> discord.ui.LayoutView:
     """Build the WYR Ping Role select view with an extra Create Role button.
 
@@ -100,30 +100,25 @@ def build_wyr_ping_role_view(
     button that opens WyrCreateRoleModal to let admins create a new role
     on the spot and have it auto-selected as the ping role.
     """
-    unique_id = create_unique_id()
     builder = AdminLayoutBuilder()
 
     builder.add_header("## WYR Ping Role")
 
-    if current_values:
-        names = []
-        for rid in current_values:
-            role = guild.get_role(int(rid))
-            names.append(role.mention if role else f"Unknown ({rid})")
-        builder.add_text(f"**Currently assigned:** {', '.join(names)}")
-    else:
-        builder.add_text("*No role currently assigned.*")
-
-    builder.add_separator()
-    builder.add_text(
+    builder.add_item(readonly_container(discord.ui.TextDisplay(
         "Role pinged when a WYR question is posted. Leave empty for no ping.\n\n"
         "-# Don't have a dedicated role? Use **Create Role** to create one — "
         "then go to **Server Settings → Roles** to set its color, icon, and position."
-    )
+    )))
+
+    if current_values:
+        mentions = [f"<@&{int(rid)}>" for rid in current_values]
+        current_text = f"**Currently assigned:** {', '.join(mentions)}"
+    else:
+        current_text = "*No role currently assigned.*"
 
     role_select = discord.ui.RoleSelect(
         placeholder="Select a role...",
-        custom_id=f"wyr_role_select_{unique_id}",
+        custom_id=cid("editor", "select", "wyr_ping_role"),
         min_values=1,
         max_values=1,
         default_values=[discord.Object(id=int(rid)) for rid in current_values],
@@ -134,14 +129,20 @@ def build_wyr_ping_role_view(
         await on_save(interaction, role_ids)
 
     role_select.callback = _role_cb
-    builder.add_select(role_select)
+
+    select_row = discord.ui.ActionRow()
+    select_row.add_item(role_select)
+    builder.add_item(editable_container(
+        discord.ui.TextDisplay(current_text),
+        select_row,
+    ))
 
     # Button row: Back/Close | Clear | Create Role
     back_style = discord.ButtonStyle.danger if back_label == "Close" else discord.ButtonStyle.secondary
     back_btn = discord.ui.Button(
         label=back_label,
         style=back_style,
-        custom_id=f"back_{unique_id}",
+        custom_id=cid("editor", "back", "wyr_ping_role"),
     )
     back_btn.callback = on_back
     btn_row = discord.ui.ActionRow()
@@ -151,7 +152,7 @@ def build_wyr_ping_role_view(
         clear_btn = discord.ui.Button(
             label="Clear",
             style=discord.ButtonStyle.danger,
-            custom_id=f"clear_{unique_id}",
+            custom_id=cid("editor", "clear", "wyr_ping_role"),
             disabled=(len(current_values) == 0),
         )
         clear_btn.callback = on_clear
@@ -160,7 +161,7 @@ def build_wyr_ping_role_view(
     create_btn = discord.ui.Button(
         label="Create Role",
         style=discord.ButtonStyle.primary,
-        custom_id=f"create_role_{unique_id}",
+        custom_id=cid("editor", "create", "wyr_ping_role"),
     )
     create_btn.callback = on_create_role
     btn_row.add_item(create_btn)

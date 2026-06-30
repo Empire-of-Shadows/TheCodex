@@ -3,7 +3,7 @@ import logging
 import discord
 from discord.ext import commands
 
-from utils.logger import get_logger, log_context, log_performance
+from storage.logging import get_logger, log_context, log_performance
 
 logger = get_logger("CloneEmbed")
 
