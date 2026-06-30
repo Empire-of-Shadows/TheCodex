@@ -4,8 +4,8 @@ from discord.ext import commands
 from typing import Optional
 from datetime import datetime, timezone
 
-from storage.database_manager import db_manager
-from utils.logger import get_logger
+from storage.manager import db_manager
+from storage.logging import get_logger
 from storage.config_manager import get_config
 
 logger = get_logger("WhitelistManager")

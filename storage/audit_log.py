@@ -24,7 +24,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from utils.logger import get_logger
+from storage.logging import get_logger
 
 logger = get_logger("AuditLog")
 
@@ -102,7 +102,7 @@ _audit_logger: Optional[AuditLogger] = None
 async def get_audit_logger() -> AuditLogger:
     global _audit_logger
     if _audit_logger is None:
-        from storage.database_manager import db_manager
+        from storage.manager import db_manager
         _audit_logger = AuditLogger(db_manager)
         await _audit_logger.initialize()
     return _audit_logger

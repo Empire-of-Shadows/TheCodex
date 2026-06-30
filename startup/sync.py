@@ -19,7 +19,7 @@ from discord.ext import commands
 from tabulate import tabulate
 
 from startup.bot import bot, s
-from utils.logger import get_logger, log_performance
+from storage.logging import get_logger, log_performance
 
 logger = get_logger("Sync")
 
@@ -167,7 +167,7 @@ async def attach_databases():
 
     try:
         # Initialize DatabaseManager first (all other managers depend on it)
-        from storage.database_manager import db_manager
+        from storage.manager import db_manager
         try:
             await db_manager.initialize()
             result, is_success = await attach_attribute("db_manager", db_manager)

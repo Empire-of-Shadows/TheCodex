@@ -23,4 +23,6 @@ tsconfig.tsbuildinfo
 
 # Environment
 .env
+.env.local
+.env.*.local
 /docker/

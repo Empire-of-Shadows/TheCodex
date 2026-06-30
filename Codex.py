@@ -21,19 +21,22 @@ from pathlib import Path
 
 # Load env from docker/.env before any other imports read env vars
 from dotenv import load_dotenv
-load_dotenv(Path(__file__).parent / "docker" / ".env")
+_env_dir = Path(__file__).parent / "docker"
+load_dotenv(_env_dir / ".env")
+# Dev override: docker/.env.local (gitignored, never deployed) wins locally.
+load_dotenv(_env_dir / ".env.local", override=True)
 
 import discord
 
 from startup.bot import bot, TOKEN, s  # noqa: E402,F401
-from utils.logger import get_logger, setup_application_logging  # noqa: E402
+from storage.logging import get_logger, setup_application_logging  # noqa: E402
 from startup.sync import load_cogs, attach_databases, log_all_commands  # noqa: E402
 from startup.phases import (  # noqa: E402
     log_startup_summary,
     startup_phase,
 )
 from health_endpoint import initialize_health_server, stop_health_server  # noqa: E402
-from storage.database_manager import db_manager  # noqa: E402
+from storage.manager import db_manager  # noqa: E402
 
 # Guild that owns the guild-scoped admin slash commands (e.g. /status).
 # Environment-specific, so it is opt-in via env; guild sync is skipped if unset.

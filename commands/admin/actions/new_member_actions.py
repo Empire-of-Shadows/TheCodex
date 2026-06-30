@@ -7,7 +7,7 @@ All read/write goes through storage.config_manager.py.
 import json
 from typing import Any, Dict
 
-from utils.logger import get_logger
+from storage.logging import get_logger
 from storage.config_manager import get_config, get_guild_config_manager
 
 logger = get_logger("NewMemberActions")
@@ -182,7 +182,7 @@ class NewMemberActions:
     async def get_whitelist_stats(guild_id: int) -> Dict[str, Any]:
         """Count active/total whitelist entries from DB."""
         try:
-            from storage.database_manager import db_manager
+            from storage.manager import db_manager
             whitelist_collection = db_manager.get_collection_manager('serverdata_whitelist')
 
             all_entries = await whitelist_collection.find_many({'guild_id': guild_id})

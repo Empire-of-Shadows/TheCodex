@@ -4,7 +4,7 @@ import re
 from typing import Optional, Set, Callable, Awaitable, TYPE_CHECKING
 import discord
 
-from utils.logger import get_logger, log_context, log_performance
+from storage.logging import get_logger, log_context, log_performance
 
 if TYPE_CHECKING:
     from Features.ce_utilities.helpers.embed_config_loader import EmbedConfigLoader
