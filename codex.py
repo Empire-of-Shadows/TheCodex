@@ -5,7 +5,7 @@ Unified startup sequence (mirrors Ecom / TheHost / ImperialReminder):
     1. Load env from docker/.env
     2. setup_application_logging  → "Application logging initialized for: discord-bot-codex"
     3. main(): banner + Python/discord.py versions
-    4. _async_main(): install signal handlers → init DatabaseManager → start health endpoint (50002)
+    4. _async_main(): install signal handlers → init DatabaseManager → start health endpoint (50010)
     5. start_services(): bot.start raced against shutdown_event
     6. on_ready (idempotent via _init_done): Database Attachment → Cog Loading → Command Sync → Status Setup
     7. shutdown_handler(): health → DB → bot
@@ -41,7 +41,7 @@ STATUS_ADMIN_GUILD_ID = int(os.getenv("STATUS_ADMIN_GUILD_ID", "0"))
 
 # Initialize application-wide logging
 APPLICATION_NAME = "discord-bot-codex"
-HEALTH_PORT = 50002
+HEALTH_PORT = 50010
 
 app_logger = setup_application_logging(
     app_name=APPLICATION_NAME,

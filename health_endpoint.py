@@ -2,7 +2,7 @@
 Health Endpoint Module for TheCodex Bot
 Provides HTTP endpoint for centralized health monitoring
 
-Port: 50002 (as defined in HealthCheck/README.md)
+Port: 50010 (as defined in HealthCheck/README.md)
 """
 
 import http.server
@@ -116,12 +116,12 @@ def stop_health_server():
         logger.info("Health check server stopped")
 
 
-def initialize_health_server(port=50002, bot=None, db_manager=None):
+def initialize_health_server(port=50010, bot=None, db_manager=None):
     """
     Initialize the health server in a background thread
 
     Args:
-        port (int): Port to listen on (default: 50002)
+        port (int): Port to listen on (default: 50010)
         bot: Discord bot instance (optional)
         db_manager: Database manager instance (optional)
 
