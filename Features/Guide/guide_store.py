@@ -10,8 +10,8 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-from storage.database_manager import db_manager
-from utils.logger import get_logger
+from storage.manager import db_manager
+from storage.logging import get_logger
 
 logger = get_logger("GuideStore")
 

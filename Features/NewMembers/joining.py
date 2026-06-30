@@ -7,9 +7,9 @@ import discord
 from startup.bot import bot, TOKEN, s
 from storage.cache import GuildCacheManager
 from storage.config_manager import get_config, GuildConfig
-from storage.database_manager import db_manager
+from storage.manager import db_manager
 from storage.config_manager import get_guild_config_manager
-from utils.logger import get_logger
+from storage.logging import get_logger
 
 
 class GuildEventHandler:
@@ -383,7 +383,7 @@ class GuildEventHandler:
         if guild_config.new_members["auto_kick"] and account_age.days < guild_config.new_members["account_age_requirement_days"]:
             # Check if user is whitelisted before kicking
             if guild_config.new_members["whitelist_enabled"]:
-                from storage.database_manager import db_manager
+                from storage.manager import db_manager
                 try:
                     whitelist_collection = db_manager.get_collection_manager('serverdata_whitelist')
                     whitelist_entry = await whitelist_collection.find_one({

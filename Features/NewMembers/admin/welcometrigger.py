@@ -5,7 +5,7 @@ from typing import Optional
 
 from Features.NewMembers.joining import guild_handler
 from Features.NewMembers.welcome_schema import validate_welcome_schema
-from utils.logger import get_logger
+from storage.logging import get_logger
 from storage.config_manager import get_config
 
 logger = get_logger("WelcomeTrigger")

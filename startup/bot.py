@@ -32,7 +32,7 @@ SIMILARITY_THRESHOLD = 80
 # Logging indent helper
 s = " " * 5
 
-# Expose the handler if needed in codex.py
+# Expose the handler if needed in Codex.py
 __all__ = [
     "bot", "TOKEN",
     "SIMILARITY_THRESHOLD", "s",

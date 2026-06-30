@@ -10,7 +10,7 @@ All embed settings live inside config.embed on the GuildConfig dataclass:
 """
 
 from typing import Any, Dict, List, Optional
-from utils.logger import get_logger
+from storage.logging import get_logger
 
 logger = get_logger("EmbedConfigActions")
 

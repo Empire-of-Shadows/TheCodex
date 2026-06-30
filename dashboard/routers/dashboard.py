@@ -11,7 +11,7 @@ from dashboard.auth.dependencies import get_current_user, require_guild_manage
 from dashboard.auth.panel_role import resolve_panel_role
 from dashboard.config import BOT_TOKEN, DISCORD_API_BASE, MANAGE_GUILD_PERMISSION
 from dashboard import db
-from utils.logger import get_logger
+from storage.logging import get_logger
 
 logger = get_logger("dashboard.routers.dashboard")
 

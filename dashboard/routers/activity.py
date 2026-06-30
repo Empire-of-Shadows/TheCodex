@@ -10,7 +10,7 @@ from dashboard.auth.dependencies import get_current_user
 from dashboard.config import BOT_TOKEN, DISCORD_API_BASE
 from dashboard.routers.dashboard import _fetch_bot_guild_ids
 from dashboard import db
-from utils.logger import get_logger
+from storage.logging import get_logger
 
 logger = get_logger("dashboard.routers.activity")
 

@@ -14,8 +14,8 @@ from discord.ext import commands
 from rapidfuzz import fuzz
 
 from startup.bot import bot
-from utils.logger import get_logger, PerformanceLogger
-from storage.database_manager import db_manager
+from storage.logging import get_logger, PerformanceLogger
+from storage.manager import db_manager
 from Features.Guide.guide_store import guide_store
 from Features.Guide.guide_renderer import GuideRenderer
 from Features.Guide.guide_actions import (

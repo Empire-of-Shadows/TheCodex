@@ -14,8 +14,8 @@ from discord.ext import commands
 from commands.admin.actions.drops_actions import DropsActions
 from commands.admin.views.panel_views import attach_timeout_expiry_msg
 from storage.config_manager import get_config
-from storage.database_manager import db_manager
-from utils.logger import get_logger
+from storage.manager import db_manager
+from storage.logging import get_logger
 
 from .drop_views import (
     build_drops_browse_view,
