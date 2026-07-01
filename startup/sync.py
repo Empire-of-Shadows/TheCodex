@@ -176,17 +176,15 @@ async def attach_databases():
             failed_logs.append(f"{s}❌ db_manager → Error: {db_error}\n")
             raise  # Can't continue without db_manager
 
-        # Cache manager (uses db_manager's collections)
-        from storage.cache import create_cache_manager
+        # Guild snapshot service (snapshots discord objects into the ServerData collections)
         try:
-            cache_manager = create_cache_manager(db_manager)
-            result, is_success = await attach_attribute("cache_manager", cache_manager)
+            from storage.discord import create_guild_snapshot_service, GuildSnapshotConfig
+            guild_snapshots = create_guild_snapshot_service(
+                db_manager, config=GuildSnapshotConfig(timezone="America/Chicago"))
+            result, is_success = await attach_attribute("guild_snapshots", guild_snapshots)
             (success_logs if is_success else failed_logs).append(result)
-
-            import storage.cache as cache_module
-            cache_module.cache_manager = cache_manager
-        except Exception as cache_error:
-            failed_logs.append(f"{s}❌ cache_manager → Error: {cache_error}\n")
+        except Exception as snapshot_error:
+            failed_logs.append(f"{s}❌ guild_snapshots → Error: {snapshot_error}\n")
 
         # Unified GuildConfigManager (structured config + flat settings)
         try:

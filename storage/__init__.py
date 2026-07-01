@@ -30,7 +30,14 @@ Public surface (shown master-relative):
     from storage_engine.interaction import InteractionStateStore, pack, parse
     from storage_engine.content import CachedLoader
     from storage_engine.services import AuditLog, SetupGate, SingletonLock, UserPreferenceCache
+    from storage_engine.snapshots import SnapshotStore, SnapshotSpec, SnapshotEventLog
     from storage_engine.logging import get_logger, setup_application_logging
+
+Discord bots only (optional discord.py dependency; NOT imported by the engine core, so the
+core stays importable/vendorable without discord.py):
+    from storage_engine.discord import (
+        GuildSnapshotService, create_guild_snapshot_service, GuildSnapshotConfig,
+    )
 """
 
 from .core import CollectionConfig, CollectionManager, ConnectionPool, with_retry
@@ -40,6 +47,7 @@ from .buffer import BatchWriter
 from .interaction import InteractionStateStore, CustomId, pack, parse
 from .content import CachedLoader
 from .services import AuditLog, SetupGate, SingletonLock, UserPreferenceCache
+from .snapshots import SnapshotStore, SnapshotSpec, SnapshotEventLog
 from .logging import (
     get_logger,
     setup_application_logging,
@@ -67,6 +75,9 @@ __all__ = [
     "SetupGate",
     "SingletonLock",
     "UserPreferenceCache",
+    "SnapshotStore",
+    "SnapshotSpec",
+    "SnapshotEventLog",
     "get_logger",
     "setup_application_logging",
     "log_performance",
