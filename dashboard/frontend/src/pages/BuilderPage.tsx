@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   DndContext,
   DragOverlay,
@@ -362,8 +362,10 @@ interface WelcomeCache {
 export default function BuilderPage() {
   const { guildId } = useParams<{ guildId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const initialMode: BuilderMode = searchParams.get("mode") === "welcome" ? "welcome" : "guide";
 
-  const [mode, setMode] = useState<BuilderMode>("guide");
+  const [mode, setMode] = useState<BuilderMode>(initialMode);
   const [components, setComponents] = useState<ComponentDef[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pages, setPages] = useState<GuidePage[]>([]);
@@ -491,17 +493,23 @@ export default function BuilderPage() {
           };
         }
 
-        // Load guide mode into active state (default mode)
+        // Hydrate the guide page-tree state so the tree is ready when toggling modes
         const gc = guideCacheRef.current;
         setPages(gc.pages);
         setCurrentPageId(gc.currentPageId);
-        setAccentColor(gc.accentColor);
-        if (gc.currentPageId) {
-          const firstPage = findPage(gc.pages, gc.currentPageId);
-          setComponents(firstPage?.content?.components ? [...firstPage.content.components] : []);
+        // Load the requested mode into the active editor
+        const wc = welcomeCacheRef.current;
+        if (initialMode === "welcome") {
+          setComponents([...wc.components]);
+          setAccentColor(wc.accentColor);
+        } else {
+          setAccentColor(gc.accentColor);
+          if (gc.currentPageId) {
+            const firstPage = findPage(gc.pages, gc.currentPageId);
+            setComponents(firstPage?.content?.components ? [...firstPage.content.components] : []);
+          }
         }
         // Seed saved signatures from loaded data so initial state is "clean"
-        const wc = welcomeCacheRef.current;
         setSavedSigs({
           guide: JSON.stringify(buildGuideData(gc.pages, gc.accentColor)),
           welcome: JSON.stringify(buildWelcomeData(wc.components, wc.accentColor)),
@@ -509,7 +517,7 @@ export default function BuilderPage() {
       })
       .catch(() => navigate("/dashboard"))
       .finally(() => setLoading(false));
-  }, [guildId, navigate]);
+  }, [guildId, navigate, initialMode]);
 
   // ── Snapshot current state into the active cache ───────────────────────
 

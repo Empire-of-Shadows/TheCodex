@@ -452,7 +452,7 @@ export default function DashboardPage() {
               <button className="btn btn-primary" onClick={() => navigate(`/builder/${selectedGuildId}`)}>
                 Edit Guide
               </button>
-              <button className="btn btn-secondary" onClick={() => navigate(`/builder/${selectedGuildId}`)}>
+              <button className="btn btn-secondary" onClick={() => navigate(`/builder/${selectedGuildId}?mode=welcome`)}>
                 Edit Welcome
               </button>
               <button className="btn btn-secondary" onClick={() => navigate(`/settings/${selectedGuildId}`)}>

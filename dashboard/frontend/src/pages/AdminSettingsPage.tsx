@@ -1070,7 +1070,7 @@ function NewMembersTab({
 
       <p className="muted" style={{ marginTop: 16 }}>
         Welcome message layout is managed in the{" "}
-        <Link to={`/builder/${guildId}`}>builder</Link>.
+        <Link to={`/builder/${guildId}?mode=welcome`}>builder</Link>.
       </p>
 
       <SaveBar dirty={dirty} saving={saving} onSave={onSave} readOnly={readOnly} />
