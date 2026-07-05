@@ -681,7 +681,14 @@ class WYR(commands.Cog):
 
                 # Build ping content if role is configured
                 ping_content = f"<@&{guild_config.wyr['ping_role_id']}>" if guild_config.wyr.get("ping_role_id") else None
-                message = await channel.send(content=ping_content, embed=embed, view=view)
+                # Explicit override: the bot's global default suppresses role pings,
+                # but the configured WYR ping role is an intentional ping.
+                message = await channel.send(
+                    content=ping_content,
+                    embed=embed,
+                    view=view,
+                    allowed_mentions=discord.AllowedMentions(roles=True),
+                )
 
                 # Store the message-question mapping with guild info
                 await self.store_message_question_mapping(

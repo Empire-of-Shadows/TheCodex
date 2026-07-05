@@ -20,7 +20,12 @@ bot = commands.Bot(
     intents=intents,
     help_command=None,
     shard_id=0,
-    shard_count=1
+    shard_count=1,
+    # Safe default so user-authored content the bot echoes (guide/welcome builder
+    # text, etc.) can never ping @everyone/@here or roles. Individual user mentions
+    # (e.g. the welcome "{member}" placeholder) still work. Features that
+    # intentionally ping a role must pass an explicit allowed_mentions override.
+    allowed_mentions=discord.AllowedMentions(everyone=False, roles=False, users=True),
 )
 
 # Configuration defaults
