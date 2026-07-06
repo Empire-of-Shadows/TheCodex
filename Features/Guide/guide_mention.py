@@ -98,11 +98,11 @@ class HelpListener(commands.Cog):
 			await message.channel.send(view=layout)
 			return
 
-		# Generic help words → root menu (topic selection). Checked before search so
-		# a help word always shows the menu rather than jumping to a matching page.
+		# Generic help words → guide Home page. Checked before search so a help
+		# word always lands on Home rather than jumping to a matching page.
 		if any(word in clean for word in HELP_WORDS):
 			logger.info("Generic help triggered")
-			layout = await guide_manager.get_root_menu(guild_id, user_id, guild=guild, member=member)
+			layout = await guide_manager.get_home_view(guild_id, user_id, guild=guild, member=member)
 			await message.channel.send(view=layout)
 			return
 
@@ -116,9 +116,9 @@ class HelpListener(commands.Cog):
 			await message.channel.send(view=layout)
 			return
 
-		# No match — open the first page of the guide instead of the menu
+		# No match — open the guide's Home page
 		logger.info(f"No matches found for: '{clean}'")
-		layout = await guide_manager.get_first_page_view(guild_id, user_id, guild=guild, member=member)
+		layout = await guide_manager.get_home_view(guild_id, user_id, guild=guild, member=member)
 		await message.channel.send(view=layout)
 
 
