@@ -77,8 +77,12 @@ def decode_select_value(value: str) -> tuple[str, str]:
 	"""
 	if ":" in value:
 		action, target = value.split(":", 1)
-		return action, target
-	return "nav", value
+	else:
+		action, target = "nav", value
+	# The builder emits "navigate" for page links; the dispatcher speaks "nav".
+	if action == "navigate":
+		action = "nav"
+	return action, target
 
 
 def encode_select_value(action: str, target: str) -> str:
@@ -92,3 +96,4 @@ CUSTOM_ID_HOME = encode_action("home")
 CUSTOM_ID_SEARCH = encode_action("search")
 CUSTOM_ID_SELECT = encode_action("_select")
 CUSTOM_ID_USELECT = encode_action("_uselect")
+CUSTOM_ID_SECTIONS = encode_action("_sections")

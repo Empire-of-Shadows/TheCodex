@@ -27,6 +27,7 @@ from Features.Guide.guide_actions import (
 	CUSTOM_ID_SEARCH,
 	CUSTOM_ID_SELECT,
 	CUSTOM_ID_USELECT,
+	CUSTOM_ID_SECTIONS,
 )
 from Features.NewMembers.joining_responses import joining_responses
 from utils.component_builders import (
@@ -122,6 +123,17 @@ class GuideRenderer:
 		children = page.get("children", [])
 		if children:
 			layout.add_item(cls._build_children_select(children))
+
+		# ── Top-level sections (Home page only) ──────────────────────────
+		# Keeps every top-level section reachable now that there's no menu.
+		if is_root:
+			sections = guide_data.get("pages", [])
+			if sections:
+				layout.add_item(cls._build_children_select(
+					sections,
+					custom_id=CUSTOM_ID_SECTIONS,
+					placeholder="Jump to a section...",
+				))
 
 		# ── Breadcrumb ──────────────────────────────────────────────────
 		if breadcrumb_path:
@@ -325,8 +337,13 @@ class GuideRenderer:
 		)
 
 	@classmethod
-	def _build_children_select(cls, children: List[Dict[str, Any]]) -> discord.ui.ActionRow:
-		"""Build a select dropdown for child pages."""
+	def _build_children_select(
+		cls,
+		children: List[Dict[str, Any]],
+		custom_id: str = CUSTOM_ID_SELECT,
+		placeholder: str = "Select a topic...",
+	) -> discord.ui.ActionRow:
+		"""Build a select dropdown for child pages (or top-level sections)."""
 		# Sort by order
 		sorted_children = sorted(children, key=lambda p: p.get("order", 999))
 
@@ -345,8 +362,8 @@ class GuideRenderer:
 			))
 
 		select = discord.ui.Select(
-			custom_id=CUSTOM_ID_SELECT,
-			placeholder="Select a topic...",
+			custom_id=custom_id,
+			placeholder=placeholder,
 			options=options,
 		)
 

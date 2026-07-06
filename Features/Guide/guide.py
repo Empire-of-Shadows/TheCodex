@@ -659,8 +659,8 @@ async def dispatch_guide_interaction(interaction: discord.Interaction) -> bool:
 	try:
 		# Handle select menus
 		if component_type == 3:  # String select
-			# Auto-generated children/search select — value is a page_id
-			if custom_id == "g:_select":
+			# Auto-generated children / sections / search select — value is a page_id
+			if custom_id in ("g:_select", "g:_sections"):
 				values = interaction.data.get("values", [])
 				if not values:
 					return True

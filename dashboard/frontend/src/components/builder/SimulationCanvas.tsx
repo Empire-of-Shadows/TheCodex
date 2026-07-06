@@ -120,6 +120,7 @@ function GuidePageView({
   const breadcrumbs = getBreadcrumbLabels(pages, pageId);
   const pageComponents = page.content?.components || [];
   const children = page.children || [];
+  const isHome = pageId === homePageId(pages);
 
   // Build children select if page has sub-pages
   const childrenSelect = children.length > 0 ? {
@@ -131,6 +132,20 @@ function GuidePageView({
       action: "navigate" as const,
       target: c.id,
     })),
+  } : null;
+
+  // On the Home page, auto-list all top-level sections (matches the bot).
+  const sectionsSelect = isHome && pages.length > 0 ? {
+    placeholder: "Jump to a section...",
+    options: [...pages]
+      .sort((a, b) => (a.order ?? 999) - (b.order ?? 999))
+      .map((p) => ({
+        label: p.label,
+        description: p.description,
+        emoji: p.icon,
+        action: "navigate" as const,
+        target: p.id,
+      })),
   } : null;
 
   return (
@@ -145,10 +160,15 @@ function GuidePageView({
         <SelectPreview select={childrenSelect} onInteract={onInteract} />
       )}
 
+      {/* Top-level sections (Home page only) */}
+      {sectionsSelect && (
+        <SelectPreview select={sectionsSelect} onInteract={onInteract} />
+      )}
+
       {/* Breadcrumb + Nav row. The Home page (top of the tree) is the root —
           it hides the Back/Home buttons, matching the bot. */}
       <GuideBreadcrumb labels={breadcrumbs} />
-      <GuideNavRow isRoot={pageId === homePageId(pages)} onInteract={onInteract} />
+      <GuideNavRow isRoot={isHome} onInteract={onInteract} />
     </>
   );
 }
