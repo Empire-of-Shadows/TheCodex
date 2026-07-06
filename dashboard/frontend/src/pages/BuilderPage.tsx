@@ -26,6 +26,7 @@ import type {
 import { VALID_ACTIONS } from "../api/types";
 import { validateGuideSchema } from "../validators/guideValidator";
 import { validateWelcomeSchema } from "../validators/welcomeValidator";
+import { checkNoDangerousContent } from "../validators/safeContent";
 import ComponentPalette from "../components/builder/ComponentPalette";
 import PageTreeEditor from "../components/builder/PageTreeEditor";
 import Canvas from "../components/builder/Canvas";
@@ -876,6 +877,15 @@ export default function BuilderPage() {
       };
       if (!file) return;
 
+      // The <input accept=".json"> filter only narrows the OS picker — a renamed
+      // or drag-and-dropped file bypasses it. Gate on the extension so non-JSON
+      // uploads (.exe/.svg/.html/.gz/…) are rejected up front.
+      if (!/\.json$/i.test(file.name)) {
+        pushToast("Only .json files can be imported.", "error");
+        resetInput();
+        return;
+      }
+
       // Reject oversized files before reading them into memory — mirrors the
       // backend byte ceilings (guide 256 KB, welcome 64 KB). This is the primary
       // guard against huge/deeply-nested "bomb" payloads.
@@ -890,6 +900,15 @@ export default function BuilderPage() {
       reader.onload = () => {
         try {
           const data = JSON.parse(reader.result as string);
+
+          // Reject prototype-pollution keys, unsafe HTML/script markup, and
+          // invisible/bidi control characters on the raw payload before any
+          // processing. The schema validators repeat this for the save path.
+          const safe = checkNoDangerousContent(data);
+          if (!safe.valid) {
+            pushToast(`Import rejected — ${safe.error}`, "error");
+            return;
+          }
 
           if (mode === "guide") {
             if (!data.pages || !Array.isArray(data.pages)) {

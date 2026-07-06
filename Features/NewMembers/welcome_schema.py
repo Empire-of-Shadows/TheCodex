@@ -16,6 +16,7 @@ from utils.component_validators import (
     validate_accent_color,
     validate_components_list,
 )
+from utils.safe_content import check_no_dangerous_content
 
 _VALID_BUTTON_STYLES = {"primary", "secondary", "success", "danger", "link"}
 
@@ -56,11 +57,16 @@ def validate_welcome_schema(data: Any) -> Tuple[bool, str]:
     if "components" not in data:
         return False, "Missing required field: \"components\"."
 
-    return validate_components_list(
+    ok, msg = validate_components_list(
         data["components"],
         action_validator=_validate_welcome_button,
         select_validator=_validate_welcome_select,
     )
+    if not ok:
+        return False, msg
+
+    # Content-safety scan runs last so structural errors keep their specific messages.
+    return check_no_dangerous_content(data)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

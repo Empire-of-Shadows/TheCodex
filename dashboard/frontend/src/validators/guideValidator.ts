@@ -13,6 +13,7 @@ import {
   type ActionValidator,
   type ValidationResult,
 } from "./componentValidator";
+import { checkNoDangerousContent } from "./safeContent";
 
 const OK: ValidationResult = { valid: true, error: "" };
 const MAX_LABEL = 100;
@@ -59,6 +60,10 @@ export function validateGuideSchema(data: unknown): ValidationResult {
       return { valid: false, error: `Navigate action targets page "${target}" which does not exist.` };
     }
   }
+
+  // Content-safety scan runs last so structural errors keep their specific messages.
+  const safe = checkNoDangerousContent(data);
+  if (!safe.valid) return safe;
 
   return OK;
 }
