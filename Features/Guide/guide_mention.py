@@ -93,12 +93,20 @@ class HelpListener(commands.Cog):
 		member = message.author
 
 		if not clean:
-			# Just a mention with no query — show main menu
+			# Just a mention with no query — show how-to-use instructions and tips
+			layout = await guide_manager.get_usage_view(guild_id, user_id, guild=guild, member=member)
+			await message.channel.send(view=layout)
+			return
+
+		# Generic help words → root menu (topic selection). Checked before search so
+		# a help word always shows the menu rather than jumping to a matching page.
+		if any(word in clean for word in HELP_WORDS):
+			logger.info("Generic help triggered")
 			layout = await guide_manager.get_root_menu(guild_id, user_id, guild=guild, member=member)
 			await message.channel.send(view=layout)
 			return
 
-		# Search the guide
+		# Non-help word (trigger word) — search the guide
 		results = await guide_manager.search_content(clean, guild_id, user_id)
 
 		if results and results[0]["score"] >= _CONFIDENCE_THRESHOLD:
@@ -108,16 +116,9 @@ class HelpListener(commands.Cog):
 			await message.channel.send(view=layout)
 			return
 
-		# Check for generic help words
-		if any(word in clean for word in HELP_WORDS):
-			logger.info("Generic help triggered")
-			layout = await guide_manager.get_root_menu(guild_id, user_id, guild=guild, member=member)
-			await message.channel.send(view=layout)
-			return
-
-		# No match — show guide menu as fallback
+		# No match — open the first page of the guide instead of the menu
 		logger.info(f"No matches found for: '{clean}'")
-		layout = await guide_manager.get_root_menu(guild_id, user_id, guild=guild, member=member)
+		layout = await guide_manager.get_first_page_view(guild_id, user_id, guild=guild, member=member)
 		await message.channel.send(view=layout)
 
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased] - 2026-07-06
+
+### Changed
+- When you @mention the bot with a keyword that isn't a general "help" word, it now takes you straight into the guide: if the word matches a topic it opens that topic, and if it doesn't match anything it drops you on the first page of the guide instead of showing the topic-picker menu. Saying "help" (or similar words like "guide", "faq", or "support") still brings up the 📖 Server Guide menu so you can pick a topic.
+- @mentioning the bot on its own (with no words) now shows a short "How to Use the Server Guide" walkthrough with tips on the different ways to ask for help, plus quick buttons to browse topics or search — instead of jumping straight to the topic menu.
+
 ## [Unreleased] - 2026-07-03
 
 ### Added

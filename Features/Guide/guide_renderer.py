@@ -173,6 +173,72 @@ class GuideRenderer:
 
 		return layout
 
+	@classmethod
+	def render_usage(
+		cls,
+		guide_data: Dict[str, Any],
+		interaction: Optional[discord.Interaction] = None,
+		guild: Optional[discord.Guild] = None,
+		member: Optional[Union[discord.Member, discord.User]] = None,
+	) -> discord.ui.LayoutView:
+		"""Render the "how to use the guide" instructions shown on a bare mention."""
+		layout = discord.ui.LayoutView(timeout=600.0)
+
+		accent_color = resolve_color(guide_data.get("accent_color", "#4D0EB3"))
+
+		intro = (
+			"Mention me whenever you need a hand finding your way around the "
+			"server. Here are the ways to use me:\n\n"
+			"**🔎 Ask about a topic**\n"
+			"Mention me with a keyword and I'll take you straight to the closest "
+			"match — for example *rules*, *roles*, or *how do I level up*.\n\n"
+			"**📚 Browse everything**\n"
+			"Mention me with **help** (or *guide*, *faq*, *support*) to open the "
+			"full topic menu and pick from the list.\n\n"
+			"**👋 Just mention me**\n"
+			"Mention me on my own (like you just did) to see this quick how-to "
+			"any time."
+		)
+
+		details = (
+			"**Once you're in the guide**\n"
+			"- Use the **dropdown** to open a topic or its sub-sections.\n"
+			"- Tap **🔍 Search** to look through everything by keyword.\n"
+			"- Use **◀ Back** and **🏠 Main Menu** to move around.\n\n"
+			"**💡 Tips**\n"
+			"- The more specific your wording, the better the match — try the "
+			"exact name of what you're after.\n"
+			"- Can't find it? Open the menu and browse, or hit Search."
+		)
+
+		container = discord.ui.Container(
+			discord.ui.TextDisplay("## 📖 How to Use the Server Guide"),
+			discord.ui.TextDisplay(intro),
+			discord.ui.Separator(),
+			discord.ui.TextDisplay(details),
+		)
+		container.accent_colour = accent_color
+		layout.add_item(container)
+
+		# Entry buttons — reuse the existing home/search handlers so no new
+		# interaction routing is needed.
+		nav_row = discord.ui.ActionRow()
+		nav_row.add_item(discord.ui.Button(
+			label="Browse Topics",
+			style=discord.ButtonStyle.primary,
+			custom_id=CUSTOM_ID_HOME,
+			emoji="📚",
+		))
+		nav_row.add_item(discord.ui.Button(
+			label="Search",
+			style=discord.ButtonStyle.secondary,
+			custom_id=CUSTOM_ID_SEARCH,
+			emoji="🔍",
+		))
+		layout.add_item(nav_row)
+
+		return layout
+
 	# ─────────────────────────────────────────────────────────────────────────
 	# Private builders
 	# ─────────────────────────────────────────────────────────────────────────

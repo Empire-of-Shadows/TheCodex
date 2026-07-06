@@ -324,6 +324,22 @@ class GuideManager:
 			interaction=interaction, guild=guild, member=member,
 		)
 
+	async def get_usage_view(
+		self, guild_id: int, user_id: int,
+		interaction: discord.Interaction = None,
+		guild: discord.Guild = None,
+		member: Union[discord.Member, discord.User] = None,
+	) -> discord.ui.LayoutView:
+		"""Render the "how to use the guide" instructions (shown on a bare mention)."""
+		guide_data = await self._get_guide(guild_id)
+
+		self.navigation.reset(guild_id, user_id)
+
+		return GuideRenderer.render_usage(
+			guide_data,
+			interaction=interaction, guild=guild, member=member,
+		)
+
 	async def get_page_view(
 		self, guild_id: int, user_id: int, page_id: str,
 		interaction: discord.Interaction = None,
@@ -348,6 +364,28 @@ class GuideManager:
 
 		return GuideRenderer.render_page(
 			page, guide_data, breadcrumb_path, is_root=False,
+			interaction=interaction, guild=guild, member=member,
+		)
+
+	async def get_first_page_view(
+		self, guild_id: int, user_id: int,
+		interaction: discord.Interaction = None,
+		guild: discord.Guild = None,
+		member: Union[discord.Member, discord.User] = None,
+	) -> discord.ui.LayoutView:
+		"""Render the first top-level page of the guide (lowest ``order``)."""
+		guide_data = await self._get_guide(guild_id)
+		pages = guide_data.get("pages", [])
+		if not pages:
+			# Empty guide — fall back to the (empty) root menu rather than error.
+			return await self.get_root_menu(
+				guild_id, user_id,
+				interaction=interaction, guild=guild, member=member,
+			)
+
+		first_id = sorted(pages, key=lambda p: p.get("order", 999))[0].get("id")
+		return await self.get_page_view(
+			guild_id, user_id, first_id,
 			interaction=interaction, guild=guild, member=member,
 		)
 
