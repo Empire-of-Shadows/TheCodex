@@ -125,9 +125,11 @@ class GuideRenderer:
 			layout.add_item(cls._build_children_select(children))
 
 		# ── Top-level sections (Home page only) ──────────────────────────
-		# Keeps every top-level section reachable now that there's no menu.
+		# Keeps the other top-level sections reachable now that there's no menu.
+		# Exclude the Home page itself, identified by id (its label may vary).
 		if is_root:
-			sections = guide_data.get("pages", [])
+			home_id = page.get("id")
+			sections = [p for p in guide_data.get("pages", []) if p.get("id") != home_id]
 			if sections:
 				layout.add_item(cls._build_children_select(
 					sections,

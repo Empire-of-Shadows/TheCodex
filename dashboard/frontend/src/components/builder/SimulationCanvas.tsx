@@ -134,18 +134,20 @@ function GuidePageView({
     })),
   } : null;
 
-  // On the Home page, auto-list all top-level sections (matches the bot).
-  const sectionsSelect = isHome && pages.length > 0 ? {
+  // On the Home page, auto-list the other top-level sections (matches the bot).
+  // The Home page itself is excluded, identified by id (its label may vary).
+  const otherSections = isHome
+    ? [...pages].filter((p) => p.id !== pageId).sort((a, b) => (a.order ?? 999) - (b.order ?? 999))
+    : [];
+  const sectionsSelect = otherSections.length > 0 ? {
     placeholder: "Jump to a section...",
-    options: [...pages]
-      .sort((a, b) => (a.order ?? 999) - (b.order ?? 999))
-      .map((p) => ({
-        label: p.label,
-        description: p.description,
-        emoji: p.icon,
-        action: "navigate" as const,
-        target: p.id,
-      })),
+    options: otherSections.map((p) => ({
+      label: p.label,
+      description: p.description,
+      emoji: p.icon,
+      action: "navigate" as const,
+      target: p.id,
+    })),
   } : null;
 
   return (
