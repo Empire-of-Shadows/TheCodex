@@ -1,13 +1,13 @@
 """
-Suggestion admin-panel nodes — TheCodex per-bot feature.
+Suggestion admin-panel nodes.
 
 These PanelNode factories wire the Suggestions admin group (Update Status / Export /
-View Status) to TheCodex's suggestion backend. This is a **per-bot feature**: it depends
-on this bot's ``suggestions_*`` collections and the ``/suggest`` feature, so it lives here
-and is NOT part of the shared admin engine (``EmpireSystems/admin_engine`` / the vendored
-``commands/admin`` files carrying the ``VENDORED`` header).
+View Status) to a bot's suggestion backend. This is a **per-bot feature**: it depends on
+the bot's ``suggestions_*`` collections and the ``/suggest`` feature, so it is only active
+in bots that reference these nodes from their ``panel_configs.py``. The code lives in the
+shared admin engine (``EmpireSystems/admin_engine``) alongside the other feature modules.
 
-They follow the same shape as the vendored factories in ``actions/structure/modals.py``
+They follow the same shape as the factories in ``actions/structure/modals.py``
 (``modal_action``) and ``actions/structure/info.py`` (``info_action``): render into message-2
 via ``cog._send_or_edit``, chain Back-navigation through ``cog._navigate_to``, and gate repeat
 submissions with ``cog._check_cooldown``. The generic ``modal_action`` factory only supports a
