@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        - GIT_REF=${GIT_REF:-Revamp}
+        - GIT_REF=${GIT_REF:-main}
     env_file:
       - .env
     environment:

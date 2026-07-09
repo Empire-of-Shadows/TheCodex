@@ -12,7 +12,7 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-ARG GIT_REF=Revamp
+ARG GIT_REF=main
 
 # Clone your GitHub repo directly
 RUN git clone --depth 1 --branch "${GIT_REF}" https://github.com/Empire-of-Shadows/TheCodex.git .
