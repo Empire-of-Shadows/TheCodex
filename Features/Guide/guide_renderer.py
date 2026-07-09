@@ -9,7 +9,7 @@ Layout structure:
   ActionRow (if page has children):
     Select dropdown with child pages as options
   ActionRow (navigation chrome — always present):
-    [Back] [Main Menu] [Search]
+    [Back] [Home] [Search]
 """
 
 import random
@@ -27,6 +27,7 @@ from Features.Guide.guide_actions import (
 	CUSTOM_ID_SEARCH,
 	CUSTOM_ID_SELECT,
 	CUSTOM_ID_USELECT,
+	CUSTOM_ID_SECTIONS,
 )
 from Features.NewMembers.joining_responses import joining_responses
 from utils.component_builders import (
@@ -123,6 +124,19 @@ class GuideRenderer:
 		if children:
 			layout.add_item(cls._build_children_select(children))
 
+		# ── Top-level sections (Home page only) ──────────────────────────
+		# Keeps the other top-level sections reachable now that there's no menu.
+		# Exclude the Home page itself, identified by id (its label may vary).
+		if is_root:
+			home_id = page.get("id")
+			sections = [p for p in guide_data.get("pages", []) if p.get("id") != home_id]
+			if sections:
+				layout.add_item(cls._build_children_select(
+					sections,
+					custom_id=CUSTOM_ID_SECTIONS,
+					placeholder="Jump to a section...",
+				))
+
 		# ── Breadcrumb ──────────────────────────────────────────────────
 		if breadcrumb_path:
 			breadcrumb_text = " › ".join(breadcrumb_path)
@@ -134,38 +148,86 @@ class GuideRenderer:
 		return layout
 
 	@classmethod
-	def render_root_menu(
+	def render_empty(
 		cls,
 		guide_data: Dict[str, Any],
-		pages: List[Dict[str, Any]],
 		interaction: Optional[discord.Interaction] = None,
 		guild: Optional[discord.Guild] = None,
 		member: Optional[Union[discord.Member, discord.User]] = None,
 	) -> discord.ui.LayoutView:
-		"""Render the root menu showing all top-level pages."""
+		"""Render a friendly placeholder when the guide has no pages yet."""
 		layout = discord.ui.LayoutView(timeout=600.0)
 
 		accent_color = resolve_color(guide_data.get("accent_color", "#4D0EB3"))
 
-		# Header container
-		container_children = [
+		container = discord.ui.Container(
 			discord.ui.TextDisplay("## 📖 Server Guide"),
-			discord.ui.TextDisplay("Select a topic below to get started."),
-		]
-
-		container = discord.ui.Container(*container_children)
+			discord.ui.TextDisplay("This guide doesn't have any pages yet. Check back soon!"),
+		)
 		container.accent_colour = accent_color
 		layout.add_item(container)
 
-		# Page select dropdown
-		if pages:
-			layout.add_item(cls._build_children_select(pages))
+		return layout
 
-		# Nav row (root — no back button)
+	@classmethod
+	def render_usage(
+		cls,
+		guide_data: Dict[str, Any],
+		interaction: Optional[discord.Interaction] = None,
+		guild: Optional[discord.Guild] = None,
+		member: Optional[Union[discord.Member, discord.User]] = None,
+	) -> discord.ui.LayoutView:
+		"""Render the "how to use the guide" instructions shown on a bare mention."""
+		layout = discord.ui.LayoutView(timeout=600.0)
+
+		accent_color = resolve_color(guide_data.get("accent_color", "#4D0EB3"))
+
+		intro = (
+			"Mention me whenever you need a hand finding your way around the "
+			"server. Here are the ways to use me:\n\n"
+			"**🔎 Ask about a topic**\n"
+			"Mention me with a keyword and I'll take you straight to the closest "
+			"match — for example *rules*, *roles*, or *how do I level up*.\n\n"
+			"**📖 Open the guide**\n"
+			"Mention me with **help** (or *guide*, *faq*, *support*) and I'll "
+			"drop you on the guide's Home page — explore everything from there.\n\n"
+			"**👋 Just mention me**\n"
+			"Mention me on my own (like you just did) to see this quick how-to "
+			"any time."
+		)
+
+		details = (
+			"**Getting around the guide**\n"
+			"- Use the **dropdown** on a page to open its sub-sections.\n"
+			"- Tap **🔍 Search** to look through everything by keyword.\n"
+			"- Use **◀ Back** and **🏠 Home** to move around.\n\n"
+			"**💡 Tips**\n"
+			"- The more specific your wording, the better the match — try the "
+			"exact name of what you're after.\n"
+			"- Can't find it? Open the guide and browse, or hit Search."
+		)
+
+		container = discord.ui.Container(
+			discord.ui.TextDisplay("## 📖 How to Use the Server Guide"),
+			discord.ui.TextDisplay(intro),
+			discord.ui.Separator(),
+			discord.ui.TextDisplay(details),
+		)
+		container.accent_colour = accent_color
+		layout.add_item(container)
+
+		# Entry buttons — reuse the existing home/search handlers so no new
+		# interaction routing is needed.
 		nav_row = discord.ui.ActionRow()
 		nav_row.add_item(discord.ui.Button(
-			label="Search",
+			label="Open Guide",
 			style=discord.ButtonStyle.primary,
+			custom_id=CUSTOM_ID_HOME,
+			emoji="📖",
+		))
+		nav_row.add_item(discord.ui.Button(
+			label="Search",
+			style=discord.ButtonStyle.secondary,
 			custom_id=CUSTOM_ID_SEARCH,
 			emoji="🔍",
 		))
@@ -277,8 +339,13 @@ class GuideRenderer:
 		)
 
 	@classmethod
-	def _build_children_select(cls, children: List[Dict[str, Any]]) -> discord.ui.ActionRow:
-		"""Build a select dropdown for child pages."""
+	def _build_children_select(
+		cls,
+		children: List[Dict[str, Any]],
+		custom_id: str = CUSTOM_ID_SELECT,
+		placeholder: str = "Select a topic...",
+	) -> discord.ui.ActionRow:
+		"""Build a select dropdown for child pages (or top-level sections)."""
 		# Sort by order
 		sorted_children = sorted(children, key=lambda p: p.get("order", 999))
 
@@ -297,8 +364,8 @@ class GuideRenderer:
 			))
 
 		select = discord.ui.Select(
-			custom_id=CUSTOM_ID_SELECT,
-			placeholder="Select a topic...",
+			custom_id=custom_id,
+			placeholder=placeholder,
 			options=options,
 		)
 
@@ -319,7 +386,7 @@ class GuideRenderer:
 				emoji="◀",
 			))
 			row.add_item(discord.ui.Button(
-				label="Main Menu",
+				label="Home",
 				style=discord.ButtonStyle.secondary,
 				custom_id=CUSTOM_ID_HOME,
 				emoji="🏠",

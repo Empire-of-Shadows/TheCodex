@@ -243,8 +243,10 @@ class DefineCollections:
             database='ServerData',
             connection='primary',
             indexes=[
-                IndexModel([('guild_id', 1), ('timestamp', -1)], name='guild_timestamp'),
-                IndexModel([('timestamp', -1)], name='timestamp_desc'),
+                # SnapshotEventLog keys events off the stamped created_at datetime.
+                IndexModel([('guild_id', 1), ('created_at', -1)], name='guild_created_desc'),
+                # Auto-expire events after 30 days (replaces the old manual event pruning).
+                IndexModel([('created_at', 1)], name='created_at_ttl', expireAfterSeconds=2592000),
             ]
         )
 

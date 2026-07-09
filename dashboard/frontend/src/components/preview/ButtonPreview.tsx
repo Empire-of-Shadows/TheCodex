@@ -18,8 +18,8 @@ export default function ButtonPreview({ button, onInteract }: Props) {
       onInteract({ type: "channel", target: button.target });
     } else if (button.action === "role" && button.target) {
       onInteract({ type: "role", target: button.target });
-    } else if (button.style === "link" && button.url) {
-      window.open(button.url, "_blank");
+    } else if (button.style === "link" && button.url?.startsWith("https://")) {
+      window.open(button.url, "_blank", "noopener,noreferrer");
     } else if (button.action && button.action in VALID_ACTIONS) {
       onInteract({ type: "welcome_action", action: button.action });
     } else if (button.action) {

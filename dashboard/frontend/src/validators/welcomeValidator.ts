@@ -9,6 +9,7 @@ import {
   type ActionValidator,
   type ValidationResult,
 } from "./componentValidator";
+import { checkNoDangerousContent } from "./safeContent";
 import { VALID_ACTIONS } from "../api/types";
 
 const VALID_BUTTON_STYLES = new Set(["primary", "secondary", "success", "danger", "link"]);
@@ -29,11 +30,11 @@ export function validateWelcomeSchema(data: unknown): ValidationResult {
     return { valid: false, error: 'Missing required field: "components".' };
   }
 
-  return validateComponentsList(
-    d.components,
-    validateWelcomeButton,
-    validateWelcomeSelect
-  );
+  const r = validateComponentsList(d.components, validateWelcomeButton, validateWelcomeSelect);
+  if (!r.valid) return r;
+
+  // Content-safety scan runs last so structural errors keep their specific messages.
+  return checkNoDangerousContent(data);
 }
 
 const validateWelcomeButton: ActionValidator = (comp, prefix) => {

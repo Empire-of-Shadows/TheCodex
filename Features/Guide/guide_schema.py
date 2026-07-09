@@ -18,6 +18,7 @@ from utils.component_validators import (
 	validate_accent_color,
 	validate_components_list,
 )
+from utils.safe_content import check_no_dangerous_content
 
 _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9\-]*$")
 _MAX_LABEL = 100
@@ -77,6 +78,11 @@ def validate_guide_schema(data: Any) -> Tuple[bool, str]:
 	for target in navigate_targets:
 		if target not in all_ids:
 			return False, f"Navigate action targets page \"{target}\" which does not exist."
+
+	# Content-safety scan runs last so structural errors keep their specific messages.
+	ok, msg = check_no_dangerous_content(data)
+	if not ok:
+		return False, msg
 
 	return True, ""
 

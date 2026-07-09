@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   DndContext,
   DragOverlay,
@@ -26,6 +26,7 @@ import type {
 import { VALID_ACTIONS } from "../api/types";
 import { validateGuideSchema } from "../validators/guideValidator";
 import { validateWelcomeSchema } from "../validators/welcomeValidator";
+import { checkNoDangerousContent } from "../validators/safeContent";
 import ComponentPalette from "../components/builder/ComponentPalette";
 import PageTreeEditor from "../components/builder/PageTreeEditor";
 import Canvas from "../components/builder/Canvas";
@@ -35,6 +36,11 @@ import ValidationErrors from "../components/builder/ValidationErrors";
 import DocsPanel from "../components/builder/DocsPanel";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { formatError } from "../utils/formatError";
+
+// Import file-size ceilings — mirror the backend byte limits
+// (guide_schema.py _MAX_GUIDE_BYTES / welcome_schema.py _MAX_WELCOME_BYTES).
+const MAX_GUIDE_BYTES = 256 * 1024;
+const MAX_WELCOME_BYTES = 64 * 1024;
 
 let _nextId = 1;
 function uid(): string {
@@ -362,8 +368,10 @@ interface WelcomeCache {
 export default function BuilderPage() {
   const { guildId } = useParams<{ guildId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const initialMode: BuilderMode = searchParams.get("mode") === "welcome" ? "welcome" : "guide";
 
-  const [mode, setMode] = useState<BuilderMode>("guide");
+  const [mode, setMode] = useState<BuilderMode>(initialMode);
   const [components, setComponents] = useState<ComponentDef[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pages, setPages] = useState<GuidePage[]>([]);
@@ -491,17 +499,23 @@ export default function BuilderPage() {
           };
         }
 
-        // Load guide mode into active state (default mode)
+        // Hydrate the guide page-tree state so the tree is ready when toggling modes
         const gc = guideCacheRef.current;
         setPages(gc.pages);
         setCurrentPageId(gc.currentPageId);
-        setAccentColor(gc.accentColor);
-        if (gc.currentPageId) {
-          const firstPage = findPage(gc.pages, gc.currentPageId);
-          setComponents(firstPage?.content?.components ? [...firstPage.content.components] : []);
+        // Load the requested mode into the active editor
+        const wc = welcomeCacheRef.current;
+        if (initialMode === "welcome") {
+          setComponents([...wc.components]);
+          setAccentColor(wc.accentColor);
+        } else {
+          setAccentColor(gc.accentColor);
+          if (gc.currentPageId) {
+            const firstPage = findPage(gc.pages, gc.currentPageId);
+            setComponents(firstPage?.content?.components ? [...firstPage.content.components] : []);
+          }
         }
         // Seed saved signatures from loaded data so initial state is "clean"
-        const wc = welcomeCacheRef.current;
         setSavedSigs({
           guide: JSON.stringify(buildGuideData(gc.pages, gc.accentColor)),
           welcome: JSON.stringify(buildWelcomeData(wc.components, wc.accentColor)),
@@ -509,7 +523,7 @@ export default function BuilderPage() {
       })
       .catch(() => navigate("/dashboard"))
       .finally(() => setLoading(false));
-  }, [guildId, navigate]);
+  }, [guildId, navigate, initialMode]);
 
   // ── Snapshot current state into the active cache ───────────────────────
 
@@ -858,49 +872,134 @@ export default function BuilderPage() {
   const handleImport = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
+      const resetInput = () => {
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      };
       if (!file) return;
+
+      // The <input accept=".json"> filter only narrows the OS picker — a renamed
+      // or drag-and-dropped file bypasses it. Gate on the extension so non-JSON
+      // uploads (.exe/.svg/.html/.gz/…) are rejected up front.
+      if (!/\.json$/i.test(file.name)) {
+        pushToast("Only .json files can be imported.", "error");
+        resetInput();
+        return;
+      }
+
+      // Reject oversized files before reading them into memory — mirrors the
+      // backend byte ceilings (guide 256 KB, welcome 64 KB). This is the primary
+      // guard against huge/deeply-nested "bomb" payloads.
+      const maxBytes = mode === "guide" ? MAX_GUIDE_BYTES : MAX_WELCOME_BYTES;
+      if (file.size > maxBytes) {
+        pushToast(`File is too large (max ${Math.floor(maxBytes / 1024)} KB for ${mode}).`, "error");
+        resetInput();
+        return;
+      }
+
       const reader = new FileReader();
       reader.onload = () => {
         try {
           const data = JSON.parse(reader.result as string);
 
+          // Reject prototype-pollution keys, unsafe HTML/script markup, and
+          // invisible/bidi control characters on the raw payload before any
+          // processing. The schema validators repeat this for the save path.
+          const safe = checkNoDangerousContent(data);
+          if (!safe.valid) {
+            pushToast(`Import rejected — ${safe.error}`, "error");
+            return;
+          }
+
           if (mode === "guide") {
-            if (data.pages && Array.isArray(data.pages)) {
-              const normalized = normalizePages(data.pages as GuidePage[]);
-              const imported = normalized.map((p: GuidePage) => addIdsToPage(p));
-              setPages(imported);
-              if (data.accent_color) setAccentColor(data.accent_color as string);
-              if (imported.length > 0) {
-                setCurrentPageId(imported[0].id);
-                setComponents(imported[0].content?.components ? [...imported[0].content.components] : []);
-              } else {
-                setCurrentPageId(null);
-                setComponents([]);
-              }
-              setSelectedId(null);
-              pushToast(`Imported ${imported.length} pages`, "success");
-            } else {
+            if (!data.pages || !Array.isArray(data.pages)) {
               pushToast("Invalid guide JSON — expected { pages: [...] }", "error");
+              return;
             }
-          } else {
-            if (data.components && Array.isArray(data.components)) {
-              setComponents(addIds(data.components));
-              if (data.accent_color) setAccentColor(data.accent_color as string);
-              setSelectedId(null);
-              pushToast(`Imported ${data.components.length} components`, "success");
+            // Normalize (assign ids/order) then validate BEFORE touching editor
+            // state — mirrors the backend order and reuses the shared validator.
+            // The validator caps nesting depth, so a deep tree is rejected safely.
+            const normalized = normalizePages(data.pages as GuidePage[]);
+            const candidate: GuideData = { pages: normalized };
+            if (data.accent_color !== undefined) candidate.accent_color = data.accent_color;
+            const r = validateGuideSchema(candidate);
+            if (!r.valid) {
+              pushToast(`Import rejected — ${r.error}`, "error");
+              return;
+            }
+            const imported = normalized.map((p: GuidePage) => addIdsToPage(p));
+            setPages(imported);
+            if (data.accent_color) setAccentColor(data.accent_color as string);
+            if (imported.length > 0) {
+              setCurrentPageId(imported[0].id);
+              setComponents(imported[0].content?.components ? [...imported[0].content.components] : []);
             } else {
-              pushToast("Invalid welcome JSON — expected { components: [...] }", "error");
+              setCurrentPageId(null);
+              setComponents([]);
             }
+            setSelectedId(null);
+            pushToast(`Imported ${imported.length} pages`, "success");
+          } else {
+            if (!data.components || !Array.isArray(data.components)) {
+              pushToast("Invalid welcome JSON — expected { components: [...] }", "error");
+              return;
+            }
+            const candidate: WelcomeData = { components: data.components };
+            if (data.accent_color !== undefined) candidate.accent_color = data.accent_color;
+            const r = validateWelcomeSchema(candidate);
+            if (!r.valid) {
+              pushToast(`Import rejected — ${r.error}`, "error");
+              return;
+            }
+            setComponents(addIds(data.components));
+            if (data.accent_color) setAccentColor(data.accent_color as string);
+            setSelectedId(null);
+            pushToast(`Imported ${data.components.length} components`, "success");
           }
         } catch {
           pushToast("Failed to parse JSON file", "error");
+        } finally {
+          resetInput();
         }
-        if (fileInputRef.current) fileInputRef.current.value = "";
       };
       reader.readAsText(file);
     },
     [mode, pushToast]
   );
+
+  // ── Export JSON ────────────────────────────────────────────────────────
+
+  const handleExport = useCallback(() => {
+    let data: GuideData | WelcomeData;
+    if (mode === "guide") {
+      // Fold the currently-edited page's live components back into the tree
+      // (same as save()) so unsaved edits to the active page are included.
+      let pagesWithCurrent = pages;
+      if (currentPageId) {
+        pagesWithCurrent = updatePageInTree(pages, currentPageId, (p) => ({
+          ...p,
+          content: { components: [...components] },
+        }));
+      }
+      data = buildGuideData(pagesWithCurrent, accentColor);
+    } else {
+      data = buildWelcomeData(components, accentColor);
+    }
+
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    // Filename uses fixed values only (no guild name / labels) to avoid injection.
+    const filename = `codex-${mode}-${guildId ?? "guild"}-${stamp}.json`;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    pushToast(`Exported ${mode} JSON`, "success");
+  }, [mode, pages, currentPageId, components, accentColor, guildId, pushToast]);
 
   // ── Dirty tracking ─────────────────────────────────────────────────────
 
@@ -1104,6 +1203,9 @@ export default function BuilderPage() {
           />
           <button className="btn btn-secondary" onClick={() => fileInputRef.current?.click()} style={{ fontSize: 12 }}>
             Import JSON
+          </button>
+          <button className="btn btn-secondary" onClick={handleExport} style={{ fontSize: 12 }}>
+            Export JSON
           </button>
           {dirty && (
             <span className="dirty-badge" role="status" aria-live="polite">

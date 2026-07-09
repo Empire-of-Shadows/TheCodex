@@ -155,7 +155,7 @@ function SettingsActionPanel({
             <button className="btn btn-primary" onClick={() => onNavigate(`/builder/${guild.id}`)}>
               Edit Guide
             </button>
-            <button className="btn btn-secondary" onClick={() => onNavigate(`/builder/${guild.id}`)}>
+            <button className="btn btn-secondary" onClick={() => onNavigate(`/builder/${guild.id}?mode=welcome`)}>
               Edit Welcome
             </button>
             <button className="btn btn-secondary" onClick={() => onNavigate(`/settings/${guild.id}`)}>

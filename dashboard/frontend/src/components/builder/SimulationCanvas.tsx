@@ -7,7 +7,7 @@ import type {
 import DiscordPreview from "../preview/DiscordPreview";
 import SelectPreview from "../preview/SelectPreview";
 import MessageChrome from "../preview/MessageChrome";
-import { GuideRootMenu, GuideBreadcrumb, GuideNavRow } from "../preview/GuideChrome";
+import { GuideBreadcrumb, GuideNavRow } from "../preview/GuideChrome";
 
 interface Props {
   mode: BuilderMode;
@@ -16,6 +16,13 @@ interface Props {
   accentColor: string;
   components: ComponentDef[];
   onInteract: (action: SimulationAction) => void;
+}
+
+// The Home page is the top page of the tree (lowest `order`). A bare mention,
+// the Home button, and unmatched searches all land here — mirrors the bot.
+function homePageId(pages: GuidePage[]): string | null {
+  if (pages.length === 0) return null;
+  return [...pages].sort((a, b) => (a.order ?? 999) - (b.order ?? 999))[0].id;
 }
 
 function findPage(pages: GuidePage[], id: string): GuidePage | null {
@@ -52,16 +59,18 @@ export default function SimulationCanvas({
   onInteract,
 }: Props) {
   if (mode === "guide") {
+    // A null simulation page means "Home" — resolve it to the top page.
+    const activePageId = simulationPageId ?? homePageId(pages);
     return (
       <MessageChrome>
         <div className="discord-preview">
           <div className="canvas-drop-zone">
-            {simulationPageId === null ? (
-              <GuideRootMenu pages={pages} accentColor={accentColor} onInteract={onInteract} />
+            {activePageId === null ? (
+              <div className="canvas-empty">This guide doesn't have any pages yet.</div>
             ) : (
               <GuidePageView
                 pages={pages}
-                pageId={simulationPageId}
+                pageId={activePageId}
                 accentColor={accentColor}
                 onInteract={onInteract}
               />
@@ -111,6 +120,7 @@ function GuidePageView({
   const breadcrumbs = getBreadcrumbLabels(pages, pageId);
   const pageComponents = page.content?.components || [];
   const children = page.children || [];
+  const isHome = pageId === homePageId(pages);
 
   // Build children select if page has sub-pages
   const childrenSelect = children.length > 0 ? {
@@ -121,6 +131,22 @@ function GuidePageView({
       emoji: c.icon,
       action: "navigate" as const,
       target: c.id,
+    })),
+  } : null;
+
+  // On the Home page, auto-list the other top-level sections (matches the bot).
+  // The Home page itself is excluded, identified by id (its label may vary).
+  const otherSections = isHome
+    ? [...pages].filter((p) => p.id !== pageId).sort((a, b) => (a.order ?? 999) - (b.order ?? 999))
+    : [];
+  const sectionsSelect = otherSections.length > 0 ? {
+    placeholder: "Jump to a section...",
+    options: otherSections.map((p) => ({
+      label: p.label,
+      description: p.description,
+      emoji: p.icon,
+      action: "navigate" as const,
+      target: p.id,
     })),
   } : null;
 
@@ -136,9 +162,15 @@ function GuidePageView({
         <SelectPreview select={childrenSelect} onInteract={onInteract} />
       )}
 
-      {/* Breadcrumb + Nav row */}
+      {/* Top-level sections (Home page only) */}
+      {sectionsSelect && (
+        <SelectPreview select={sectionsSelect} onInteract={onInteract} />
+      )}
+
+      {/* Breadcrumb + Nav row. The Home page (top of the tree) is the root —
+          it hides the Back/Home buttons, matching the bot. */}
       <GuideBreadcrumb labels={breadcrumbs} />
-      <GuideNavRow isRoot={false} onInteract={onInteract} />
+      <GuideNavRow isRoot={isHome} onInteract={onInteract} />
     </>
   );
 }

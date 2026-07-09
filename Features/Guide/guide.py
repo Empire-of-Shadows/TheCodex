@@ -306,23 +306,27 @@ class GuideManager:
 	# Public rendering methods
 	# ─────────────────────────────────────────────────────────────────────
 
-	async def get_root_menu(
+	async def get_usage_view(
 		self, guild_id: int, user_id: int,
 		interaction: discord.Interaction = None,
 		guild: discord.Guild = None,
 		member: Union[discord.Member, discord.User] = None,
 	) -> discord.ui.LayoutView:
-		"""Render the root guide menu."""
+		"""Render the "how to use the guide" instructions (shown on a bare mention)."""
 		guide_data = await self._get_guide(guild_id)
-		pages = guide_data.get("pages", [])
-		sorted_pages = sorted(pages, key=lambda p: p.get("order", 999))
 
 		self.navigation.reset(guild_id, user_id)
 
-		return GuideRenderer.render_root_menu(
-			guide_data, sorted_pages,
+		return GuideRenderer.render_usage(
+			guide_data,
 			interaction=interaction, guild=guild, member=member,
 		)
+
+	def _home_page_id(self, pages: List[Dict]) -> Optional[str]:
+		"""Return the Home page id — the top-level page with the lowest ``order``."""
+		if not pages:
+			return None
+		return sorted(pages, key=lambda p: p.get("order", 999))[0].get("id")
 
 	async def get_page_view(
 		self, guild_id: int, user_id: int, page_id: str,
@@ -346,8 +350,40 @@ class GuideManager:
 		labels = self._get_breadcrumb_labels(pages, page_id)
 		breadcrumb_path = ["Guide"] + (labels or [page.get("label", "")])
 
+		# The Home page (top of the tree) is the root — no Back/Home buttons.
+		is_root = page_id == self._home_page_id(pages)
+
 		return GuideRenderer.render_page(
-			page, guide_data, breadcrumb_path, is_root=False,
+			page, guide_data, breadcrumb_path, is_root=is_root,
+			interaction=interaction, guild=guild, member=member,
+		)
+
+	async def get_home_view(
+		self, guild_id: int, user_id: int,
+		interaction: discord.Interaction = None,
+		guild: discord.Guild = None,
+		member: Union[discord.Member, discord.User] = None,
+	) -> discord.ui.LayoutView:
+		"""Render the guide's Home page — the page at the top of the tree.
+
+		The top-level page with the lowest ``order`` is the Home page. It is the
+		entry point that ``help`` mentions, the Home button, and unmatched
+		searches all land on. Navigation state is reset so Home is the root of
+		the breadcrumb.
+		"""
+		guide_data = await self._get_guide(guild_id)
+		pages = guide_data.get("pages", [])
+		if not pages:
+			# No pages authored yet — show a friendly empty state.
+			return GuideRenderer.render_empty(
+				guide_data,
+				interaction=interaction, guild=guild, member=member,
+			)
+
+		self.navigation.reset(guild_id, user_id)
+		home_id = self._home_page_id(pages)
+		return await self.get_page_view(
+			guild_id, user_id, home_id,
 			interaction=interaction, guild=guild, member=member,
 		)
 
@@ -362,25 +398,26 @@ class GuideManager:
 		# Get current path
 		nav_path = self.navigation.get_path(guild_id, user_id)
 		if len(nav_path) <= 1:
-			return await self.get_root_menu(guild_id, user_id, interaction=interaction)
+			return await self.get_home_view(guild_id, user_id, interaction=interaction)
 
 		# Pop current, navigate to parent
 		self.navigation.pop(guild_id, user_id)
 		nav_path = self.navigation.get_path(guild_id, user_id)
 
 		if not nav_path:
-			return await self.get_root_menu(guild_id, user_id, interaction=interaction)
+			return await self.get_home_view(guild_id, user_id, interaction=interaction)
 
 		parent_id = nav_path[-1]
 		page = self._find_page(pages, parent_id)
 		if not page:
-			return await self.get_root_menu(guild_id, user_id, interaction=interaction)
+			return await self.get_home_view(guild_id, user_id, interaction=interaction)
 
 		labels = self._get_breadcrumb_labels(pages, parent_id)
 		breadcrumb_path = ["Guide"] + (labels or [page.get("label", "")])
 
+		is_root = parent_id == self._home_page_id(pages)
 		return GuideRenderer.render_page(
-			page, guide_data, breadcrumb_path, is_root=False, interaction=interaction
+			page, guide_data, breadcrumb_path, is_root=is_root, interaction=interaction
 		)
 
 	async def handle_search(self, query: str, guild_id: int, user_id: int) -> discord.ui.LayoutView:
@@ -441,7 +478,7 @@ class GuideManager:
 		from Features.Guide.guide_actions import CUSTOM_ID_HOME, CUSTOM_ID_SEARCH
 		nav_row = discord.ui.ActionRow()
 		nav_row.add_item(discord.ui.Button(
-			label="Main Menu", style=discord.ButtonStyle.secondary,
+			label="Home", style=discord.ButtonStyle.secondary,
 			custom_id=CUSTOM_ID_HOME, emoji="🏠",
 		))
 		nav_row.add_item(discord.ui.Button(
@@ -467,7 +504,7 @@ class GuideManager:
 
 		nav_row = discord.ui.ActionRow()
 		nav_row.add_item(discord.ui.Button(
-			label="Main Menu", style=discord.ButtonStyle.secondary,
+			label="Home", style=discord.ButtonStyle.secondary,
 			custom_id=CUSTOM_ID_HOME, emoji="🏠",
 		))
 		layout.add_item(nav_row)
@@ -586,7 +623,7 @@ async def _dispatch_action(
 		await interaction.response.edit_message(view=layout)
 
 	elif action == "home":
-		layout = await guide_manager.get_root_menu(guild_id, user_id, interaction=interaction)
+		layout = await guide_manager.get_home_view(guild_id, user_id, interaction=interaction)
 		await interaction.response.edit_message(view=layout)
 
 	elif action == "search":
@@ -622,8 +659,8 @@ async def dispatch_guide_interaction(interaction: discord.Interaction) -> bool:
 	try:
 		# Handle select menus
 		if component_type == 3:  # String select
-			# Auto-generated children/search select — value is a page_id
-			if custom_id == "g:_select":
+			# Auto-generated children / sections / search select — value is a page_id
+			if custom_id in ("g:_select", "g:_sections"):
 				values = interaction.data.get("values", [])
 				if not values:
 					return True
@@ -677,10 +714,10 @@ async def get_help_menu(
 	guild: discord.Guild = None,
 	member: Union[discord.Member, discord.User] = None,
 ) -> discord.ui.LayoutView:
-	"""Get the root guide menu. Used by welcome_actions open_guide handler."""
+	"""Get the guide's Home page. Used by welcome_actions open_guide handler."""
 	if guild_id is None:
 		raise ValueError("guild_id is required")
-	return await guide_manager.get_root_menu(
+	return await guide_manager.get_home_view(
 		guild_id, user_id,
 		interaction=interaction, guild=guild, member=member,
 	)
