@@ -224,46 +224,6 @@ class SuggestionDatabaseManager:
                 logger.error(f"Error creating suggestion: {e}", exc_info=True)
                 raise
 
-    async def update_suggestion_status(self, suggestion_id: str, status: str,
-                                       admin_id: int, reason: str = None) -> bool:
-        """Update suggestion status"""
-        await self._ensure_initialized()
-
-        with PerformanceLogger(logger, "update_suggestion_status"):
-            logger.info(f"Admin {admin_id} updating suggestion {suggestion_id} status to {status}")
-
-            try:
-                update_doc = {
-                    "status": status,
-                    "last_updated_by": admin_id
-                }
-
-                if reason:
-                    update_doc["status_reason"] = reason
-                    logger.debug(f"Status update reason: {reason}")
-
-                result = await self.db_manager.suggestions_suggestions.update_one(
-                    {"suggestion_id": suggestion_id},
-                    {"$set": update_doc}
-                )
-
-                if result:
-                    # Add to notification queue
-                    suggestion = await self.db_manager.suggestions_suggestions.find_one(
-                        {"suggestion_id": suggestion_id})
-                    if suggestion and not suggestion.get("anonymous") and suggestion.get("user_id"):
-                        await self._queue_notification(suggestion["user_id"], suggestion_id, status, reason)
-
-                    logger.info(f"Successfully updated suggestion {suggestion_id} status to {status}")
-                    return True
-                else:
-                    logger.warning(f"No suggestion found with ID {suggestion_id} to update")
-                    return False
-
-            except Exception as e:
-                logger.error(f"Error updating suggestion status: {e}", exc_info=True)
-                return False
-
     async def add_vote(self, suggestion_id: str, user_id: int, vote_type: str) -> Dict[str, Any]:
         """Add or update a vote for a suggestion"""
         await self._ensure_initialized()
@@ -471,26 +431,6 @@ class SuggestionDatabaseManager:
             logger.debug(f"Updated {stat_type} stat for user {user_id}")
         except Exception as e:
             logger.error(f"Error updating user stats: {e}", exc_info=True)
-
-    async def _queue_notification(self, user_id: int, suggestion_id: str,
-                                  status: str, reason: str = None):
-        """Queue notification for user"""
-        try:
-            notification_doc = {
-                "user_id": user_id,
-                "suggestion_id": suggestion_id,
-                "type": "status_update",
-                "status": status,
-                "reason": reason,
-                "sent": False
-            }
-
-            await self.db_manager.get_collection_manager('suggestions_notification_queue').create_one(notification_doc)
-            logger.info(
-                f"Queued notification for user {user_id} - suggestion {suggestion_id} status changed to {status}")
-
-        except Exception as e:
-            logger.error(f"Error queuing notification: {e}", exc_info=True)
 
     async def get_pending_notifications(self) -> List[Dict]:
         """Get pending notifications"""

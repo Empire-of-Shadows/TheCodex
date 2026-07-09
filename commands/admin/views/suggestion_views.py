@@ -9,7 +9,7 @@ from typing import Any, Callable, Awaitable, Dict
 
 import discord
 
-from .base import AdminLayoutBuilder, cid, readonly_container, editable_container, build_notice_layout
+from .base import cid, readonly_container, editable_container
 
 # Display labels for suggestion statuses
 _STATUS_LABELS = {
@@ -25,10 +25,12 @@ _STATUS_LABELS = {
 _STATUS_ORDER = ["pending", "under_review", "approved", "implemented", "rejected", "on_hold"]
 
 
-def build_suggestion_status_view(stats: Dict[str, Any], guild: discord.Guild) -> discord.ui.LayoutView:
-    """Build a read-only status overview of the suggestion system."""
-    builder = AdminLayoutBuilder()
+def format_suggestion_status(stats: Dict[str, Any], guild: discord.Guild) -> str:
+    """Format a read-only status overview of the suggestion system as markdown text.
 
+    Consumed by the shared ``info_action`` node (see ``actions/suggestion_nodes.py``),
+    which renders the header and Back button around this body.
+    """
     channel_id = stats.get("channel_id")
     total_suggestions = stats.get("total_suggestions", 0)
     status_breakdown = stats.get("status_breakdown", {})
@@ -41,8 +43,6 @@ def build_suggestion_status_view(stats: Dict[str, Any], guild: discord.Guild) ->
         channel_display = channel.mention if channel else f"Not found ({channel_id})"
     else:
         channel_display = "Not configured"
-
-    builder.add_header("## Suggestion System Status")
 
     sections: list[str] = [
         f"**Server:** {guild.name}\n"
@@ -75,9 +75,7 @@ def build_suggestion_status_view(stats: Dict[str, Any], guild: discord.Guild) ->
         ]
         sections.append("**Top Contributors**\n" + "\n".join(contrib_lines))
 
-    builder.add_item(readonly_container(discord.ui.TextDisplay("\n\n".join(sections))))
-
-    return builder.build()
+    return "\n\n".join(sections)
 
 
 class SuggestionStatusUpdateModal(discord.ui.Modal):

@@ -21,6 +21,11 @@ from .actions.wyr_actions import WYRConfigActions
 from .actions.new_member_actions import NewMemberActions
 from .actions.announcement_actions import AnnouncementActions
 from .actions.suggestion_actions import SuggestionActions
+from .actions.suggestion_nodes import (
+    build_suggestion_update_status_node,
+    build_suggestion_export_node,
+    build_suggestion_status_node,
+)
 from .actions.guide_actions import GuideActions
 from .actions.drops_actions import DropsActions
 from .actions.color_set_actions import ColorSetActions
@@ -1037,9 +1042,6 @@ DROPS_TRACKER_STUB = _stub("drops_tracker", "Tracked Channels", "Channels tracke
 DROPS_MANAGER_STUB = _stub("drops_manager_role", "Manager Role", "Role allowed to manage drops via /drop.")
 DROPS_STATUS_STUB = _view_stub("drops_status", "View Status", "View drops configuration and stats.")
 ANN_STATUS_STUB = _view_stub("ann_status", "View Status", "View announcement configuration summary.")
-SUG_UPDATE_STUB = _stub("sug_update_status", "Update Status", "Update a suggestion's review status.")
-SUG_EXPORT_STUB = _stub("sug_export", "Export", "Export suggestions as CSV or JSON.")
-SUG_STATUS_STUB = _view_stub("sug_status", "View Status", "View suggestion system stats.")
 GUIDE_STATUS_STUB = _view_stub("guide_status", "View Status", "View guide system configuration.")
 
 
@@ -1160,9 +1162,9 @@ _SUGGESTIONS_GROUP = PanelNode(
     category_group="feature",
     children={
         "sug_channel": SUG_CHANNEL_CONFIG,
-        "sug_update_status": SUG_UPDATE_STUB,
-        "sug_export": SUG_EXPORT_STUB,
-        "sug_status": SUG_STATUS_STUB,
+        "sug_update_status": build_suggestion_update_status_node(),
+        "sug_export": build_suggestion_export_node(),
+        "sug_status": build_suggestion_status_node(),
     },
 )
 
