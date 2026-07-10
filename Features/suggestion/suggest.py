@@ -15,6 +15,15 @@ logger = get_logger("Suggestion")
 
 load_dotenv()
 
+# Categories offered in both the slash-command choices and the interactive builder.
+SUGGESTION_CATEGORIES = [
+    "Bot Feature",
+    "Server Improvement",
+    "Event Idea",
+    "Rule Change",
+    "Other",
+]
+
 class SuggestionView(discord.ui.View):
     def __init__(self, suggestion_id: str, db_manager):
         super().__init__(timeout=None)
@@ -161,6 +170,236 @@ class SuggestionModal(discord.ui.Modal):
                 logger.error("SuggestionCog not found when processing template submission")
                 await interaction.response.send_message("❌ System error: Suggestion service unavailable.",
                                                         ephemeral=True)
+
+
+class SuggestionBuilderModal(discord.ui.Modal):
+    """Text-field editor for the interactive builder.
+
+    Opened from the builder's Edit button. On submit it writes the values
+    back onto the parent builder view and re-renders the builder message.
+    """
+
+    def __init__(self, builder: "SuggestionBuilderView"):
+        super().__init__(title="Suggestion Details")
+        self.builder = builder
+
+        self.title_input = discord.ui.TextInput(
+            label="Title",
+            placeholder="A short headline for your suggestion",
+            default=builder.draft_title or None,
+            max_length=100,
+            required=True,
+        )
+        self.description_input = discord.ui.TextInput(
+            label="Description",
+            placeholder="Describe your suggestion in detail",
+            style=discord.TextStyle.paragraph,
+            default=builder.draft_description or None,
+            max_length=1000,
+            required=True,
+        )
+        self.details_input = discord.ui.TextInput(
+            label="Additional Details (optional)",
+            placeholder="Reasoning, use case, timing, anything extra",
+            style=discord.TextStyle.paragraph,
+            default=builder.draft_details or None,
+            max_length=500,
+            required=False,
+        )
+
+        self.add_item(self.title_input)
+        self.add_item(self.description_input)
+        self.add_item(self.details_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        self.builder.draft_title = self.title_input.value.strip()
+        self.builder.draft_description = self.description_input.value.strip()
+        self.builder.draft_details = self.details_input.value.strip()
+        logger.debug(
+            f"Builder draft updated by user {interaction.user.id} - title set: {bool(self.builder.draft_title)}")
+        self.builder.render()
+        await interaction.response.edit_message(view=self.builder)
+
+
+class SuggestionBuilderView(discord.ui.LayoutView):
+    """Interactive Components v2 builder for composing a suggestion.
+
+    Shown when /suggest is run without options. Holds the in-progress draft
+    on the instance (ephemeral, author-locked, short-lived). A single Edit
+    button opens a modal for the text fields; a select picks the category and
+    a toggle button flips anonymity; Submit hands off to the cog's normal
+    processing path.
+    """
+
+    def __init__(
+        self,
+        cog: "SuggestionCog",
+        author_id: int,
+        initial_category: str = "Other",
+        initial_anonymous: bool = False,
+        timeout: float = 300.0,
+    ):
+        super().__init__(timeout=timeout)
+        self.cog = cog
+        self.author_id = author_id
+        self.category = initial_category if initial_category in SUGGESTION_CATEGORIES else "Other"
+        self.anonymous = initial_anonymous
+        self.draft_title = ""
+        self.draft_description = ""
+        self.draft_details = ""
+        self.render()
+
+    # ---- state -> text -------------------------------------------------
+
+    def _summary_text(self) -> str:
+        title = self.draft_title or "*not set*"
+        description = self.draft_description or "*not set*"
+        details = self.draft_details or "*none*"
+        anon = "On" if self.anonymous else "Off"
+        return (
+            "## New Suggestion\n"
+            f"**Title:** {title}\n"
+            f"**Description:** {description}\n"
+            f"**Details:** {details}\n"
+            f"**Category:** {self.category}\n"
+            f"**Anonymous:** {anon}\n\n"
+            "Use **Edit Details** to fill in your suggestion, pick a category, "
+            "toggle anonymity, then press **Submit**."
+        )
+
+    def _compose_text(self) -> str:
+        parts = [f"**{self.draft_title}**", "", self.draft_description]
+        if self.draft_details:
+            parts.extend(["", f"**Details:** {self.draft_details}"])
+        return "\n".join(parts)
+
+    # ---- rendering -----------------------------------------------------
+
+    def render(self):
+        """Rebuild the layout to reflect current draft state."""
+        self.clear_items()
+
+        container = discord.ui.Container(accent_color=0x5865F2)
+        container.add_item(discord.ui.TextDisplay(self._summary_text()))
+        container.add_item(discord.ui.Separator())
+
+        category_select = discord.ui.Select(
+            placeholder=f"Category: {self.category}",
+            min_values=1,
+            max_values=1,
+            options=[
+                discord.SelectOption(label=c, value=c, default=(c == self.category))
+                for c in SUGGESTION_CATEGORIES
+            ],
+        )
+        category_select.callback = self._on_category
+        cat_row = discord.ui.ActionRow()
+        cat_row.add_item(category_select)
+        container.add_item(cat_row)
+
+        edit_btn = discord.ui.Button(
+            label="Edit Details",
+            style=discord.ButtonStyle.primary,
+            emoji="📝",
+        )
+        edit_btn.callback = self._on_edit
+
+        anon_btn = discord.ui.Button(
+            label="Anonymous: On" if self.anonymous else "Anonymous: Off",
+            style=discord.ButtonStyle.success if self.anonymous else discord.ButtonStyle.secondary,
+            emoji="🕵️",
+        )
+        anon_btn.callback = self._on_toggle_anon
+
+        controls_row = discord.ui.ActionRow()
+        controls_row.add_item(edit_btn)
+        controls_row.add_item(anon_btn)
+        container.add_item(controls_row)
+
+        submit_btn = discord.ui.Button(
+            label="Submit",
+            style=discord.ButtonStyle.success,
+            emoji="✅",
+        )
+        submit_btn.callback = self._on_submit
+
+        cancel_btn = discord.ui.Button(
+            label="Cancel",
+            style=discord.ButtonStyle.danger,
+            emoji="✖️",
+        )
+        cancel_btn.callback = self._on_cancel
+
+        action_row = discord.ui.ActionRow()
+        action_row.add_item(submit_btn)
+        action_row.add_item(cancel_btn)
+        container.add_item(action_row)
+
+        self.add_item(container)
+
+    # ---- guards --------------------------------------------------------
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.author_id:
+            await interaction.response.send_message(
+                "This suggestion form belongs to someone else. Run `/suggest` to open your own.",
+                ephemeral=True,
+            )
+            return False
+        return True
+
+    # ---- component callbacks ------------------------------------------
+
+    async def _on_category(self, interaction: discord.Interaction):
+        values = interaction.data.get("values") if interaction.data else None
+        if values:
+            self.category = values[0]
+            logger.debug(f"Builder category set to {self.category} by user {interaction.user.id}")
+        self.render()
+        await interaction.response.edit_message(view=self)
+
+    async def _on_toggle_anon(self, interaction: discord.Interaction):
+        self.anonymous = not self.anonymous
+        logger.debug(f"Builder anonymity toggled to {self.anonymous} by user {interaction.user.id}")
+        self.render()
+        await interaction.response.edit_message(view=self)
+
+    async def _on_edit(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(SuggestionBuilderModal(self))
+
+    async def _on_submit(self, interaction: discord.Interaction):
+        if not self.draft_title or not self.draft_description:
+            await interaction.response.send_message(
+                "Please add a title and description first using **Edit Details**.",
+                ephemeral=True,
+            )
+            return
+
+        suggestion_text = self._compose_text()
+        logger.info(
+            f"Builder submission by user {interaction.user.id} - Category: {self.category}, "
+            f"Anonymous: {self.anonymous}, Length: {len(suggestion_text)} chars")
+
+        # Close out the builder message, then run the normal processing path.
+        closing = discord.ui.LayoutView()
+        closing.add_item(
+            discord.ui.Container(
+                discord.ui.TextDisplay("Submitting your suggestion..."),
+                accent_color=0x5865F2,
+            )
+        )
+        await interaction.response.edit_message(view=closing)
+        self.stop()
+
+        await self.cog._process_suggestion(
+            interaction, suggestion_text, self.anonymous, self.category, already_responded=True
+        )
+
+    async def _on_cancel(self, interaction: discord.Interaction):
+        cancelled = discord.ui.LayoutView()
+        cancelled.add_item(discord.ui.TextDisplay("Suggestion cancelled."))
+        await interaction.response.edit_message(view=cancelled)
+        self.stop()
 
 
 class SuggestionDatabaseManager:
@@ -482,12 +721,11 @@ class SuggestionCog(commands.Cog):
 
     # ==================== Standalone Commands ====================
 
-    @app_commands.command(name="suggest", description="Submit a suggestion (text or template)")
+    @app_commands.command(name="suggest", description="Submit a suggestion (opens a form, or pass text directly)")
     @app_commands.describe(
         suggestion_text="The text of your suggestion",
         anonymous="Submit anonymously",
         category="Category for your suggestion",
-        template="Use a guided template instead of free-text"
     )
     @app_commands.choices(
         category=[
@@ -497,12 +735,6 @@ class SuggestionCog(commands.Cog):
             app_commands.Choice(name="Rule Change", value="Rule Change"),
             app_commands.Choice(name="Other", value="Other"),
         ],
-        template=[
-            app_commands.Choice(name="Bot Feature", value="Bot Feature"),
-            app_commands.Choice(name="Server Rule", value="Server Rule"),
-            app_commands.Choice(name="Event Proposal", value="Event Proposal"),
-            app_commands.Choice(name="Channel Request", value="Channel Request"),
-        ],
     )
     @app_commands.checks.cooldown(1, 30)
     async def suggest_command(
@@ -511,22 +743,27 @@ class SuggestionCog(commands.Cog):
             suggestion_text: Optional[str] = None,
             anonymous: bool = False,
             category: str = "Other",
-            template: Optional[str] = None,
     ):
-        """Submit a suggestion via free text or a guided template."""
-        if template:
-            logger.info(f"Template submission command used by {interaction.user.id} - Template: {template}")
-            modal = SuggestionModal(template, anonymous)
-            await interaction.response.send_modal(modal)
-        elif suggestion_text:
+        """Submit a suggestion.
+
+        Hybrid behavior:
+        - `suggestion_text` set -> post directly using the given options (quick path).
+        - nothing set -> open the interactive Components v2 builder, seeded with
+          any category/anonymous options that were supplied.
+        """
+        if suggestion_text:
             logger.info(
                 f"Suggestion submission by {interaction.user.id} - Category: {category}, Anonymous: {anonymous}")
             await self._process_suggestion(interaction, suggestion_text, anonymous, category)
         else:
-            await interaction.response.send_message(
-                "Please provide either `suggestion_text` or choose a `template`.",
-                ephemeral=True,
+            logger.info(f"Interactive builder opened by {interaction.user.id}")
+            view = SuggestionBuilderView(
+                self,
+                interaction.user.id,
+                initial_category=category,
+                initial_anonymous=anonymous,
             )
+            await interaction.response.send_message(view=view, ephemeral=True)
 
     @app_commands.command(name="suggest-search", description="Search suggestions")
     @app_commands.describe(
@@ -639,14 +876,22 @@ class SuggestionCog(commands.Cog):
         self.bot.add_view(SuggestionView("", self.db_manager))
 
     async def _process_suggestion(self, interaction: discord.Interaction,
-                                  suggestion_text: str, anonymous: bool, category: str):
-        """Process suggestion submission"""
+                                  suggestion_text: str, anonymous: bool, category: str,
+                                  already_responded: bool = False):
+        """Process suggestion submission.
+
+        already_responded=True when called from the interactive builder, whose
+        Submit button has already edited the builder message (consuming the
+        interaction response). In that case we skip the defer and rely on
+        followups only.
+        """
         with log_context(logger, f"process_suggestion_{category}"):
             user = interaction.user
             logger.info(
                 f"Processing suggestion from user {user.id} - Category: {category}, Anonymous: {anonymous}, Length: {len(suggestion_text)} chars")
 
-            await interaction.response.defer(ephemeral=anonymous)
+            if not already_responded:
+                await interaction.response.defer(ephemeral=anonymous)
 
             if len(suggestion_text) > 2000:
                 logger.warning(f"Suggestion from user {user.id} rejected - too long ({len(suggestion_text)} chars)")
