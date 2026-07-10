@@ -26,3 +26,4 @@ tsconfig.tsbuildinfo
 .env.local
 .env.*.local
 /docker/
+/codex-guide-1265120128295632926-20260706.json

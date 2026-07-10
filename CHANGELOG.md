@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased] - 2026-07-10
+
+### Fixed
+- The admin **Suggestions** panel now works again. Viewing the suggestion stats (View Status), changing a suggestion's status (Update Status), and exporting suggestions to CSV/JSON were all silently failing behind the scenes; they now run correctly.
+
 ## [Unreleased] - 2026-07-09
 
 ### Added

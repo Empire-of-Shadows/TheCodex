@@ -74,19 +74,18 @@ class SuggestionActions:
 
         try:
             suggestions_cm = db_manager.get_collection_manager("suggestions_suggestions")
-            col = await suggestions_cm.get_collection()
 
-            total_suggestions = await col.count_documents({"guild_id": guild_id})
+            total_suggestions = await suggestions_cm.count_documents({"guild_id": guild_id})
 
             # Status distribution
-            async for doc in await col.aggregate([
+            for doc in await suggestions_cm.aggregate([
                 {"$match": {"guild_id": guild_id}},
                 {"$group": {"_id": "$status", "count": {"$sum": 1}}},
             ]):
                 status_breakdown[doc["_id"]] = doc["count"]
 
             # Category distribution
-            async for doc in await col.aggregate([
+            for doc in await suggestions_cm.aggregate([
                 {"$match": {"guild_id": guild_id}},
                 {"$group": {"_id": "$category", "count": {"$sum": 1}}},
             ]):
@@ -94,7 +93,7 @@ class SuggestionActions:
 
             # Top contributors (up to 5, non-anonymous)
             contributor_docs: list = []
-            async for doc in await col.aggregate([
+            for doc in await suggestions_cm.aggregate([
                 {"$match": {"guild_id": guild_id, "anonymous": False}},
                 {"$group": {"_id": "$user_id", "count": {"$sum": 1}}},
                 {"$sort": {"count": -1}},
@@ -116,8 +115,7 @@ class SuggestionActions:
 
         try:
             votes_cm = db_manager.get_collection_manager("suggestions_votes")
-            votes_col = await votes_cm.get_collection()
-            total_votes = await votes_col.count_documents({"guild_id": guild_id})
+            total_votes = await votes_cm.count_documents({"guild_id": guild_id})
         except Exception as e:
             logger.warning("Failed to query votes collection: %s", e)
 
@@ -147,12 +145,10 @@ class SuggestionActions:
         """
         try:
             suggestions_cm = db_manager.get_collection_manager("suggestions_suggestions")
-            col = await suggestions_cm.get_collection()
 
             # Find the suggestion by prefix within this guild
-            cursor = col.find({"guild_id": guild_id})
             full_id: Optional[str] = None
-            async for doc in cursor:
+            for doc in await suggestions_cm.find_many({"guild_id": guild_id}):
                 if doc["suggestion_id"].startswith(suggestion_id_prefix):
                     full_id = doc["suggestion_id"]
                     break
@@ -164,15 +160,14 @@ class SuggestionActions:
             update_doc: Dict[str, Any] = {"status": status, "last_updated_by": admin_id}
             if reason:
                 update_doc["status_reason"] = reason
-            await col.update_one({"suggestion_id": full_id}, {"$set": update_doc})
+            await suggestions_cm.update_one({"suggestion_id": full_id}, {"$set": update_doc})
 
             # Queue notification for non-anonymous suggestions
-            suggestion = await col.find_one({"suggestion_id": full_id})
+            suggestion = await suggestions_cm.find_one({"suggestion_id": full_id})
             if suggestion and not suggestion.get("anonymous") and suggestion.get("user_id"):
                 try:
                     notif_cm = db_manager.get_collection_manager("suggestions_notification_queue")
-                    notif_col = await notif_cm.get_collection()
-                    await notif_col.insert_one({
+                    await notif_cm.create_one({
                         "user_id": suggestion["user_id"],
                         "suggestion_id": full_id,
                         "type": "status_update",
@@ -234,8 +229,7 @@ class SuggestionActions:
         """
         try:
             suggestions_cm = db_manager.get_collection_manager("suggestions_suggestions")
-            col = await suggestions_cm.get_collection()
-            suggestions = await col.find({"guild_id": guild_id}).to_list(length=1000)
+            suggestions = await suggestions_cm.find_many({"guild_id": guild_id}, limit=1000)
 
             if not suggestions:
                 return None
