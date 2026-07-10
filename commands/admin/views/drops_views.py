@@ -160,13 +160,12 @@ def build_drops_tracker_view(
     return builder.build()
 
 
-def build_drops_status_view(
-    overview: Dict[str, Any],
-    guild: discord.Guild,
-) -> discord.ui.LayoutView:
-    """Build a read-only status overview of drops configuration and stats."""
-    builder = AdminLayoutBuilder()
+def format_drops_status(overview: Dict[str, Any], guild: discord.Guild) -> str:
+    """Format a read-only status overview of drops configuration and stats as markdown.
 
+    Consumed by the shared ``info_action`` node (see ``panel_configs.py``), which
+    renders the header and Back button around this body.
+    """
     # Drops channel
     drops_ch_id = overview.get("drops_channel_id")
     if drops_ch_id:
@@ -199,21 +198,17 @@ def build_drops_status_view(
         months = cat_stats.get("months_with_data", 0)
         stats_lines.append(f"- **{category}:** {total} total | {avg}/mo avg | {months} months tracked")
 
-    builder.add_header("## Updates & Drops Status")
-
     schedule = overview.get("schedule", {}) or {}
     sched_hour = schedule.get("hour", 6)
     sched_min = schedule.get("minute", 30)
     sched_tz = schedule.get("timezone", "America/Chicago")
     schedule_display = f"{sched_hour:02d}:{sched_min:02d} {sched_tz}"
 
-    builder.add_item(readonly_container(discord.ui.TextDisplay(
+    return (
         f"**Server:** {guild.name}\n"
         f"**Drops Posting Channel:** {drops_display}\n"
         f"**Status:** {enabled_display}\n"
         f"**Daily Post Time:** {schedule_display}\n\n"
         "**Tracked Channels:**\n" + "\n".join(tracker_lines) + "\n\n"
         "**Statistics (Guild):**\n" + "\n".join(stats_lines)
-    )))
-
-    return builder.build()
+    )

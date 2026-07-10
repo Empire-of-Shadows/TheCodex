@@ -14,6 +14,9 @@ import discord
 
 from .views.panel_engine import PanelNode
 from .views.embed_views import TIER_NAMES, TIER_LABELS, FEATURE_OPTIONS
+from .views.drops_views import format_drops_status
+from .views.new_member_views import format_new_member_status
+from .actions.structure import info_action
 from .panel_branding import PANEL_TITLE, PANEL_DESCRIPTION
 from storage.config_manager import get_config_manager
 from .actions.embed_config_actions import EmbedConfigActions
@@ -994,15 +997,6 @@ def _stub(key: str, label: str, description: str = "") -> PanelNode:
     return PanelNode(key=key, label=label, kind="menu", description=description)
 
 
-def _view_stub(key: str, label: str, description: str = "") -> PanelNode:
-    """Read-only "View Status" entry — surfaces as 'View only' in parent menus
-    so it never reports a misleading 'Not configured'."""
-    return PanelNode(
-        key=key, label=label, kind="menu", description=description, view_only=True,
-    )
-
-
-
 async def _color_tiers_summary_values(guild_id: int) -> list:
     """Return a non-empty marker list when Color Tiers is configured.
 
@@ -1031,13 +1025,42 @@ COLOR_TIERS_STUB = PanelNode(
     description="Manage per-guild color palettes.",
     get_values=_color_tiers_summary_values,
 )
-NM_STATUS_STUB = _view_stub("nm_status", "View Status", "View new members system status.")
 TAG_TRACKER_STUB = _stub("tag_tracker", "Tag Tracker", "Configure server tag tracking.")
 BOOST_TRACKER_STUB = _stub("boost_tracker", "Boost Tracker", "Configure boost log channel.")
 DROPS_CHANNEL_STUB = _stub("drops_channel", "Drops Channel", "Channel for daily Prime Gaming drops.")
 DROPS_TRACKER_STUB = _stub("drops_tracker", "Tracked Channels", "Channels tracked for stats.")
 DROPS_MANAGER_STUB = _stub("drops_manager_role", "Manager Role", "Role allowed to manage drops via /drop.")
-DROPS_STATUS_STUB = _view_stub("drops_status", "View Status", "View drops configuration and stats.")
+
+
+# ── Drops / New Members "View Status" (wired read-only stats) ─────────────────
+#
+# Unlike the config-echo stubs above, these render live stats the top-level
+# overview does not surface, so they are real `action` nodes via `info_action`.
+
+async def _render_new_member_status(cog, guild, ctx) -> str:
+    overview = await NewMemberActions.get_overview(guild.id)
+    return format_new_member_status(overview, guild)
+
+
+async def _render_drops_status(cog, guild, ctx) -> str:
+    overview = await DropsActions.get_overview(guild.id)
+    return format_drops_status(overview, guild)
+
+
+NM_STATUS_NODE = info_action(
+    key="nm_status",
+    label="View Status",
+    description="View new members system status.",
+    render=_render_new_member_status,
+    mod_allowed=True,
+)
+DROPS_STATUS_NODE = info_action(
+    key="drops_status",
+    label="View Status",
+    description="View drops configuration and stats.",
+    render=_render_drops_status,
+    mod_allowed=True,
+)
 
 
 # ── MAIN_PANEL tree (Message 1 dashboard) ────────────────────────────────────
@@ -1102,7 +1125,7 @@ _NEW_MEMBERS_GROUP = PanelNode(
         "nm_welcome_builder": NM_WELCOME_TEXT_CONFIG,
         "nm_settings": NM_SETTINGS_CONFIG,
         "nm_whitelist_role": NM_WHITELIST_ROLE_CONFIG,
-        "nm_status": NM_STATUS_STUB,
+        "nm_status": NM_STATUS_NODE,
     },
 )
 
@@ -1129,7 +1152,7 @@ _UPDATES_DROPS_GROUP = PanelNode(
         "drops_schedule": DROPS_SCHEDULE_CONFIG,
         "drops_tracker": DROPS_TRACKER_STUB,
         "drops_manager_role": DROPS_MANAGER_STUB,
-        "drops_status": DROPS_STATUS_STUB,
+        "drops_status": DROPS_STATUS_NODE,
     },
 )
 

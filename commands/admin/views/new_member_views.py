@@ -10,13 +10,12 @@ from typing import Callable, Awaitable, Dict, Any, Optional
 from .base import AdminLayoutBuilder, cid, readonly_container, editable_container
 
 
-def build_new_member_status_view(
-    overview: Dict[str, Any],
-    guild: discord.Guild,
-) -> discord.ui.LayoutView:
-    """Build a read-only status overview of New Members configuration."""
-    builder = AdminLayoutBuilder()
+def format_new_member_status(overview: Dict[str, Any], guild: discord.Guild) -> str:
+    """Format a read-only status overview of New Members configuration as markdown.
 
+    Consumed by the shared ``info_action`` node (see ``panel_configs.py``), which
+    renders the header and Back button around this body.
+    """
     age = overview.get("account_age_requirement_days", 90)
     auto_kick = overview.get("auto_kick_new_accounts", True)
     welcome_enabled = overview.get("welcome_message_enabled", True)
@@ -39,8 +38,7 @@ def build_new_member_status_view(
     else:
         role_display = "Not configured"
 
-    builder.add_header("## New Members Status")
-    builder.add_item(readonly_container(discord.ui.TextDisplay(
+    return (
         f"**Server:** {guild.name}\n"
         f"**Account Age Requirement:** {age} days\n"
         f"**Auto-Kick New Accounts:** {'Enabled' if auto_kick else 'Disabled'}\n"
@@ -53,9 +51,7 @@ def build_new_member_status_view(
         f"- Inactive entries: {stats.get('inactive', 0)}\n"
         f"- Total entries: {stats.get('total', 0)}\n"
         f"- Roles currently assigned: {stats.get('role_assigned', 0)}"
-    )))
-
-    return builder.build()
+    )
 
 
 # -- Whitelist Role View --------------------------------------------------

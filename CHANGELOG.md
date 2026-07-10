@@ -4,10 +4,11 @@
 
 ### Added
 - Running `/suggest` on its own now opens an interactive suggestion form instead of asking you to fill in command options. The form has an **Edit Details** button (title, description, and optional extra details), a dropdown to pick the category, a button to turn anonymous posting on or off, and **Submit** / **Cancel** buttons. Your choices update in place as you go. You can still use `/suggest` the quick way by passing `suggestion_text` directly, which skips the form.
+- The **View Status** screens for **Updates & Drops** and **New Members** now actually work instead of opening to a blank screen. For Drops it shows a live summary - the posting channel, daily post time, tracked channels, and per-category drop totals. For New Members it shows the screening settings plus whitelist counts (active, inactive, total, and how many currently have the role).
 
 ### Changed
 - Removed the `template` option from `/suggest`. It overlapped with the category choices and made the command more confusing than helpful. Guided prompts still live inside the new form (and the "suggest a feature" button in the welcome flow is unchanged).
-- Tidied up the admin panel by removing the leftover **View Status** entries under Embed Settings, WYR, Trackers, Announcements, and the Guide. Those entries only repeated settings you can already see, and they opened to a blank screen. The overview at the top of the panel still shows every setting when you press **Show Config Details**. The **View Status** entries that show real activity (Suggestions and Drops) are unchanged.
+- Tidied up the admin panel by removing the leftover **View Status** entries under Embed Settings, WYR, Trackers, Announcements, and the Guide. Those entries only repeated settings you can already see, and they opened to a blank screen. The overview at the top of the panel still shows every setting when you press **Show Config Details**. The **View Status** entries that show real activity (Suggestions, Updates & Drops, and New Members) are kept and working.
 
 ### Fixed
 - The admin **Suggestions** panel now works again. Viewing the suggestion stats (View Status), changing a suggestion's status (Update Status), and exporting suggestions to CSV/JSON were all silently failing behind the scenes; they now run correctly.
