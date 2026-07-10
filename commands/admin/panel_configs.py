@@ -1024,7 +1024,6 @@ async def _color_tiers_summary_values(guild_id: int) -> list:
     return out
 
 
-EMBED_STATUS_STUB = _view_stub("status", "View Status", "View embed configuration summary.")
 COLOR_TIERS_STUB = PanelNode(
     key="color_tiers",
     label="Color Tiers",
@@ -1032,17 +1031,13 @@ COLOR_TIERS_STUB = PanelNode(
     description="Manage per-guild color palettes.",
     get_values=_color_tiers_summary_values,
 )
-WYR_STATUS_STUB = _view_stub("wyr_status", "WYR Status", "View WYR configuration summary.")
 NM_STATUS_STUB = _view_stub("nm_status", "View Status", "View new members system status.")
 TAG_TRACKER_STUB = _stub("tag_tracker", "Tag Tracker", "Configure server tag tracking.")
 BOOST_TRACKER_STUB = _stub("boost_tracker", "Boost Tracker", "Configure boost log channel.")
-TRACKER_STATUS_STUB = _view_stub("tracker_status", "View Status", "View tracker configuration summary.")
 DROPS_CHANNEL_STUB = _stub("drops_channel", "Drops Channel", "Channel for daily Prime Gaming drops.")
 DROPS_TRACKER_STUB = _stub("drops_tracker", "Tracked Channels", "Channels tracked for stats.")
 DROPS_MANAGER_STUB = _stub("drops_manager_role", "Manager Role", "Role allowed to manage drops via /drop.")
 DROPS_STATUS_STUB = _view_stub("drops_status", "View Status", "View drops configuration and stats.")
-ANN_STATUS_STUB = _view_stub("ann_status", "View Status", "View announcement configuration summary.")
-GUIDE_STATUS_STUB = _view_stub("guide_status", "View Status", "View guide system configuration.")
 
 
 # ── MAIN_PANEL tree (Message 1 dashboard) ────────────────────────────────────
@@ -1077,7 +1072,6 @@ _EMBED_SETTINGS_GROUP = PanelNode(
         "description_limits": DESCRIPTION_LIMITS_CONFIG,
         "color_tiers": COLOR_TIERS_STUB,
         "feature_access": FEATURE_ACCESS_CONFIG,
-        "status": EMBED_STATUS_STUB,
     },
 )
 
@@ -1094,7 +1088,6 @@ _WYR_SETTINGS_GROUP = PanelNode(
         "wyr_category": WYR_CATEGORY_CONFIG,
         "wyr_thread": WYR_THREAD_CONFIG,
         "wyr_cleanup": WYR_CLEANUP_CONFIG,
-        "wyr_status": WYR_STATUS_STUB,
     },
 )
 
@@ -1122,7 +1115,6 @@ _TRACKERS_GROUP = PanelNode(
     children={
         "tag_tracker": TAG_TRACKER_STUB,
         "boost_tracker": BOOST_TRACKER_STUB,
-        "tracker_status": TRACKER_STATUS_STUB,
     },
 )
 
@@ -1150,7 +1142,6 @@ _ANNOUNCEMENTS_GROUP = PanelNode(
     children={
         "ann_channel": ANN_CHANNEL_CONFIG,
         "ann_settings": ANN_SETTINGS_CONFIG,
-        "ann_status": ANN_STATUS_STUB,
     },
 )
 
@@ -1178,7 +1169,6 @@ _GUIDE_SETTINGS_GROUP = PanelNode(
         "guide_channel": GUIDE_CHANNEL_CONFIG,
         "guide_upload": GUIDE_UPLOAD_CONFIG,
         "guide_enabled": GUIDE_ENABLED_CONFIG,
-        "guide_status": GUIDE_STATUS_STUB,
     },
 )
 
