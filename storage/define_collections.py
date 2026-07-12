@@ -41,6 +41,20 @@ class DefineCollections:
             ]
         )
 
+        # Per-user WYR votes — one document per (question, guild, user). Keeps the
+        # unbounded per-voter data out of the shared question document.
+        self._collection_configs['daily_wyr_votes'] = CollectionConfig(
+            name='WYR_Votes',
+            database='Daily',
+            connection='primary',
+            indexes=[
+                IndexModel([('question_id', 1), ('guild_id', 1), ('user_id', 1)],
+                           unique=True, name='question_guild_user_unique'),
+                IndexModel([('question_id', 1), ('guild_id', 1)], name='question_guild'),
+                IndexModel([('created_at', -1)]),
+            ]
+        )
+
         # Guide V2: single document per guild with full page tree
         self._collection_configs['guide_content'] = CollectionConfig(
             name='Content',

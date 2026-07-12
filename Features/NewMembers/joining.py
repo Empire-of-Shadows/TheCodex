@@ -701,6 +701,7 @@ class GuildEventHandler:
                 {"$unset": {f"guilds.{gid_str}": ""}},
             )
             totals["daily_wyr_leaderboard"] = await col("daily_wyr_leaderboard").delete_many({"guild_id": gid_str})
+            totals["daily_wyr_votes"] = await col("daily_wyr_votes").delete_many({"guild_id": gid_str})
             totals["daily_wyr_mappings"] = await col("daily_wyr_mappings").delete_many({"guild_id": guild_id})
 
             # --- Suggestions (votes/notifications reference suggestion_id, not guild_id directly) ---
