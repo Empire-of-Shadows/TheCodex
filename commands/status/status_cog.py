@@ -4,6 +4,8 @@ Slash command group `/status` scoped to a single admin guild. Lets the bot
 operator set the live presence and store named presets to switch between.
 """
 
+import os
+
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -13,9 +15,11 @@ from storage.logging import get_logger
 
 logger = get_logger("StatusAdmin")
 
-# Only this guild gets the commands.
-GUILD_ID = 1265120128295632926
-GUILD_OBJ = discord.Object(id=GUILD_ID)
+# The guild that owns the /status admin commands. Single source of truth shared
+# with Codex.py's guild command sync — both read STATUS_ADMIN_GUILD_ID, so the
+# commands are always defined for exactly the guild they're synced to. Unset (0)
+# disables the tool (setup() skips registering the cog).
+STATUS_ADMIN_GUILD_ID = int(os.getenv("STATUS_ADMIN_GUILD_ID", "0"))
 
 # Discord caps activity name at 128 chars.
 MAX_NAME_LEN = 128
@@ -278,7 +282,7 @@ class StatusAdmin(commands.Cog):
     status_group = app_commands.Group(
         name="status",
         description="Manage the bot's Discord presence",
-        guild_ids=[GUILD_ID],
+        guild_ids=[STATUS_ADMIN_GUILD_ID],
         default_permissions=discord.Permissions(administrator=True),
     )
 
@@ -310,5 +314,8 @@ class StatusAdmin(commands.Cog):
 
 
 async def setup(bot: commands.Bot):
+    if not STATUS_ADMIN_GUILD_ID:
+        logger.info("STATUS_ADMIN_GUILD_ID unset — /status admin commands disabled")
+        return
     await bot.add_cog(StatusAdmin(bot))
-    logger.info(f"StatusAdmin cog loaded (guild-scoped to {GUILD_ID})")
+    logger.info(f"StatusAdmin cog loaded (guild-scoped to {STATUS_ADMIN_GUILD_ID})")
