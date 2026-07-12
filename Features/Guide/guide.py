@@ -155,13 +155,18 @@ class SearchEngine:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class NavigationBreadcrumbs:
-	"""Tracks user navigation path per guild."""
+	"""Tracks user navigation path per guild (bounded to _MAX_USERS)."""
+
+	_MAX_USERS = 5000
 
 	def __init__(self):
 		self.breadcrumbs: Dict[tuple, list] = {}  # (guild_id, user_id) -> [page_id, ...]
 
 	def push(self, guild_id: int, user_id: int, page_id: str):
 		key = (guild_id, user_id)
+		# Bound memory: evict the oldest tracked user when over capacity.
+		if key not in self.breadcrumbs and len(self.breadcrumbs) >= self._MAX_USERS:
+			self.breadcrumbs.pop(next(iter(self.breadcrumbs)), None)
 		path = self.breadcrumbs.setdefault(key, [])
 		# Avoid duplicates at the end
 		if not path or path[-1] != page_id:
@@ -183,30 +188,6 @@ class NavigationBreadcrumbs:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Quick Access Manager
-# ─────────────────────────────────────────────────────────────────────────────
-
-class QuickAccessManager:
-	"""Tracks frequently accessed pages per guild/user."""
-
-	def __init__(self):
-		self.access_count: Dict[str, int] = {}
-		self.trending: Dict[str, int] = {}
-
-	def track(self, guild_id: int, user_id: int, page_id: str):
-		key = f"{guild_id}:{user_id}:{page_id}"
-		self.access_count[key] = self.access_count.get(key, 0) + 1
-		tkey = f"{guild_id}:{page_id}"
-		self.trending[tkey] = self.trending.get(tkey, 0) + 1
-
-	def get_trending(self, guild_id: int, limit: int = 3) -> List[str]:
-		prefix = f"{guild_id}:"
-		items = [(k[len(prefix):], v) for k, v in self.trending.items() if k.startswith(prefix)]
-		items.sort(key=lambda x: x[1], reverse=True)
-		return [pid for pid, _ in items[:limit]]
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Guide Manager — core orchestrator
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -216,7 +197,6 @@ class GuideManager:
 	def __init__(self):
 		self.search_engine = SearchEngine()
 		self.navigation = NavigationBreadcrumbs()
-		self.quick_access = QuickAccessManager()
 		self._guide_cache: Dict[int, Dict[str, Any]] = {}
 		self._cache_time: Dict[int, datetime] = {}
 
@@ -343,7 +323,6 @@ class GuideManager:
 			return self._render_not_found(guide_data, page_id)
 
 		# Track
-		self.quick_access.track(guild_id, user_id, page_id)
 		self.navigation.push(guild_id, user_id, page_id)
 
 		# Breadcrumb labels
