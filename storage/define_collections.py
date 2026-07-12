@@ -71,9 +71,18 @@ class DefineCollections:
             connection='primary',
             indexes=[
                 IndexModel([('guild_id', 1), ('status', 1)]),
-                IndexModel([('author_id', 1)]),
+                # Documents store the submitter under `user_id` (not `author_id`);
+                # this indexes /suggest-mine and author-filtered searches.
+                IndexModel([('user_id', 1)]),
                 IndexModel([('created_at', -1)]),
-                IndexModel([('guild_id', 1), ('suggestion_id', 1)], unique=True)
+                IndexModel([('guild_id', 1), ('suggestion_id', 1)], unique=True),
+                # Full-text search over the suggestion body — powers /suggest-search
+                # and the duplicate-suggestion check. Without a text index, $text
+                # queries error and were being silently swallowed (returned nothing).
+                IndexModel([('text', 'text')], name='suggestion_text_search'),
+                # message_id lookup: lets the persistent vote view recover which
+                # suggestion a button belongs to after a bot restart.
+                IndexModel([('message_id', 1)], name='suggestion_message_lookup'),
             ]
         )
 
