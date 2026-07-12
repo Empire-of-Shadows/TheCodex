@@ -886,36 +886,63 @@ class WYR(commands.Cog):
     async def record_vote(self, question_id, user_id, guild_id, option):
         """
         Record a user's vote for a question (per-guild scoped) and update leaderboard.
+
+        Per-user votes live in the ``daily_wyr_votes`` collection (one document per
+        question/guild/user); the question document keeps only the bounded
+        ``vote_counts`` aggregate.
         """
         try:
             with PerformanceLogger(logger, f"record_vote_{user_id}_{guild_id}_{option}"):
                 gid = str(guild_id)
+                uid = str(user_id)
+
                 existing_question = await db_manager.daily_wyr.find_one({"_id": question_id})
                 if not existing_question:
                     logger.error(f"Question {question_id} not found for vote recording")
                     return
 
-                guild_data = (existing_question.get("guilds") or {}).get(gid) or {}
-                existing_votes = guild_data.get("votes", {})
-                previous_vote = existing_votes.get(str(user_id))
+                prior = await db_manager.daily_wyr_votes.find_one(
+                    {"question_id": question_id, "guild_id": gid, "user_id": uid}
+                )
+                previous_vote = prior.get("option") if prior else None
+                is_new_vote = previous_vote is None
 
-                update_query = {"$set": {f"guilds.{gid}.votes.{user_id}": option}}
-                is_new_vote = not previous_vote
+                if not is_new_vote and previous_vote == option:
+                    logger.info(
+                        f"Recorded duplicate vote for user {user_id} on question {question_id} "
+                        f"in guild {guild_id}: {option}"
+                    )
+                    return  # nothing changed
 
+                now = datetime.now(timezone.utc)
+                await db_manager.daily_wyr_votes.update_one(
+                    {"question_id": question_id, "guild_id": gid, "user_id": uid},
+                    {
+                        "$set": {"option": option, "updated_at": now},
+                        "$setOnInsert": {
+                            "question_id": question_id,
+                            "guild_id": gid,
+                            "user_id": uid,
+                            "created_at": now,
+                        },
+                    },
+                    upsert=True,
+                )
+
+                # Keep the denormalized per-guild counts on the question document.
                 if is_new_vote:
-                    update_query["$inc"] = {f"guilds.{gid}.vote_counts.{option}": 1}
-                elif previous_vote != option:
-                    update_query["$inc"] = {
+                    inc = {f"guilds.{gid}.vote_counts.{option}": 1}
+                else:
+                    inc = {
                         f"guilds.{gid}.vote_counts.{previous_vote}": -1,
                         f"guilds.{gid}.vote_counts.{option}": 1,
                     }
-
-                await db_manager.daily_wyr.update_one({"_id": question_id}, update_query)
+                await db_manager.daily_wyr.update_one({"_id": question_id}, {"$inc": inc})
 
                 if is_new_vote:
                     await self.update_user_leaderboard(user_id, guild_id, option)
 
-                vote_type = "new" if is_new_vote else "changed" if previous_vote != option else "duplicate"
+                vote_type = "new" if is_new_vote else "changed"
                 logger.info(
                     f"Recorded {vote_type} vote for user {user_id} on question {question_id} in guild {guild_id}: {option}"
                 )
@@ -940,7 +967,6 @@ class WYR(commands.Cog):
 
                 guild_data = (question.get("guilds") or {}).get(gid) or {}
                 vote_counts = guild_data.get("vote_counts") or {"option1": 0, "option2": 0}
-                votes_map = guild_data.get("votes", {})
                 has_option3 = bool(question.get("option_3"))
                 total_votes = (
                     vote_counts.get("option1", 0)
@@ -960,7 +986,6 @@ class WYR(commands.Cog):
                     "option1_percentage": option1_percentage,
                     "option2_percentage": option2_percentage,
                     "total_votes": total_votes,
-                    "votes": votes_map,
                 }
 
                 if has_option3:
@@ -973,6 +998,20 @@ class WYR(commands.Cog):
 
         except Exception as e:
             logger.error(f"Error getting question results for {question_id}: {e}", exc_info=True)
+            return None
+
+    async def get_user_vote(self, question_id, guild_id, user_id):
+        """Return the option a user voted for on a question (or None)."""
+        try:
+            doc = await db_manager.daily_wyr_votes.find_one(
+                {"question_id": question_id, "guild_id": str(guild_id), "user_id": str(user_id)}
+            )
+            return doc.get("option") if doc else None
+        except Exception as e:
+            logger.error(
+                f"Error fetching user vote for {user_id} on question {question_id}: {e}",
+                exc_info=True,
+            )
             return None
 
     async def increment_used_count(self, question_id, guild_id):
@@ -1131,7 +1170,7 @@ class WYRView(discord.ui.View):
                     return
 
                 # Look up which option this user voted for
-                user_vote = results.get("votes", {}).get(str(interaction.user.id))
+                user_vote = await cog.get_user_vote(question_id, interaction.guild_id, interaction.user.id)
 
                 embed = discord.Embed(
                     title=" Current Results",

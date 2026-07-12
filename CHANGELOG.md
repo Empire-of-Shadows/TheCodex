@@ -1,5 +1,19 @@
 # Changelog
 
+## [Unreleased] - 2026-07-12
+
+### Changed
+- Adding TheCodex to a server from the dashboard now asks only for the permissions the bot actually uses (posting messages and embeds, managing its own discussion threads, managing the whitelist/tag/guide roles, and removing brand-new accounts) instead of requesting full Administrator access.
+- If the bot is removed from a server and added back within a day, that server's settings and history are now kept instead of being wiped straight away. Previously, leaving a server - even briefly or by accident - erased all of its saved data immediately.
+- Checking server boosters is now done with slash commands - `/boosters` (who's currently boosting) and `/boosthistory` (a member's boost status and recent boost activity) - instead of the old `.boosters` and `.boosthistory` text commands, matching the rest of the bot's commands.
+- Cloning a bot embed is now done by right-clicking the message and choosing **Apps -> Clone Embed** (available to members who can Manage Messages). It re-posts the embed in the same channel as a clean copy, with no "used a command" line above it, and leaves the original message in place. This replaces the old hidden `.embed clone` / `.embed preview` / `.embed batch` text commands.
+
+### Fixed
+- Tightened the safety check on where the dashboard sends you after you sign in, so a specially crafted login link can no longer bounce you to a look-alike outside site.
+- When the guide is turned off for a server, mentioning the bot there no longer pops up a guide response. It now respects the guide's on/off setting.
+- Searching suggestions with `/suggest-search` returns matching results again, and submitting a suggestion once more warns you when a very similar one already exists. Both had quietly stopped working and always came back empty.
+- The 👍 / 👎 / ❤️ / 🤔 vote buttons on posted suggestions keep working after the bot restarts. Previously, any vote cast after a restart was recorded against the wrong place instead of the suggestion you clicked on.
+
 ## [Unreleased] - 2026-07-10
 
 ### Added

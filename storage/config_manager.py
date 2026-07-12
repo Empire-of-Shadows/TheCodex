@@ -37,19 +37,6 @@ _STRUCTURED_KEYS: frozenset = frozenset({
     "created_at", "updated_at",
 })
 
-# Legacy top-level keys to remove from existing documents on first save
-_LEGACY_FIELDS: tuple = (
-    "channels",
-    "wyr_post_hour", "wyr_post_minute", "wyr_timezone",
-    "wyr_default_category", "wyr_thread_name_format",
-    "wyr_thread_starter_message", "wyr_thread_auto_archive",
-    "wyr_mapping_cleanup_days",
-    "embed_description_limits", "embed_color_tiers", "embed_feature_access",
-    "embed_role_tier_mapping",
-    # new_members text fields replaced by welcome_components JSON builder
-    "welcome_header", "welcome_body", "welcome_channels_title",
-)
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Default factory functions
 # ─────────────────────────────────────────────────────────────────────────────
@@ -58,6 +45,7 @@ def _default_roles() -> Dict[str, Any]:
     return {
         "admin_role_ids": [],
         "mod_role_ids": [],
+        "tiers": {},
     }
 
 
@@ -177,6 +165,23 @@ DEFAULT_CONFIG = {
 }
 
 
+def _as_int_id_list(values: Any) -> List[int]:
+    """Coerce a list of Discord IDs to ints, dropping anything non-numeric.
+
+    Role/channel IDs can arrive as ints (bot writes) or numeric strings (some
+    dashboard/older docs). Normalizing once here means every bot-side consumer
+    (permission checks like create_embed / whitelist, ``guild.get_role``) compares
+    like-typed ints without each call site having to re-coerce.
+    """
+    out: List[int] = []
+    for v in values or []:
+        try:
+            out.append(int(v))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # GuildConfig dataclass — structured per-guild settings
 # ─────────────────────────────────────────────────────────────────────────────
@@ -224,327 +229,117 @@ class GuildConfig:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "GuildConfig":
-        """Create from dictionary (database document).
-
-        Handles three generations of documents transparently:
-        - Gen3 (new feature-centric): wyr.channel_id, new_members.welcome_channel_id, etc.
-        - Gen2 (nested channels/roles + flat WYR): channels.wyr, roles.wyr_ping, wyr_post_hour...
-        - Gen1 (fully flat): wyr_channel_id, wyr_ping_role_id, etc.
-        """
-        # Generation detection
-        # Gen3: has top-level "wyr" dict with "channel_id" key (no "channels" key)
-        # Gen2: has top-level "channels" dict
-        # Gen1: neither
-        is_gen3 = (
-            "wyr" in data
-            and isinstance(data.get("wyr"), dict)
-            and "channel_id" in data.get("wyr", {})
-        )
-        is_gen2 = "channels" in data and not is_gen3
-        channels_g2 = data.get("channels", {}) if is_gen2 else {}
-        roles_g2 = data.get("roles", {}) if is_gen2 else {}
-
+        """Create from a database document (current feature-centric schema)."""
         # ── roles ──────────────────────────────────────────────────────
-        _old_tier_names = {"silver_fang", "golden_snake", "platinum_ghost", "diamond_wraith", "mystic_dragon"}
-        if "roles" in data:
-            stored = data["roles"]
-            tiers_stored = stored.get("tiers", {})
-            if set(tiers_stored.keys()) & _old_tier_names:
-                tiers_stored = {}
-            # Canonical keys are admin_role_ids / mod_role_ids; fall back to the
-            # legacy admin / moderator names for documents not yet migrated.
-            roles = {
-                "admin_role_ids": stored.get("admin_role_ids", stored.get("admin", [])),
-                "mod_role_ids": stored.get("mod_role_ids", stored.get("moderator", [])),
-                "tiers": tiers_stored,
-            }
-        else:
-            roles = {
-                "admin_role_ids": data.get("admin_role_ids", []),
-                "mod_role_ids": data.get("moderator_role_ids", []),
-                "tiers": {},
-            }
+        # Normalize the permission-role lists to ints so downstream membership
+        # checks (create_embed, whitelist, is_admin_role) are type-consistent
+        # regardless of how the ids were stored.
+        stored = data.get("roles") or {}
+        roles = {
+            "admin_role_ids": _as_int_id_list(stored.get("admin_role_ids")),
+            "mod_role_ids": _as_int_id_list(stored.get("mod_role_ids")),
+            "tiers": stored.get("tiers", {}),
+        }
 
         # ── server ─────────────────────────────────────────────────────
-        if "server" in data and isinstance(data["server"], dict):
-            stored = data["server"]
-            server = {"admin_channel_id": stored.get("admin_channel_id")}
-        elif is_gen2:
-            server = {"admin_channel_id": channels_g2.get("admin")}
-        else:
-            server = {"admin_channel_id": data.get("admin_channel_id")}
+        stored = data.get("server") or {}
+        server = {"admin_channel_id": stored.get("admin_channel_id")}
 
         # ── wyr ────────────────────────────────────────────────────────
         dw = _default_wyr()
-        if is_gen3:
-            stored = data["wyr"]
-            wyr = {
-                "channel_id": stored.get("channel_id"),
-                "ping_role_id": stored.get("ping_role_id"),
-                "post_hour": stored.get("post_hour", dw["post_hour"]),
-                "post_minute": stored.get("post_minute", dw["post_minute"]),
-                "timezone": stored.get("timezone", dw["timezone"]),
-                "default_category": stored.get("default_category", dw["default_category"]),
-                "thread_name_format": stored.get("thread_name_format", dw["thread_name_format"]),
-                "thread_starter_message": stored.get("thread_starter_message", dw["thread_starter_message"]),
-                "thread_auto_archive": stored.get("thread_auto_archive", dw["thread_auto_archive"]),
-                "mapping_cleanup_days": stored.get("mapping_cleanup_days", dw["mapping_cleanup_days"]),
-            }
-            wyr["enabled"] = stored["enabled"] if "enabled" in stored else bool(wyr.get("channel_id"))
-        elif is_gen2:
-            wyr = {
-                "channel_id": channels_g2.get("wyr"),
-                "ping_role_id": roles_g2.get("wyr_ping"),
-                "post_hour": data.get("wyr_post_hour", dw["post_hour"]),
-                "post_minute": data.get("wyr_post_minute", dw["post_minute"]),
-                "timezone": data.get("wyr_timezone", dw["timezone"]),
-                "default_category": data.get("wyr_default_category", dw["default_category"]),
-                "thread_name_format": data.get("wyr_thread_name_format", dw["thread_name_format"]),
-                "thread_starter_message": data.get("wyr_thread_starter_message", dw["thread_starter_message"]),
-                "thread_auto_archive": data.get("wyr_thread_auto_archive", dw["thread_auto_archive"]),
-                "mapping_cleanup_days": data.get("wyr_mapping_cleanup_days", dw["mapping_cleanup_days"]),
-            }
-            wyr["enabled"] = bool(wyr.get("channel_id"))
-        else:
-            wyr = {
-                "channel_id": data.get("wyr_channel_id"),
-                "ping_role_id": data.get("wyr_ping_role_id"),
-                "post_hour": data.get("wyr_post_hour", dw["post_hour"]),
-                "post_minute": data.get("wyr_post_minute", dw["post_minute"]),
-                "timezone": data.get("wyr_timezone", dw["timezone"]),
-                "default_category": data.get("wyr_default_category", dw["default_category"]),
-                "thread_name_format": data.get("wyr_thread_name_format", dw["thread_name_format"]),
-                "thread_starter_message": data.get("wyr_thread_starter_message", dw["thread_starter_message"]),
-                "thread_auto_archive": data.get("wyr_thread_auto_archive", dw["thread_auto_archive"]),
-                "mapping_cleanup_days": data.get("wyr_mapping_cleanup_days", dw["mapping_cleanup_days"]),
-            }
-            wyr["enabled"] = bool(wyr.get("channel_id"))
+        stored = data.get("wyr") or {}
+        wyr = {
+            "channel_id": stored.get("channel_id"),
+            "ping_role_id": stored.get("ping_role_id"),
+            "post_hour": stored.get("post_hour", dw["post_hour"]),
+            "post_minute": stored.get("post_minute", dw["post_minute"]),
+            "timezone": stored.get("timezone", dw["timezone"]),
+            "default_category": stored.get("default_category", dw["default_category"]),
+            "thread_name_format": stored.get("thread_name_format", dw["thread_name_format"]),
+            "thread_starter_message": stored.get("thread_starter_message", dw["thread_starter_message"]),
+            "thread_auto_archive": stored.get("thread_auto_archive", dw["thread_auto_archive"]),
+            "mapping_cleanup_days": stored.get("mapping_cleanup_days", dw["mapping_cleanup_days"]),
+        }
+        wyr["enabled"] = stored["enabled"] if "enabled" in stored else bool(wyr["channel_id"])
 
         # ── new_members ────────────────────────────────────────────────
-        if "new_members" in data and isinstance(data["new_members"], dict):
-            stored = data["new_members"]
-            if "welcome_channel_id" in stored:
-                # gen3 — all data self-contained
-                nm_welcome_ch = stored.get("welcome_channel_id")
-                nm_whitelist_role = stored.get("whitelist_role_id")
-            else:
-                # gen2 — channel/role in outer channels/roles dicts
-                nm_welcome_ch = channels_g2.get("welcome")
-                nm_whitelist_role = roles_g2.get("whitelist")
-            _nm_enabled = (
-                stored["enabled"] if "enabled" in stored
-                else bool(nm_welcome_ch or nm_whitelist_role)
-            )
-            new_members = {
-                "enabled": _nm_enabled,
-                "account_age_requirement_days": stored.get("account_age_requirement_days", 90),
-                "auto_kick": stored.get("auto_kick", True),
-                "welcome_channel_id": nm_welcome_ch,
-                "whitelist_role_id": nm_whitelist_role,
-                "whitelist_enabled": stored.get("whitelist_enabled", True),
-                "whitelist_role_name": stored.get("whitelist_role_name", "Whitelisted New Member"),
-                "welcome_message_enabled": stored.get("welcome_message_enabled", True),
-                "welcome_components": stored.get("welcome_components"),
-            }
-        elif is_gen2:
-            new_members = {
-                "enabled": bool(channels_g2.get("welcome") or roles_g2.get("whitelist")),
-                "account_age_requirement_days": 90,
-                "auto_kick": True,
-                "welcome_channel_id": channels_g2.get("welcome"),
-                "whitelist_role_id": roles_g2.get("whitelist"),
-                "whitelist_enabled": True,
-                "whitelist_role_name": "Whitelisted New Member",
-                "welcome_message_enabled": True,
-                "welcome_components": None,
-            }
-        else:
-            _wc = data.get("welcome_channel_id")
-            _wr = data.get("whitelist_role_id")
-            new_members = {
-                "enabled": bool(data.get("new_members_enabled") if "new_members_enabled" in data else (_wc or _wr)),
-                "account_age_requirement_days": data.get("account_age_requirement_days", 90),
-                "auto_kick": data.get("auto_kick_new_accounts", True),
-                "welcome_channel_id": _wc,
-                "whitelist_role_id": _wr,
-                "whitelist_enabled": data.get("whitelist_enabled", True),
-                "whitelist_role_name": data.get("whitelist_role_name", "Whitelisted New Member"),
-                "welcome_message_enabled": data.get("welcome_message_enabled", True),
-                "welcome_components": data.get("welcome_components"),
-            }
+        stored = data.get("new_members") or {}
+        nm_welcome_ch = stored.get("welcome_channel_id")
+        nm_whitelist_role = stored.get("whitelist_role_id")
+        new_members = {
+            "enabled": stored["enabled"] if "enabled" in stored else bool(nm_welcome_ch or nm_whitelist_role),
+            "account_age_requirement_days": stored.get("account_age_requirement_days", 90),
+            "auto_kick": stored.get("auto_kick", True),
+            "welcome_channel_id": nm_welcome_ch,
+            "whitelist_role_id": nm_whitelist_role,
+            "whitelist_enabled": stored.get("whitelist_enabled", True),
+            "whitelist_role_name": stored.get("whitelist_role_name", "Whitelisted New Member"),
+            "welcome_message_enabled": stored.get("welcome_message_enabled", True),
+            "welcome_components": stored.get("welcome_components"),
+        }
 
         # ── announcement ───────────────────────────────────────────────
-        if "announcement" in data and isinstance(data["announcement"], dict):
-            stored = data["announcement"]
-            if "channel_id" in stored:
-                ann_channel = stored.get("channel_id")
-            elif is_gen2:
-                ann_channel = channels_g2.get("announcement")
-            else:
-                ann_channel = data.get("announcement_channel_id")
-            ann = {
-                "channel_id": ann_channel,
-                "thread_auto_create": stored.get("thread_auto_create", True),
-                "thread_name_format": stored.get("thread_name_format", "💬 {message_content}"),
-                "thread_auto_archive_duration": stored.get("thread_auto_archive_duration", 1440),
-                "thread_welcome_message": stored.get("thread_welcome_message", "💬 **Discussion Thread**\n\nDiscuss this announcement here!"),
-                "auto_delete_threads": stored.get("auto_delete_threads", True),
-            }
-        elif is_gen2:
-            ann = {
-                "channel_id": channels_g2.get("announcement"),
-                "thread_auto_create": True,
-                "thread_name_format": "💬 {message_content}",
-                "thread_auto_archive_duration": 1440,
-                "thread_welcome_message": "💬 **Discussion Thread**\n\nDiscuss this announcement here!",
-                "auto_delete_threads": True,
-            }
-        else:
-            ann = {
-                "channel_id": data.get("announcement_channel_id"),
-                "thread_auto_create": data.get("thread_auto_create", True),
-                "thread_name_format": data.get("thread_name_format", "💬 {message_content}"),
-                "thread_auto_archive_duration": data.get("thread_auto_archive_duration", 1440),
-                "thread_welcome_message": data.get("thread_welcome_message", "💬 **Discussion Thread**\n\nDiscuss this announcement here!"),
-                "auto_delete_threads": data.get("auto_delete_threads", True),
-            }
+        stored = data.get("announcement") or {}
+        ann = {
+            "channel_id": stored.get("channel_id"),
+            "thread_auto_create": stored.get("thread_auto_create", True),
+            "thread_name_format": stored.get("thread_name_format", "💬 {message_content}"),
+            "thread_auto_archive_duration": stored.get("thread_auto_archive_duration", 1440),
+            "thread_welcome_message": stored.get("thread_welcome_message", "💬 **Discussion Thread**\n\nDiscuss this announcement here!"),
+            "auto_delete_threads": stored.get("auto_delete_threads", True),
+        }
 
         # ── tag_tracker ────────────────────────────────────────────────
-        if "tag_tracker" in data and isinstance(data["tag_tracker"], dict):
-            stored = data["tag_tracker"]
-            if "role_id" in stored:
-                tt_role = stored.get("role_id")
-            elif is_gen2:
-                tt_role = roles_g2.get("tag_tracker")
-            else:
-                tt_role = data.get("tag_tracker_role_id")
-            tag_tracker = {
-                "enabled": stored.get("enabled", False),
-                "server_tag": stored.get("server_tag"),
-                "role_id": tt_role,
-            }
-        elif is_gen2:
-            tag_tracker = {
-                "enabled": False,
-                "server_tag": None,
-                "role_id": roles_g2.get("tag_tracker"),
-            }
-        else:
-            tag_tracker = {
-                "enabled": data.get("tag_tracker_enabled", False),
-                "server_tag": data.get("tag_tracker_server_tag"),
-                "role_id": data.get("tag_tracker_role_id"),
-            }
+        stored = data.get("tag_tracker") or {}
+        tag_tracker = {
+            "enabled": stored.get("enabled", False),
+            "server_tag": stored.get("server_tag"),
+            "role_id": stored.get("role_id"),
+        }
 
         # ── drops ──────────────────────────────────────────────────────
         _drops_defaults = _default_drops()
-        if "drops" in data and isinstance(data["drops"], dict):
-            stored = data["drops"]
-            if "channel_id" in stored:
-                drops_channel = stored.get("channel_id")
-            elif is_gen2:
-                drops_channel = channels_g2.get("drops")
-            else:
-                drops_channel = data.get("drops_channel_id")
-            drops = {
-                "channel_id": drops_channel,
-                "tracker_channels": stored.get("tracker_channels", {"Updates": None, "Free": None, "Prime": None}),
-                "manager_role_id": stored.get("manager_role_id"),
-                "post_hour": stored.get("post_hour", _drops_defaults["post_hour"]),
-                "post_minute": stored.get("post_minute", _drops_defaults["post_minute"]),
-                "timezone": stored.get("timezone", _drops_defaults["timezone"]),
-            }
-            if "enabled" in stored:
-                drops["enabled"] = stored["enabled"]
-            else:
-                _any_ch = drops.get("channel_id") or any(drops["tracker_channels"].values())
-                drops["enabled"] = bool(_any_ch)
-        elif is_gen2:
-            drops = {
-                "channel_id": channels_g2.get("drops"),
-                "tracker_channels": data.get("drops_tracker_channels", {"Updates": None, "Free": None, "Prime": None}),
-                "manager_role_id": None,
-                "post_hour": _drops_defaults["post_hour"],
-                "post_minute": _drops_defaults["post_minute"],
-                "timezone": _drops_defaults["timezone"],
-            }
-            _any_ch = drops.get("channel_id") or any(drops["tracker_channels"].values())
-            drops["enabled"] = bool(_any_ch)
+        stored = data.get("drops") or {}
+        drops = {
+            "channel_id": stored.get("channel_id"),
+            "tracker_channels": stored.get("tracker_channels", {"Updates": None, "Free": None, "Prime": None}),
+            "manager_role_id": stored.get("manager_role_id"),
+            "post_hour": stored.get("post_hour", _drops_defaults["post_hour"]),
+            "post_minute": stored.get("post_minute", _drops_defaults["post_minute"]),
+            "timezone": stored.get("timezone", _drops_defaults["timezone"]),
+        }
+        if "enabled" in stored:
+            drops["enabled"] = stored["enabled"]
         else:
-            drops = {
-                "channel_id": data.get("drops_channel_id"),
-                "tracker_channels": {"Updates": None, "Free": None, "Prime": None},
-                "manager_role_id": None,
-                "post_hour": _drops_defaults["post_hour"],
-                "post_minute": _drops_defaults["post_minute"],
-                "timezone": _drops_defaults["timezone"],
-            }
-            drops["enabled"] = bool(drops.get("channel_id"))
+            drops["enabled"] = bool(drops["channel_id"] or any(drops["tracker_channels"].values()))
 
         # ── suggestions ────────────────────────────────────────────────
-        if "suggestions" in data and isinstance(data["suggestions"], dict):
-            suggestions = {"channel_id": data["suggestions"].get("channel_id")}
-        elif is_gen2:
-            suggestions = {"channel_id": channels_g2.get("suggestions")}
-        else:
-            suggestions = {"channel_id": data.get("suggestions_channel_id")}
+        stored = data.get("suggestions") or {}
+        suggestions = {"channel_id": stored.get("channel_id")}
 
         # ── boost ──────────────────────────────────────────────────────
-        if "boost" in data and isinstance(data["boost"], dict):
-            _bstored = data["boost"]
-            boost = {"channel_id": _bstored.get("channel_id")}
-            boost["enabled"] = _bstored["enabled"] if "enabled" in _bstored else bool(boost.get("channel_id"))
-        elif is_gen2:
-            boost = {"channel_id": channels_g2.get("boost_log")}
-            boost["enabled"] = bool(boost.get("channel_id"))
-        else:
-            boost = {"channel_id": data.get("boost_log_channel_id")}
-            boost["enabled"] = bool(boost.get("channel_id"))
+        stored = data.get("boost") or {}
+        boost = {"channel_id": stored.get("channel_id")}
+        boost["enabled"] = stored["enabled"] if "enabled" in stored else bool(boost["channel_id"])
 
         # ── guide ──────────────────────────────────────────────────────
         dg = _default_guide()
-        if "guide" in data and isinstance(data["guide"], dict):
-            stored = data["guide"]
-            guide = {
-                "enabled": stored.get("enabled", dg["enabled"]),
-                "channel_id": stored.get("channel_id", dg["channel_id"]),
-            }
-        else:
-            guide = dict(dg)
+        stored = data.get("guide") or {}
+        guide = {
+            "enabled": stored.get("enabled", dg["enabled"]),
+            "channel_id": stored.get("channel_id", dg["channel_id"]),
+        }
 
         # ── embed ──────────────────────────────────────────────────────
-        legacy_role_tier = data.get("embed_role_tier_mapping", {})
-        if "embed" in data and isinstance(data["embed"], dict):
-            stored = data["embed"]
-            if "description_limits" in stored or "color_tiers" in stored or "feature_access" in stored:
-                # gen3 — all embed settings inside the embed dict
-                embed = {
-                    "default_color": stored.get("default_color"),
-                    "role_tier": stored.get("role_tier", legacy_role_tier),
-                    "description_limits": stored.get("description_limits", {"default_limit": 500, "limits": {}}),
-                    "color_tiers": stored.get("color_tiers", {}),
-                    "feature_access": stored.get("feature_access", {}),
-                }
-                embed["enabled"] = stored["enabled"] if "enabled" in stored else bool(embed.get("role_tier"))
-            else:
-                # gen2 — embed dict exists but flat settings are at top level
-                embed = {
-                    "default_color": stored.get("default_color"),
-                    "role_tier": stored.get("role_tier", legacy_role_tier),
-                    "description_limits": data.get("embed_description_limits", {"default_limit": 500, "limits": {}}),
-                    "color_tiers": data.get("embed_color_tiers", {}),
-                    "feature_access": data.get("embed_feature_access", {}),
-                }
-                embed["enabled"] = stored["enabled"] if "enabled" in stored else bool(embed.get("role_tier"))
-        else:
-            embed = {
-                "default_color": data.get("default_embed_color"),
-                "role_tier": legacy_role_tier,
-                "description_limits": data.get("embed_description_limits", {"default_limit": 500, "limits": {}}),
-                "color_tiers": data.get("embed_color_tiers", {}),
-                "feature_access": data.get("embed_feature_access", {}),
-            }
-            embed["enabled"] = bool(embed.get("role_tier"))
+        stored = data.get("embed") or {}
+        embed = {
+            "default_color": stored.get("default_color"),
+            "role_tier": stored.get("role_tier", {}),
+            "description_limits": stored.get("description_limits", {"default_limit": 500, "limits": {}}),
+            "color_tiers": stored.get("color_tiers", {}),
+            "feature_access": stored.get("feature_access", {}),
+        }
+        embed["enabled"] = stored["enabled"] if "enabled" in stored else bool(embed["role_tier"])
 
         return cls(
             guild_id=data.get("guild_id"),
@@ -692,11 +487,7 @@ class GuildConfigManager:
             return GuildConfig(guild_id=guild_id)
 
     async def save_config(self, config: GuildConfig) -> bool:
-        """Save a guild's structured configuration to the database.
-
-        On first save of a legacy document, removes old channels dict and
-        flat WYR/embed settings via $unset so the document is clean.
-        """
+        """Save a guild's structured configuration to the database."""
         if not self._initialized:
             await self.initialize()
 
@@ -706,14 +497,9 @@ class GuildConfigManager:
 
             if existing:
                 config.updated_at = now
-                update_op: Dict[str, Any] = {"$set": config.to_dict()}
-                # Migrate: remove legacy fields if they still exist
-                fields_to_unset = {f: "" for f in _LEGACY_FIELDS if f in existing}
-                if fields_to_unset:
-                    update_op["$unset"] = fields_to_unset
                 await self._collection.update_one(
                     {"guild_id": config.guild_id},
-                    update_op,
+                    {"$set": config.to_dict()},
                 )
                 logger.info(f"Updated config for guild {config.guild_id}")
             else:
@@ -1074,23 +860,6 @@ async def get_config(guild_id: int) -> GuildConfig:
     return await manager.get_config(guild_id)
 
 
-# ── Backward-compat shims ─────────────────────────────────────────────────────
-
 async def get_config_manager() -> GuildConfigManager:
-    """Backward-compat alias for get_guild_config_manager()."""
+    """Alias for get_guild_config_manager() used by the admin-panel bindings."""
     return await get_guild_config_manager()
-
-
-def get_config_manager_sync() -> Optional[GuildConfigManager]:
-    """Get the global GuildConfigManager instance synchronously (may be None)."""
-    return _guild_config_manager
-
-
-def set_config_manager(manager: GuildConfigManager) -> None:
-    """Set the global GuildConfigManager instance (backward compat)."""
-    global _guild_config_manager
-    _guild_config_manager = manager
-
-
-# ConfigManager is aliased to GuildConfigManager for any remaining import sites.
-ConfigManager = GuildConfigManager

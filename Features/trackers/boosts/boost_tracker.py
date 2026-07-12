@@ -1,5 +1,6 @@
 import asyncio
 import discord
+from discord import app_commands
 from discord.ext import commands
 import datetime
 
@@ -266,19 +267,21 @@ class BoostTracker(commands.Cog):
         else:
             return "No Level"
 
-    @commands.command(name='boosters')
-    async def list_boosters(self, ctx):
+    @app_commands.command(name="boosters", description="List everyone currently boosting this server")
+    @app_commands.guild_only()
+    async def list_boosters(self, interaction: discord.Interaction):
         """List all current server boosters (live from Discord)."""
+        guild = interaction.guild
         now = datetime.datetime.now(datetime.timezone.utc)
 
         # discord.py exposes the boosting members directly.
         boosters = sorted(
-            ctx.guild.premium_subscribers,
+            guild.premium_subscribers,
             key=lambda m: m.premium_since or now,  # longest-boosting first
         )
 
         if not boosters:
-            await ctx.send("No active boosters found.")
+            await interaction.response.send_message("No active boosters found.", ephemeral=True)
             return
 
         lines = []
@@ -306,15 +309,17 @@ class BoostTracker(commands.Cog):
             color=0xff73fa,
         )
         embed.set_footer(
-            text=f"{ctx.guild.premium_subscription_count} boosts • "
-                 f"{self.get_boost_level(ctx.guild.premium_subscription_count)}"
+            text=f"{guild.premium_subscription_count} boosts • "
+                 f"{self.get_boost_level(guild.premium_subscription_count)}"
         )
-        await ctx.send(embed=embed)
+        await interaction.response.send_message(embed=embed)
 
-    @commands.command(name='boosthistory')
-    async def boost_history(self, ctx, user: discord.Member = None):
+    @app_commands.command(name="boosthistory", description="Show a member's boost status and recent boost events")
+    @app_commands.describe(user="The member to look up (defaults to you)")
+    @app_commands.guild_only()
+    async def boost_history(self, interaction: discord.Interaction, user: discord.Member = None):
         """Show a user's boost status and recent boost events."""
-        target_user = user or ctx.author
+        target_user = user or interaction.user
         now = datetime.datetime.now(datetime.timezone.utc)
 
         embed = discord.Embed(
@@ -339,7 +344,7 @@ class BoostTracker(commands.Cog):
         try:
             events_collection = self.db_manager.get_collection_manager('serverdata_boost_events')
             events = await events_collection.find_many(
-                {'guild_id': ctx.guild.id, 'user_id': target_user.id},
+                {'guild_id': interaction.guild.id, 'user_id': target_user.id},
                 sort=[('timestamp', -1)],
                 limit=5,
             )
@@ -360,10 +365,12 @@ class BoostTracker(commands.Cog):
             embed.add_field(name="Recent Events", value="\n".join(history_lines), inline=False)
 
         if not target_user.premium_since and not events:
-            await ctx.send(f"{target_user.mention} has no boost data available.")
+            await interaction.response.send_message(
+                f"{target_user.mention} has no boost data available.", ephemeral=True
+            )
             return
 
-        await ctx.send(embed=embed)
+        await interaction.response.send_message(embed=embed)
 
 
 async def setup(bot):

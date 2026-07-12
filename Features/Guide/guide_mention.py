@@ -7,11 +7,13 @@ and renders the result using Components V2 via GuideRenderer.
 Replaces the old KEYWORD_MAP-based approach with search-based matching.
 """
 
+import os
 import time
 
 from discord.ext import commands
 
 from Features.Guide.guide import guide_manager
+from storage.config_manager import get_config
 from storage.logging import get_logger
 
 logger = get_logger("GuideMentionListener")
@@ -46,9 +48,12 @@ HELP_WORDS = {
 # Minimum search score to show a result (lower = more permissive)
 _CONFIDENCE_THRESHOLD = 40
 
-# Todo - Remove hard coded values
-# Allow messages from selected bots by ID only
-_ALLOWED_BOT_IDS = [1324702268666417192, 1324623083646095453]
+# Other bots allowed to trigger guide help on a mentioned user's behalf.
+# Configured per-deployment via GUIDE_ALLOWED_BOT_IDS (comma-separated ids);
+# empty by default so only human mentions trigger the guide.
+_ALLOWED_BOT_IDS = {
+    int(x) for x in os.getenv("GUIDE_ALLOWED_BOT_IDS", "").split(",") if x.strip().isdigit()
+}
 
 
 class HelpListener(commands.Cog):
@@ -66,6 +71,12 @@ class HelpListener(commands.Cog):
 
 		# Must be in a guild
 		if not message.guild:
+			return
+
+		# Respect the per-guild guide toggle - stay silent where an admin
+		# has turned the guide off.
+		config = await get_config(message.guild.id)
+		if not config.guide.get("enabled", True):
 			return
 
 		# Throttle per user to prevent mention spam from hammering search.

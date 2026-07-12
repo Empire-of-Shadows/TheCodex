@@ -249,13 +249,17 @@ async def update_settings(
 
         _coerce_section_ids(section, value)
 
+        # Surgical dotted $set of only the leaf keys that actually change, so a
+        # concurrent edit to a different key in the same section isn't clobbered
+        # by a whole-section overwrite.
         existing = (doc or {}).get(section)
         if not isinstance(existing, dict):
-            existing = dict(DEFAULT_CONFIG.get(section, {}))
-
+            existing = {}
+        defaults = DEFAULT_CONFIG.get(section, {})
         for leaf_key, new_val in value.items():
-            old_val = existing.get(leaf_key)
+            old_val = existing.get(leaf_key, defaults.get(leaf_key))
             if old_val != new_val:
+                update_set[f"{section}.{leaf_key}"] = new_val
                 audit_entries.append({
                     "section": section,
                     "key": f"{section}.{leaf_key}",
@@ -264,25 +268,21 @@ async def update_settings(
                     "action": "set",
                 })
 
-        merged = {**existing, **value}
-        update_set[section] = merged
+    if not update_set:
+        # Nothing actually changed — return the current config unchanged.
+        return {"config": _serialize_config(doc)}
 
     now = datetime.now(timezone.utc)
     update_set["updated_at"] = now
-
+    update_ops: dict[str, Any] = {"$set": update_set}
     if doc is None:
-        update_set["guild_id"] = gid
-        update_set["created_at"] = now
-        await db.guild_config().update_one(
-            {"guild_id": gid},
-            {"$set": update_set},
-            upsert=True,
-        )
-    else:
-        await db.guild_config().update_one(
-            {"guild_id": gid},
-            {"$set": update_set},
-        )
+        update_ops["$setOnInsert"] = {"guild_id": gid, "created_at": now}
+
+    await db.guild_config().update_one(
+        {"guild_id": gid},
+        update_ops,
+        upsert=True,
+    )
 
     if audit_entries and actor_id is not None:
         try:

@@ -23,6 +23,11 @@ class DatabaseProperties:
         return self.get_collection_manager('daily_wyr_leaderboard')
 
     @property
+    def daily_wyr_votes(self) -> CollectionManager:
+        """Get Daily WYR Votes collection manager (per-user question votes)."""
+        return self.get_collection_manager('daily_wyr_votes')
+
+    @property
     def suggestions_votes(self) -> CollectionManager:
         """Get Suggestions Votes collection manager."""
         return self.get_collection_manager('suggestions_votes')

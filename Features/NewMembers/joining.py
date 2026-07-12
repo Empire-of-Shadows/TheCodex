@@ -12,6 +12,13 @@ from storage.config_manager import get_guild_config_manager
 from storage.logging import get_logger
 
 
+# How long to wait after the bot is removed from a guild before wiping that
+# guild's stored data. A rejoin within this window cancels the wipe, so a
+# transient removal (brief outage / accidental kick) doesn't irreversibly
+# delete the guild's config and history.
+GUILD_CLEANUP_GRACE_SECONDS = 24 * 60 * 60  # 24 hours
+
+
 class GuildEventHandler:
     """Handles all guild-related events with enhanced caching and rate limiting"""
 
@@ -68,6 +75,9 @@ class GuildEventHandler:
             'max_dms_per_day': 5,
             'block_duration_hours': 24,
         }
+
+        # guild_id -> pending deferred data-cleanup task (see schedule_guild_cleanup).
+        self._pending_cleanups: Dict[int, asyncio.Task] = {}
 
     @property
     def cache_manager(self) -> 'GuildSnapshotService':
@@ -620,6 +630,45 @@ class GuildEventHandler:
         except Exception as e:
             self.logger.error(f"\n{s}Error updating channels cache for {after.guild.name}: {e}\n")
 
+    def schedule_guild_cleanup(self, guild_id: int, guild_name: str) -> None:
+        """Schedule a deferred data wipe for a removed guild.
+
+        The wipe runs after GUILD_CLEANUP_GRACE_SECONDS unless the bot rejoins
+        first (see cancel_pending_cleanup), so a transient removal doesn't
+        irreversibly delete the guild's config and history. In-memory schedules
+        are lost on restart — that errs toward keeping data, the safe default.
+        """
+        existing = self._pending_cleanups.get(guild_id)
+        if existing and not existing.done():
+            return  # already scheduled
+        self._pending_cleanups[guild_id] = asyncio.create_task(
+            self._delayed_cleanup(guild_id, guild_name)
+        )
+        self.logger.info(
+            f"Scheduled data cleanup for guild {guild_name} ({guild_id}) in "
+            f"{GUILD_CLEANUP_GRACE_SECONDS}s (cancelled if the bot rejoins)"
+        )
+
+    def cancel_pending_cleanup(self, guild_id: int) -> None:
+        """Cancel a pending deferred cleanup (called when the bot rejoins a guild)."""
+        task = self._pending_cleanups.pop(guild_id, None)
+        if task and not task.done():
+            task.cancel()
+            self.logger.info(f"Cancelled pending data cleanup for guild {guild_id} (rejoined)")
+
+    async def _delayed_cleanup(self, guild_id: int, guild_name: str) -> None:
+        """Wait out the grace window, then wipe the guild's data if still gone."""
+        try:
+            await asyncio.sleep(GUILD_CLEANUP_GRACE_SECONDS)
+        except asyncio.CancelledError:
+            return  # rejoined within the window
+        self._pending_cleanups.pop(guild_id, None)
+        # Belt-and-suspenders: if the bot is somehow back in the guild, keep the data.
+        if self.bot.get_guild(guild_id) is not None:
+            self.logger.info(f"Skipping cleanup for guild {guild_id}: bot is back in the guild")
+            return
+        await self._cleanup_guild_data(guild_id, guild_name)
+
     async def _cleanup_guild_data(self, guild_id: int, guild_name: str) -> None:
         """
         Delete all database records scoped to a guild after the bot is removed.
@@ -652,6 +701,7 @@ class GuildEventHandler:
                 {"$unset": {f"guilds.{gid_str}": ""}},
             )
             totals["daily_wyr_leaderboard"] = await col("daily_wyr_leaderboard").delete_many({"guild_id": gid_str})
+            totals["daily_wyr_votes"] = await col("daily_wyr_votes").delete_many({"guild_id": gid_str})
             totals["daily_wyr_mappings"] = await col("daily_wyr_mappings").delete_many({"guild_id": guild_id})
 
             # --- Suggestions (votes/notifications reference suggestion_id, not guild_id directly) ---
@@ -703,46 +753,43 @@ class GuildEventHandler:
             )
 
 
-# Create the guild event handler instance
+# The guild event handler instance. Kept at module level because
+# welcometrigger.py imports `guild_handler` directly; the listeners it relies on
+# are registered explicitly in setup() below, so this feature now loads through
+# the normal cog loader instead of only as an import side effect of that cog.
 guild_handler = GuildEventHandler(bot)
 
 
-# Keep your existing event handlers but delegate to the class
+# ── Event handlers (registered as listeners in setup) ────────────────────────
+# Plain functions, not @bot.event/@bot.listen: registration happens in setup()
+# so loading is explicit. add_listener is additive — it never overrides the
+# gateway's own interaction/member processing.
 
-# Section: Interactions
-# Missing in this section:
-# - (None, all handled via on_interaction)
-@bot.listen()
 async def on_interaction(interaction: discord.Interaction):
     await guild_handler.handle_interaction(interaction)
 
-# Section: Member lifecycle and moderation
-# Missing in this section:
-# - on_member_chunk
-@bot.event
+
 async def on_member_join(member):
     await guild_handler.handle_member_join(member)
 
-@bot.event
+
 async def on_member_remove(member: discord.Member):
     await guild_handler.handle_member_remove(member)
 
-# Section: Guild lifecycle and cache
-# Missing in this section:
-# - on_guild_integrations_update
-# - on_audit_log_entry_create
 
-@bot.event
 async def on_guild_role_update(before: discord.Role, after: discord.Role):
     await guild_handler.handle_guild_role_update(before, after)
 
-@bot.event
+
 async def on_guild_channel_update(before: discord.abc.GuildChannel, after: discord.abc.GuildChannel):
     await guild_handler.handle_guild_channel_update(before, after)
 
-@bot.event
+
 async def on_guild_join(guild):
     guild_handler.logger.info(f"Event: on_guild_join - joined guild {guild.name} ({guild.id})")
+    # A rejoin cancels any pending post-removal data wipe so a transient removal
+    # keeps the guild's config and history.
+    guild_handler.cancel_pending_cleanup(guild.id)
     try:
         await guild_handler._seed_guild_default_config(guild)
     except Exception as e:
@@ -752,23 +799,21 @@ async def on_guild_join(guild):
     except Exception as e:
         guild_handler.logger.error(f"Error initializing cache on guild join: {e}")
 
-@bot.event
+
 async def on_guild_remove(guild):
     guild_handler.logger.info(f"Event: on_guild_remove - removed from guild {guild.name} ({guild.id})")
     # Clear in-memory guild cache
     if guild.id in guild_handler.guild_cache:
         del guild_handler.guild_cache[guild.id]
         guild_handler.logger.info(f"Cleared memory cache for guild {guild.id}")
-    # Remove all guild-scoped data from the database
-    await guild_handler._cleanup_guild_data(guild.id, guild.name)
+    # Defer the database wipe behind a grace window instead of deleting
+    # immediately, so a transient removal undone by a rejoin keeps all the data.
+    guild_handler.schedule_guild_cleanup(guild.id, guild.name)
     # Drop in-memory snapshot state for the departed guild (leaves stored snapshots intact)
     if guild_handler.cache_manager:
         guild_handler.cache_manager.forget(guild.id)
 
-# Section: Roles
-# Missing in this section:
-# - (None)
-@bot.event
+
 async def on_guild_role_create(role):
     guild_handler.logger.info(f"Event: on_guild_role_create - {role.name} ({role.id}) in {role.guild.name}")
     # update role distribution cache
@@ -777,9 +822,8 @@ async def on_guild_role_create(role):
     except Exception:
         # fallback to cache refresh
         await guild_handler.cache_manager.cache_roles(role.guild)
-    pass
 
-@bot.event
+
 async def on_guild_role_delete(role):
     guild_handler.logger.info(f"Event: on_guild_role_delete - {role.name} ({role.id}) in {role.guild.name}")
     # refresh roles cache
@@ -787,4 +831,23 @@ async def on_guild_role_delete(role):
         await guild_handler.cache_manager.cache_roles(role.guild)
     except Exception as e:
         guild_handler.logger.error(f"Error updating roles cache after delete: {e}")
-    pass
+
+
+async def setup(bot):
+    """Register the guild lifecycle + interaction-routing listeners.
+
+    joining.py is a plain manager module (no Cog), so it must be loaded
+    explicitly. Registering here — rather than via import-time @bot.event —
+    means the member/interaction system loads through the normal cog loader and
+    no longer depends on another cog happening to import ``guild_handler``.
+    """
+    bot.add_listener(on_interaction, "on_interaction")
+    bot.add_listener(on_member_join, "on_member_join")
+    bot.add_listener(on_member_remove, "on_member_remove")
+    bot.add_listener(on_guild_role_update, "on_guild_role_update")
+    bot.add_listener(on_guild_channel_update, "on_guild_channel_update")
+    bot.add_listener(on_guild_join, "on_guild_join")
+    bot.add_listener(on_guild_remove, "on_guild_remove")
+    bot.add_listener(on_guild_role_create, "on_guild_role_create")
+    bot.add_listener(on_guild_role_delete, "on_guild_role_delete")
+    guild_handler.logger.info("Guild event listeners registered")

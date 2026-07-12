@@ -53,14 +53,33 @@ class SuggestionView(discord.ui.View):
     async def _handle_vote(self, interaction: discord.Interaction, vote_type: str):
         with PerformanceLogger(logger, f"handle_vote_{vote_type}"):
             user_id = interaction.user.id
-            logger.info(f"Processing {vote_type} vote from user {user_id} for suggestion {self.suggestion_id}")
+
+            # The persistent view registered on startup carries no suggestion_id,
+            # so after a restart recover it from the message the buttons are on.
+            suggestion_id = self.suggestion_id
+            if not suggestion_id:
+                suggestion_id = await self.db_manager.get_suggestion_id_from_message(
+                    interaction.message.id
+                )
+            if not suggestion_id:
+                logger.warning(
+                    f"Could not resolve suggestion for {vote_type} vote from user "
+                    f"{user_id} on message {interaction.message.id}"
+                )
+                await interaction.response.send_message(
+                    "❌ Could not determine which suggestion you're voting on.",
+                    ephemeral=True,
+                )
+                return
+
+            logger.info(f"Processing {vote_type} vote from user {user_id} for suggestion {suggestion_id}")
 
             try:
-                result = await self.db_manager.add_vote(self.suggestion_id, user_id, vote_type)
+                result = await self.db_manager.add_vote(suggestion_id, user_id, vote_type)
 
                 if result["success"]:
                     logger.info(f"Vote processed successfully: {result['message']}")
-                    vote_counts = await self.db_manager.get_vote_counts(self.suggestion_id)
+                    vote_counts = await self.db_manager.get_vote_counts(suggestion_id)
                     embed = interaction.message.embeds[0] if interaction.message.embeds else None
 
                     if embed:
@@ -532,6 +551,26 @@ class SuggestionDatabaseManager:
             except Exception as e:
                 logger.error(f"Error getting vote counts: {e}", exc_info=True)
                 return {}
+
+    async def get_suggestion_id_from_message(self, message_id: int) -> Optional[str]:
+        """Resolve a suggestion_id from the message its buttons live on.
+
+        The persistent vote view is registered on startup without a suggestion_id,
+        so after a bot restart it recovers the id from the message (mirrors the
+        WYR view's message->question fallback).
+        """
+        await self._ensure_initialized()
+        try:
+            doc = await self.db_manager.suggestions_suggestions.find_one(
+                {"message_id": message_id}
+            )
+            return doc.get("suggestion_id") if doc else None
+        except Exception as e:
+            logger.error(
+                f"Error resolving suggestion from message {message_id}: {e}",
+                exc_info=True,
+            )
+            return None
 
     async def search_suggestions(self, query: str = None, category: str = None,
                                  status: str = None, author_id: int = None,

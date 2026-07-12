@@ -1,10 +1,11 @@
 """
-Setup Gatekeeper for ImperialHost
+Setup Gatekeeper for TheCodex.
 
-Blocks all bot processing (game commands) for guilds that haven't completed
-minimum setup. The only hard requirement is that game_category_id must be configured.
+Fast, cached per-feature "is this configured yet?" gates used by the admin panel
+so admins can't open a feature's settings before its prerequisite (WYR channel,
+welcome channel, embed role-tier mapping, ...) has been set.
 
-Uses an in-memory TimedLRUCache for fast event listener checks.
+Uses an in-memory TimedLRUCache for fast checks.
 """
 
 import time
@@ -129,16 +130,15 @@ class TimedLRUCache:
 
 class SetupGatekeeper:
     """
-    Guards bot functionality behind a minimum setup requirement.
+    Guards per-feature admin settings behind their configuration prerequisites.
 
-    Guilds must have at least `game_category_id` configured before any game
-    commands will function. The `/admin panel` command is always allowed so
-    admins can complete setup.
+    Each feature (WYR, New Members, Embed Settings, per-tier settings) exposes a
+    cached ``is_*_setup_complete`` predicate and a ``check_*_or_notify`` guard that
+    sends a polite ephemeral notice when the prerequisite has not been configured.
     """
 
     def __init__(self):
         self._cache: TimedLRUCache = TimedLRUCache(max_size=200, timeout=120)
-        self._config_manager = None
         self._embed_checker = None
 
     def set_embed_checker(self, checker) -> None:
@@ -151,175 +151,6 @@ class SetupGatekeeper:
         """
         self._embed_checker = checker
         logger.info("SetupGatekeeper linked to embed checker")
-
-    def set_config_manager(self, config_manager):
-        """
-        Attach the config manager instance. Must be called during startup.
-
-        Args:
-            config_manager: Initialized ConfigManager instance
-        """
-        self._config_manager = config_manager
-        logger.info("SetupGatekeeper linked to ConfigManager")
-
-    # ------------------------------------------------------------------
-    # Fast cached check (for event listeners)
-    # ------------------------------------------------------------------
-
-    async def is_setup_complete(self, guild_id: int) -> bool:
-        """
-        Check whether a guild has completed minimum setup.
-
-        Returns a cached result when available (120s TTL).
-        On cache miss, queries ConfigManager.
-        Fails open on DB errors so configured guilds aren't blocked
-        by transient database issues.
-
-        Args:
-            guild_id: The guild ID as an integer
-
-        Returns:
-            True if setup is complete, False otherwise
-        """
-        cache_key = str(guild_id)
-        cached = self._cache.get(cache_key)
-        if cached is not None:
-            logger.debug(f"Guild {guild_id} setup check: cache hit (complete={cached})")
-            return cached
-
-        # Cache miss – query config manager
-        logger.debug(f"Guild {guild_id} setup check: cache miss, querying config")
-        try:
-            if not self._config_manager:
-                logger.warning("SetupGatekeeper has no config_manager – failing open")
-                return True
-
-            is_complete = await self._evaluate_requirements(guild_id)
-            self._cache.set(cache_key, is_complete)
-            logger.debug(f"Guild {guild_id} setup check: cached result (complete={is_complete}, ttl=120s)")
-            return is_complete
-
-        except Exception as e:
-            logger.error(f"Error checking setup for guild {guild_id}, failing open: {e}")
-            return True  # Fail open
-
-    # ------------------------------------------------------------------
-    # Slash-command guard (polite ephemeral embed)
-    # ------------------------------------------------------------------
-
-    async def check_or_notify(self, interaction: discord.Interaction) -> bool:
-        """
-        Guard for slash commands. If setup is incomplete, sends an
-        ephemeral embed directing the admin to `/admin panel` and
-        returns False. Otherwise returns True.
-
-        Args:
-            interaction: The Discord interaction to check
-
-        Returns:
-            True if the guild is set up and the command may proceed
-        """
-        guild_id = interaction.guild.id if interaction.guild else None
-        if not guild_id:
-            return True  # DMs – let it through
-
-        if await self.is_setup_complete(guild_id):
-            return True
-
-        # Build a polite notification embed
-        embed = discord.Embed(
-            title="Bot Setup Required",
-            description=(
-                "This server hasn't finished setting up the bot yet.\n\n"
-                "An administrator needs to configure the **Game Category** "
-                "before game features become available.\n\n"
-                "**How to fix:**\n"
-                "`/admin panel` → **Configure Channels**"
-            ),
-            color=discord.Color.orange(),
-        )
-        embed.set_footer(text="Once setup is complete, all game commands will unlock automatically.")
-
-        try:
-            if interaction.response.is_done():
-                await interaction.followup.send(embed=embed, ephemeral=True)
-            else:
-                await interaction.response.send_message(embed=embed, ephemeral=True)
-        except Exception as e:
-            logger.warning(f"Failed to send setup-required embed: {e}")
-
-        return False
-
-    # ------------------------------------------------------------------
-    # Re-evaluate and persist (called after admin saves channel config)
-    # ------------------------------------------------------------------
-
-    async def evaluate_and_update(self, guild_id: int) -> bool:
-        """
-        Re-evaluate setup requirements and invalidate the cache entry.
-
-        Args:
-            guild_id: The guild ID as an integer
-
-        Returns:
-            True if the guild now meets all requirements
-        """
-        try:
-            if not self._config_manager:
-                logger.warning("SetupGatekeeper has no config_manager")
-                return False
-
-            is_complete = await self._evaluate_requirements(guild_id)
-
-            # Persist setup_complete status
-            await self._config_manager.set("setup_complete", is_complete, guild_id)
-
-            self.invalidate(guild_id)
-            logger.info(f"Guild {guild_id} setup_complete evaluated to {is_complete}")
-            return is_complete
-
-        except Exception as e:
-            logger.error(f"Error in evaluate_and_update for guild {guild_id}: {e}", exc_info=True)
-            self.invalidate(guild_id)
-            return False
-
-    # ------------------------------------------------------------------
-    # Channel deletion handler
-    # ------------------------------------------------------------------
-
-    async def on_channel_deleted(self, guild_id: int, channel_id: int):
-        """
-        If the deleted channel was the game_category_id, clear it
-        from settings and revert setup_complete to False.
-
-        Args:
-            guild_id: The guild ID as an integer
-            channel_id: The deleted channel ID as an integer
-        """
-        try:
-            if not self._config_manager:
-                return
-
-            game_category_id = await self._config_manager.game_category_id(guild_id)
-            if game_category_id != channel_id:
-                return  # Not the game category – nothing to do
-
-            logger.warning(
-                f"Game category {channel_id} deleted in guild {guild_id}, "
-                "reverting setup_complete to False"
-            )
-
-            await self._config_manager.set("game_category_id", None, guild_id)
-            await self._config_manager.set("setup_complete", False, guild_id)
-
-            self.invalidate(guild_id)
-
-        except Exception as e:
-            logger.error(
-                f"Error handling channel deletion for guild {guild_id}: {e}",
-                exc_info=True,
-            )
-            self.invalidate(guild_id)
 
     # ------------------------------------------------------------------
     # Embed Settings gate (requires role-tier mapping to be configured)
@@ -686,189 +517,6 @@ class SetupGatekeeper:
     def get_stats(self) -> dict:
         """Return cache statistics for diagnostics."""
         return self._cache.get_stats()
-
-    # ------------------------------------------------------------------
-    # Bot Permission Checker
-    # ------------------------------------------------------------------
-
-    async def check_bot_permissions(
-        self,
-        guild: discord.Guild,
-        channel: discord.abc.GuildChannel | None = None
-    ) -> tuple[bool, list[str]]:
-        """
-        Validate that the bot has required permissions in the guild/channel.
-
-        Required permissions for full functionality:
-        - send_messages: Send messages in channels
-        - embed_links: Send embeds for game UI
-        - manage_channels: Create/delete game channels
-        - add_reactions: Add reactions for game feedback
-
-        Optional but recommended:
-        - manage_messages: Delete invalid messages in counting
-        - read_message_history: Required for some game features
-        - manage_threads: Create discussion threads for games
-
-        Args:
-            guild: The Discord guild to check
-            channel: Optional specific channel to check (uses guild-wide if None)
-
-        Returns:
-            Tuple of (all_required_present, list_of_missing_permissions)
-        """
-        # Define required permissions
-        required_permissions = [
-            ("send_messages", "Send Messages"),
-            ("embed_links", "Embed Links"),
-            ("manage_channels", "Manage Channels"),
-            ("add_reactions", "Add Reactions"),
-        ]
-
-        # Define recommended permissions (logged as warnings if missing)
-        recommended_permissions = [
-            ("manage_messages", "Manage Messages"),
-            ("read_message_history", "Read Message History"),
-        ]
-
-        missing_required = []
-        missing_recommended = []
-
-        # Get bot's permissions
-        if channel:
-            # Check channel-specific permissions
-            perms = channel.permissions_for(guild.me)
-        else:
-            # Check guild-wide permissions
-            perms = guild.me.guild_permissions
-
-        # Check required permissions
-        for perm_attr, perm_name in required_permissions:
-            if not getattr(perms, perm_attr, False):
-                missing_required.append(perm_name)
-
-        # Check recommended permissions (just for logging)
-        for perm_attr, perm_name in recommended_permissions:
-            if not getattr(perms, perm_attr, False):
-                missing_recommended.append(perm_name)
-
-        # Log warnings for missing recommended permissions
-        if missing_recommended:
-            logger.warning(
-                f"Guild {guild.id} is missing recommended permissions: "
-                f"{', '.join(missing_recommended)}"
-            )
-
-        all_present = len(missing_required) == 0
-
-        if not all_present:
-            logger.warning(
-                f"Guild {guild.id} is missing required permissions: "
-                f"{', '.join(missing_required)}"
-            )
-
-        return all_present, missing_required
-
-    async def check_category_permissions(
-        self,
-        guild: discord.Guild,
-        category_id: int | None
-    ) -> tuple[bool, list[str]]:
-        """
-        Check if the bot has required permissions in the game category.
-
-        Args:
-            guild: The Discord guild
-            category_id: The category ID to check
-
-        Returns:
-            Tuple of (all_required_present, list_of_missing_permissions)
-        """
-        if not category_id:
-            return False, ["No game category configured"]
-
-        category = guild.get_channel(category_id)
-        if not category:
-            return False, ["Game category not found"]
-
-        if not isinstance(category, discord.CategoryChannel):
-            return False, ["Configured channel is not a category"]
-
-        return await self.check_bot_permissions(guild, category)
-
-    def build_permission_warning_embed(
-        self,
-        missing_permissions: list[str],
-        category_name: str | None = None
-    ) -> discord.Embed:
-        """
-        Build an embed warning about missing permissions.
-
-        Args:
-            missing_permissions: List of missing permission names
-            category_name: Optional category name for context
-
-        Returns:
-            Discord embed with permission warning
-        """
-        location = f"the **{category_name}** category" if category_name else "this server"
-
-        embed = discord.Embed(
-            title="Missing Bot Permissions",
-            description=(
-                f"I'm missing some permissions required to run games in {location}.\n\n"
-                "Please ask a server administrator to grant these permissions:"
-            ),
-            color=discord.Color.orange(),
-        )
-
-        permission_list = "\n".join(f"- {perm}" for perm in missing_permissions)
-        embed.add_field(
-            name="Missing Permissions",
-            value=permission_list,
-            inline=False,
-        )
-
-        embed.add_field(
-            name="How to Fix",
-            value=(
-                "1. Go to **Server Settings** > **Roles**\n"
-                "2. Find the ImperialHost role\n"
-                "3. Enable the missing permissions\n"
-                "4. Or check the category's permission overwrites"
-            ),
-            inline=False,
-        )
-
-        embed.set_footer(text="Games will work once permissions are granted.")
-
-        return embed
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
-    async def _evaluate_requirements(self, guild_id: int) -> bool:
-        """
-        Check whether the guild settings meet the minimum requirements.
-
-        Currently the only hard requirement is that game_category_id
-        is set to a non-None value.
-
-        Args:
-            guild_id: The guild ID
-
-        Returns:
-            True if all requirements are met
-        """
-        if not self._config_manager:
-            return False
-
-        game_category_id = await self._config_manager.game_category_id(guild_id)
-        if not game_category_id:
-            return False
-
-        return True
 
 
 # Global singleton
