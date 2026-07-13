@@ -39,11 +39,9 @@ Write entries as if explaining to a server member, not a programmer:
 
 ## Development Status
 
-This project has no real users and no production data. As a result:
+This project has real users and production data. Schema and storage changes MUST preserve that data:
 
-- **No migration scripts needed** — if the data structure changes, drop the collection and start fresh
-- **No backward compatibility** — old document formats do not need to be supported
-- **No migration shims** — do not add `from_dict()` legacy generation handling or field rename fallbacks for past schemas
-- When a schema changes, update the code directly and assume clean data
-
-If existing code contains any of the above (migration logic, legacy `from_dict()` generation handling, backward compat fallbacks), **remove it** rather than working around it.
+- **Migrations, not fresh starts**: when the data structure changes, ship an idempotent migration under `migrations/scripts/` that transforms existing documents. Never "drop the collection and start fresh". Each script is standalone and dry-run by default (`python -m migrations.scripts.<name>`), applying writes only with `--apply`, and loads Mongo creds from the bot's local env (`docker/.env` then `.env.local`). See `_common.py` for the shared harness.
+- **Remove old fields via migration**: once the code stops reading a field, a migration should `$unset` it from stored documents so no orphaned data lingers.
+- **Migrate the data, keep the code clean**: prefer bringing documents to the current schema over carrying long-term `from_dict()` legacy-generation handling or field-rename fallbacks in the live code (a short read-time fallback is acceptable only as a bridge while a migration rolls out). The pre-collapse conversion logic is preserved frozen in `migrations/scripts/_guildconfig_v2.py` for reference.
+- **Runbook**: run the dry-run first, confirm the reported changes, then re-run with `--apply`. Migrations are idempotent, so re-running after apply is a no-op.
