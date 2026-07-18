@@ -1,18 +1,19 @@
-"""storage_engine bindings — TheCodex.
+"""storage_engine bindings — TheCodex (bot-owned, NOT vendored).
 
 The single integration point between the vendored storage engine and this bot's
-environment. The engine (and this bot's own ``manager.py``) import these names. The
-bot-owned (hand-written) files under ``storage/`` are ``manager.py`` / ``bindings.py`` /
-``define_collections.py`` / ``config_manager.py`` / ``audit_log.py`` /
-``setup_gatekeeper.py``; everything else under ``storage/`` is vendored engine code — do not
-edit it here.
+environment. The engine (and this bot's own ``collections.py``) import these names. The
+bot-owned (hand-written) storage seam lives in ``storage/settings/`` — ``bindings.py`` /
+``collections.py`` (the registry + the shared ``db_manager``) / ``config_manager.py`` — plus
+``storage/audit_log.py`` and ``storage/setup_gatekeeper.py``; everything else under
+``storage/`` is vendored engine code — do not edit it here.
 
 Template: ``EmpireSystems/storage_engine/bindings_reference.py``.
-Reference adoption: ``FunEngagement/TheDecree/storage/bindings.py``.
+Layout reference: ``Informatinal/Stygian-Relay/storage/settings/``.
 
 Env note: ``MONGO_URI`` is loaded by the entrypoint (``Codex.py`` loads ``docker/.env`` /
-``.env.local`` before importing ``storage.manager``), so reading it here at import time is
-safe — same ordering the pre-migration ``db_manager = DatabaseManager()`` relied on.
+``.env.local`` before importing ``storage.settings.collections``), so reading it here at
+import time is safe — same ordering the pre-migration ``db_manager = DatabaseManager()``
+relied on.
 """
 
 from __future__ import annotations
@@ -20,9 +21,10 @@ from __future__ import annotations
 import os
 from typing import Any, Dict, List, Optional
 
-# Relative imports so this resolves against the vendored ``storage`` package.
-from .cache.backend import CacheBackend
-from .cache.local import LocalCache
+# Relative imports so this resolves against the vendored ``storage`` package. The engine sits
+# one level up now that the seam lives in storage/settings/.
+from ..cache.backend import CacheBackend
+from ..cache.local import LocalCache
 
 
 # ── Connections (ENGINE CONTRACT: MONGO_URIS) ──────────────────────────────────

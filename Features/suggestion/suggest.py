@@ -8,8 +8,8 @@ import os
 from dotenv import load_dotenv
 
 from storage.log import get_logger, log_context, PerformanceLogger
-from storage.config_manager import get_config
-from storage.manager import db_manager
+from storage.settings.config_manager import get_config
+from storage.settings.collections import db_manager
 
 logger = get_logger("Suggestion")
 

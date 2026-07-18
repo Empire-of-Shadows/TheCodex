@@ -259,7 +259,7 @@ class SetupGatekeeper:
             return cached
 
         try:
-            from storage.config_manager import get_guild_config_manager
+            from storage.settings.config_manager import get_guild_config_manager
             gcm = await get_guild_config_manager()
             config = await gcm.get_config(guild_id)
             is_complete = bool(config.wyr.get("channel_id"))
@@ -333,7 +333,7 @@ class SetupGatekeeper:
             return cached
 
         try:
-            from storage.config_manager import get_guild_config_manager
+            from storage.settings.config_manager import get_guild_config_manager
             gcm = await get_guild_config_manager()
             config = await gcm.get_config(guild_id)
             is_complete = bool(config.new_members.get("welcome_channel_id"))
@@ -414,7 +414,7 @@ class SetupGatekeeper:
             return cached
 
         try:
-            from storage.config_manager import get_guild_config_manager
+            from storage.settings.config_manager import get_guild_config_manager
             gcm = await get_guild_config_manager()
             config = await gcm.get_config(guild_id)
             role_tier_map = config.embed.get("role_tier", {})

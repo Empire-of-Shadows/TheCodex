@@ -7,8 +7,8 @@ import discord
 from discord.ext import commands
 
 from storage.log import get_logger, PerformanceLogger, log_context
-from storage.config_manager import get_config
-from storage.manager import db_manager
+from storage.settings.config_manager import get_config
+from storage.settings.collections import db_manager
 from dotenv import load_dotenv
 
 load_dotenv()

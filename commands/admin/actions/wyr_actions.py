@@ -29,7 +29,7 @@ _WYR_DEFAULTS = {
 
 async def _get_gcm():
     """Get the global GuildConfigManager instance."""
-    from storage.config_manager import get_guild_config_manager
+    from storage.settings.config_manager import get_guild_config_manager
     return await get_guild_config_manager()
 
 

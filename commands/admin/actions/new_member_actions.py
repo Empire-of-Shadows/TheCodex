@@ -8,7 +8,7 @@ import json
 from typing import Any, Dict
 
 from storage.log import get_logger
-from storage.config_manager import get_config, get_guild_config_manager
+from storage.settings.config_manager import get_config, get_guild_config_manager
 
 logger = get_logger("NewMemberActions")
 
@@ -182,7 +182,7 @@ class NewMemberActions:
     async def get_whitelist_stats(guild_id: int) -> Dict[str, Any]:
         """Count active/total whitelist entries from DB."""
         try:
-            from storage.manager import db_manager
+            from storage.settings.collections import db_manager
             whitelist_collection = db_manager.get_collection_manager('serverdata_whitelist')
 
             all_entries = await whitelist_collection.find_many({'guild_id': guild_id})

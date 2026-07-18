@@ -4,8 +4,8 @@ from discord import app_commands
 from discord.ext import commands
 import datetime
 
-from storage.manager import db_manager
-from storage.config_manager import get_config
+from storage.settings.collections import db_manager
+from storage.settings.config_manager import get_config
 from storage.log import get_logger
 
 logger = get_logger("BoostTracker")

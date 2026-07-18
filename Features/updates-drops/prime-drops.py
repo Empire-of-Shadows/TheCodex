@@ -6,8 +6,8 @@ import discord
 import pytz
 from discord.ext import commands, tasks
 
-from storage.manager import db_manager
-from storage.config_manager import get_guild_config_manager
+from storage.settings.collections import db_manager
+from storage.settings.config_manager import get_guild_config_manager
 from storage.log import get_logger
 
 logger = get_logger("PrimeDrops")

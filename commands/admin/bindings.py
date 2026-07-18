@@ -20,7 +20,7 @@ from typing import Any
 
 import discord
 
-from storage.config_manager import get_config, get_config_manager
+from storage.settings.config_manager import get_config, get_config_manager
 from storage.audit_log import get_audit_logger
 from storage.setup_gatekeeper import setup_gatekeeper
 

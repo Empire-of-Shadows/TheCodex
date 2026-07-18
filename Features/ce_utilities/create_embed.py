@@ -10,7 +10,7 @@ from Features.ce_utilities.helpers.embed_config_loader import EmbedConfigLoader
 from Features.ce_utilities.helpers.embed import EditEmbedModal
 from Features.ce_utilities.helpers.embed_modal import EmbedModal, get_max_description_length, get_allowed_colors, get_default_color
 from storage.log import get_logger, log_context, log_performance
-from storage.config_manager import get_config
+from storage.settings.config_manager import get_config
 
 logger = get_logger("CreateEmbed")
 

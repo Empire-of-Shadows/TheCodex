@@ -102,7 +102,7 @@ _audit_logger: Optional[AuditLogger] = None
 async def get_audit_logger() -> AuditLogger:
     global _audit_logger
     if _audit_logger is None:
-        from storage.manager import db_manager
+        from storage.settings.collections import db_manager
         _audit_logger = AuditLogger(db_manager)
         await _audit_logger.initialize()
     return _audit_logger

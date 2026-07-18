@@ -11,8 +11,8 @@ from dotenv import load_dotenv
 
 from startup.bot import s
 from storage.log import get_logger, PerformanceLogger
-from storage.manager import db_manager
-from storage.config_manager import get_config, get_guild_config_manager
+from storage.settings.collections import db_manager
+from storage.settings.config_manager import get_config, get_guild_config_manager
 
 # Load environment variables
 load_dotenv()

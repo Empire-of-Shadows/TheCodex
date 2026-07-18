@@ -25,7 +25,7 @@ _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-from storage.config_manager import DEFAULT_CONFIG  # noqa: E402
+from storage.settings.config_manager import DEFAULT_CONFIG  # noqa: E402
 
 logger = get_logger("dashboard.routers.settings")
 

@@ -10,7 +10,7 @@ from typing import Any, Dict
 import discord
 
 from storage.log import get_logger
-from storage.config_manager import get_config, get_guild_config_manager
+from storage.settings.config_manager import get_config, get_guild_config_manager
 
 logger = get_logger("DropsActions")
 
@@ -74,7 +74,7 @@ class DropsActions:
     async def get_drops_stats(guild_id: int) -> Dict[str, Any]:
         """Query updates_totals for guild-specific stats."""
         try:
-            from storage.manager import db_manager
+            from storage.settings.collections import db_manager
             totals_col = db_manager.get_collection_manager('updates_totals')
 
             stats = {}

@@ -14,8 +14,8 @@ from typing import Any, Dict, Optional, Tuple
 import discord
 
 from storage.log import get_logger
-from storage.config_manager import get_config, get_guild_config_manager
-from storage.manager import db_manager
+from storage.settings.config_manager import get_config, get_guild_config_manager
+from storage.settings.collections import db_manager
 
 logger = get_logger("SuggestionActions")
 

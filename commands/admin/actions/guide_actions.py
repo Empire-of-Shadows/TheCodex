@@ -7,7 +7,7 @@ Business logic for guide configuration in the admin panel.
 import json
 from typing import Any, Dict, List, Optional
 
-from storage.config_manager import get_guild_config_manager, get_config
+from storage.settings.config_manager import get_guild_config_manager, get_config
 from Features.Guide.guide_store import guide_store
 from Features.Guide.guide_schema import validate_guide_schema, normalize_pages
 from Features.Guide.guide import guide_manager

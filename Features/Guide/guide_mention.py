@@ -13,7 +13,7 @@ import time
 from discord.ext import commands
 
 from Features.Guide.guide import guide_manager
-from storage.config_manager import get_config
+from storage.settings.config_manager import get_config
 from storage.log import get_logger
 
 logger = get_logger("GuideMentionListener")

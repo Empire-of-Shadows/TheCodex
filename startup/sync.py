@@ -167,7 +167,7 @@ async def attach_databases():
 
     try:
         # Initialize DatabaseManager first (all other managers depend on it)
-        from storage.manager import db_manager
+        from storage.settings.collections import db_manager
         try:
             await db_manager.initialize()
             result, is_success = await attach_attribute("db_manager", db_manager)
@@ -188,7 +188,7 @@ async def attach_databases():
 
         # Unified GuildConfigManager (structured config + flat settings)
         try:
-            from storage.config_manager import get_guild_config_manager
+            from storage.settings.config_manager import get_guild_config_manager
             guild_config_manager = await get_guild_config_manager(db_manager)
             result, is_success = await attach_attribute("guild_config_manager", guild_config_manager)
             (success_logs if is_success else failed_logs).append(result)

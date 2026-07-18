@@ -18,7 +18,7 @@ from .views.drops_views import format_drops_status
 from .views.new_member_views import format_new_member_status
 from .actions.structure import info_action
 from .panel_branding import PANEL_TITLE, PANEL_DESCRIPTION
-from storage.config_manager import get_config_manager
+from storage.settings.config_manager import get_config_manager
 from .actions.embed_config_actions import EmbedConfigActions
 from .actions.wyr_actions import WYRConfigActions
 from .actions.new_member_actions import NewMemberActions

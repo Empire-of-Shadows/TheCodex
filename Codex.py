@@ -36,7 +36,7 @@ from startup.phases import (  # noqa: E402
     startup_phase,
 )
 from health_endpoint import initialize_health_server, stop_health_server  # noqa: E402
-from storage.manager import db_manager  # noqa: E402
+from storage.settings.collections import db_manager  # noqa: E402
 
 # Guild that owns the guild-scoped admin slash commands (e.g. /status).
 # Environment-specific, so it is opt-in via env; guild sync is skipped if unset.

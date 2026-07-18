@@ -132,7 +132,7 @@ class ColorSetActions:
     async def list_color_sets(guild_id: int) -> list[dict]:
         """Return all color sets for a guild, sorted by name."""
         try:
-            from storage.manager import db_manager
+            from storage.settings.collections import db_manager
             col = db_manager.get_collection_manager("color_color_sets")
             docs = await col.find_many(
                 {"guild_id": guild_id},
@@ -157,7 +157,7 @@ class ColorSetActions:
         """Return a single color set by its string ID, or None if not found."""
         try:
             from bson import ObjectId
-            from storage.manager import db_manager
+            from storage.settings.collections import db_manager
             col = db_manager.get_collection_manager("color_color_sets")
             doc = await col.find_one({"_id": ObjectId(set_id), "guild_id": guild_id})
             if not doc:
@@ -185,7 +185,7 @@ class ColorSetActions:
         colors: list of {"name": str, "value": int} dicts.
         """
         try:
-            from storage.manager import db_manager
+            from storage.settings.collections import db_manager
             col = db_manager.get_collection_manager("color_color_sets")
             # create_one auto-adds created_at and updated_at
             inserted_id = await col.create_one({
@@ -211,7 +211,7 @@ class ColorSetActions:
         """
         try:
             from bson import ObjectId
-            from storage.manager import db_manager
+            from storage.settings.collections import db_manager
             col = db_manager.get_collection_manager("color_color_sets")
             # update_one auto-adds updated_at to $set
             return await col.update_one(
@@ -227,7 +227,7 @@ class ColorSetActions:
         """Delete a color set and all its assignments."""
         try:
             from bson import ObjectId
-            from storage.manager import db_manager
+            from storage.settings.collections import db_manager
             sets_col = db_manager.get_collection_manager("color_color_sets")
             assign_col = db_manager.get_collection_manager("color_color_set_assignments")
 
@@ -248,7 +248,7 @@ class ColorSetActions:
     ) -> list[dict]:
         """Return all assignments for a guild, optionally filtered by set_id."""
         try:
-            from storage.manager import db_manager
+            from storage.settings.collections import db_manager
             col = db_manager.get_collection_manager("color_color_set_assignments")
             query: dict = {"guild_id": guild_id}
             if set_id is not None:
@@ -282,7 +282,7 @@ class ColorSetActions:
         existing documents, but the resolver ignores it.
         """
         try:
-            from storage.manager import db_manager
+            from storage.settings.collections import db_manager
             col = db_manager.get_collection_manager("color_color_set_assignments")
             # update_one with upsert=True; auto-adds updated_at to $set
             return await col.update_one(
@@ -316,7 +316,7 @@ class ColorSetActions:
     ) -> bool:
         """Delete a specific assignment."""
         try:
-            from storage.manager import db_manager
+            from storage.settings.collections import db_manager
             col = db_manager.get_collection_manager("color_color_set_assignments")
             return await col.delete_one({
                 "guild_id": guild_id,
@@ -334,7 +334,7 @@ class ColorSetActions:
     async def get_default_color(guild_id: int) -> Optional[int]:
         """Return the server default color int for this guild, or None if not set."""
         try:
-            from storage.config_manager import get_config
+            from storage.settings.config_manager import get_config
             config = await get_config(guild_id)
             return config.embed["default_color"]
         except Exception as e:
@@ -345,7 +345,7 @@ class ColorSetActions:
     async def set_default_color(guild_id: int, color: int) -> bool:
         """Set (or update) the server default color for this guild. Cannot be cleared."""
         try:
-            from storage.config_manager import get_guild_config_manager
+            from storage.settings.config_manager import get_guild_config_manager
             manager = await get_guild_config_manager()
             config = await manager.get_config(guild_id)
             config.embed["default_color"] = color
