@@ -10,7 +10,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from dashboard import db
-from storage.logging import get_logger
+from storage.log import get_logger
 
 logger = get_logger("dashboard.routers.public_stats")
 

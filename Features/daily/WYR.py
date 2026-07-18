@@ -10,7 +10,7 @@ from discord import app_commands
 from dotenv import load_dotenv
 
 from startup.bot import s
-from storage.logging import get_logger, PerformanceLogger
+from storage.log import get_logger, PerformanceLogger
 from storage.manager import db_manager
 from storage.config_manager import get_config, get_guild_config_manager
 

@@ -4,7 +4,7 @@ import discord
 from discord.ext import commands, tasks
 
 from storage.config_manager import get_config, get_guild_config_manager
-from storage.logging import get_logger
+from storage.log import get_logger
 
 # Logger
 logger = get_logger("tag_tracker")

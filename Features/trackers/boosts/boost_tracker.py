@@ -6,7 +6,7 @@ import datetime
 
 from storage.manager import db_manager
 from storage.config_manager import get_config
-from storage.logging import get_logger
+from storage.log import get_logger
 
 logger = get_logger("BoostTracker")
 

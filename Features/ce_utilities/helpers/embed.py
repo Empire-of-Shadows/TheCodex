@@ -5,7 +5,7 @@ from typing import Optional, Set
 
 import discord
 from Features.ce_utilities.helpers.embed_modal import get_allowed_colors, get_max_description_length
-from storage.logging import get_logger, log_context
+from storage.log import get_logger, log_context
 
 logger = get_logger("EmbedEditModal")
 

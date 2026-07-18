@@ -22,7 +22,7 @@ from __future__ import annotations
 import discord
 from discord import app_commands
 
-from storage.logging import get_logger
+from storage.log import get_logger
 
 logger = get_logger("CloneEmbed")
 

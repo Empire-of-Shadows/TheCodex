@@ -5,7 +5,7 @@ Provides per-guild embed settings (color sets, role-tier mappings,
 description limits, feature access) via GuildConfigManager and ColorSetActions.
 """
 from typing import Dict, Set, Any, Optional
-from storage.logging import get_logger
+from storage.log import get_logger
 
 logger = get_logger("EmbedConfigLoader")
 

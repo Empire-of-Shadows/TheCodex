@@ -6,7 +6,7 @@ All custom_ids use the "g:" prefix to avoid collisions with the welcome system (
 """
 
 import discord
-from storage.logging import get_logger
+from storage.log import get_logger
 
 logger = get_logger("GuideActions")
 

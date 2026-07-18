@@ -3,9 +3,9 @@
 The single integration point between the vendored storage engine and this bot's
 environment. The engine (and this bot's own ``manager.py``) import these names. The
 bot-owned (hand-written) files under ``storage/`` are ``manager.py`` / ``bindings.py`` /
-``define_collections.py`` / ``database_properties.py`` / ``config_manager.py`` /
-``audit_log.py`` / ``setup_gatekeeper.py``; everything else under ``storage/`` is vendored
-engine code — do not edit it here.
+``define_collections.py`` / ``config_manager.py`` / ``audit_log.py`` /
+``setup_gatekeeper.py``; everything else under ``storage/`` is vendored engine code — do not
+edit it here.
 
 Template: ``EmpireSystems/storage_engine/bindings_reference.py``.
 Reference adoption: ``FunEngagement/TheDecree/storage/bindings.py``.

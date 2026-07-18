@@ -6,7 +6,7 @@ WYR settings now live inside config.wyr on the GuildConfig dataclass.
 """
 
 from typing import Any, Dict, Optional
-from storage.logging import get_logger
+from storage.log import get_logger
 
 logger = get_logger("WYRConfigActions")
 

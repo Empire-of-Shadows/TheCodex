@@ -19,7 +19,7 @@ from pydantic import BaseModel
 from dashboard import db
 from dashboard.auth.dependencies import get_current_user
 from dashboard.auth.panel_role import require_panel_access
-from storage.logging import get_logger
+from storage.log import get_logger
 
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if _PROJECT_ROOT not in sys.path:

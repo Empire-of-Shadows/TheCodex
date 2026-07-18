@@ -9,7 +9,7 @@ from storage.discord import GuildSnapshotService
 from storage.config_manager import get_config, GuildConfig
 from storage.manager import db_manager
 from storage.config_manager import get_guild_config_manager
-from storage.logging import get_logger
+from storage.log import get_logger
 
 
 # How long to wait after the bot is removed from a guild before wiping that

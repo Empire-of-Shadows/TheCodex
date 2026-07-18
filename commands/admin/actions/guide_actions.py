@@ -11,7 +11,7 @@ from storage.config_manager import get_guild_config_manager, get_config
 from Features.Guide.guide_store import guide_store
 from Features.Guide.guide_schema import validate_guide_schema, normalize_pages
 from Features.Guide.guide import guide_manager
-from storage.logging import get_logger
+from storage.log import get_logger
 
 logger = get_logger("GuideActions")
 

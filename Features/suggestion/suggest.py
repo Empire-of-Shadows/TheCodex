@@ -7,7 +7,7 @@ import uuid
 import os
 from dotenv import load_dotenv
 
-from storage.logging import get_logger, log_context, PerformanceLogger
+from storage.log import get_logger, log_context, PerformanceLogger
 from storage.config_manager import get_config
 from storage.manager import db_manager
 

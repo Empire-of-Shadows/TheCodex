@@ -27,7 +27,7 @@ from dashboard.routers.public_stats import router as public_stats_router
 from dashboard.routers.audit_log import router as audit_log_router
 from dashboard.routers.settings import router as settings_router
 from dashboard.routers.user_data import router as user_data_router
-from storage.logging import get_logger
+from storage.log import get_logger
 
 startup_logger = get_logger("dashboard.startup")
 health_logger = get_logger("dashboard.health")

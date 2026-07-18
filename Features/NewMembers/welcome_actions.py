@@ -5,7 +5,7 @@ Named action system for welcome message component interactions.
 Replaces freeform custom_id strings with a discoverable, multi-guild-safe registry.
 """
 
-from storage.logging import get_logger
+from storage.log import get_logger
 
 logger = get_logger("WelcomeActions")
 

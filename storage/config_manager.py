@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set
 
-from storage.logging import get_logger
+from storage.log import get_logger
 
 logger = get_logger("GuildConfig")
 
