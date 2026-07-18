@@ -1,3 +1,9 @@
+# ───────────────────────────────────────────────────────────────────────────
+# VENDORED from admin_engine/ — DO NOT EDIT HERE.
+# Edit the master at <repo-root>/admin_engine/ and run:
+#     python tools/sync_admin_engine.py
+# Drift is enforced by:  python tools/sync_admin_engine.py --check
+# ───────────────────────────────────────────────────────────────────────────
 """
 Suggestion Config Views using Discord Components v2.
 
@@ -9,7 +15,7 @@ from typing import Any, Callable, Awaitable, Dict
 
 import discord
 
-from .base import cid, readonly_container, editable_container
+from ....views.base import cid, readonly_container, editable_container
 
 # Display labels for suggestion statuses
 _STATUS_LABELS = {
@@ -28,7 +34,7 @@ _STATUS_ORDER = ["pending", "under_review", "approved", "implemented", "rejected
 def format_suggestion_status(stats: Dict[str, Any], guild: discord.Guild) -> str:
     """Format a read-only status overview of the suggestion system as markdown text.
 
-    Consumed by the shared ``info_action`` node (see ``actions/suggestion_nodes.py``),
+    Consumed by the shared ``info_action`` node (see ``suggestion_nodes.py``),
     which renders the header and Back button around this body.
     """
     channel_id = stats.get("channel_id")

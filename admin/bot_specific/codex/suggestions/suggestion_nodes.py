@@ -1,3 +1,9 @@
+# ───────────────────────────────────────────────────────────────────────────
+# VENDORED from admin_engine/ — DO NOT EDIT HERE.
+# Edit the master at <repo-root>/admin_engine/ and run:
+#     python tools/sync_admin_engine.py
+# Drift is enforced by:  python tools/sync_admin_engine.py --check
+# ───────────────────────────────────────────────────────────────────────────
 """
 Suggestion admin-panel nodes.
 
@@ -5,7 +11,8 @@ These PanelNode factories wire the Suggestions admin group (Update Status / Expo
 View Status) to a bot's suggestion backend. This is a **per-bot feature**: it depends on
 the bot's ``suggestions_*`` collections and the ``/suggest`` feature, so it is only active
 in bots that reference these nodes from their ``panel_configs.py``. The code lives in the
-shared admin engine (``EmpireSystems/admin_engine``) alongside the other feature modules.
+shared admin engine under ``admin_engine/bot_specific/codex/suggestions/``, vendored into
+TheCodex alone.
 
 They follow the same shape as the factories in ``actions/structure/modals.py``
 (``modal_action``) and ``actions/structure/info.py`` (``info_action``): render into message-2
@@ -19,14 +26,14 @@ from __future__ import annotations
 
 import discord
 
-from ..views.panel_engine import PanelNode, ActionContext
-from ..views.base import AdminLayoutBuilder, build_notice_layout, cid, readonly_container, editable_container
-from ..views.suggestion_views import (
+from ....views.panel_engine import PanelNode, ActionContext
+from ....views.base import AdminLayoutBuilder, build_notice_layout, cid, readonly_container, editable_container
+from ....actions.structure import info_action
+from .suggestion_views import (
     SuggestionStatusUpdateModal,
     build_suggestion_export_view,
     format_suggestion_status,
 )
-from .structure import info_action
 from .suggestion_actions import SuggestionActions
 
 

@@ -96,7 +96,7 @@ class EmbedConfigLoader:
         Returns the list of color set dicts (with "name", "colors", "set_id")
         that are assigned to any of the user's tiers or directly to their roles.
         """
-        from commands.admin.actions.color_set_actions import ColorSetActions
+        from admin.actions.color_set_actions import ColorSetActions
 
         all_sets = await ColorSetActions.list_color_sets(guild_id)
         all_assignments = await ColorSetActions.list_assignments(guild_id)

@@ -11,7 +11,7 @@ from typing import Any, Callable, Awaitable, Dict, List
 
 import discord
 
-from commands.admin.views.base import create_unique_id, AdminLayoutBuilder
+from admin.views.base import create_unique_id, AdminLayoutBuilder
 
 DROPS_PER_PAGE = 5
 

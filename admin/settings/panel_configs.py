@@ -12,26 +12,26 @@ from functools import partial
 
 import discord
 
-from .views.panel_engine import PanelNode
-from .views.embed_views import TIER_NAMES, TIER_LABELS, FEATURE_OPTIONS
-from .views.drops_views import format_drops_status
-from .views.new_member_views import format_new_member_status
-from .actions.structure import info_action
+from ..views.panel_engine import PanelNode
+from ..views.embed_views import TIER_NAMES, TIER_LABELS, FEATURE_OPTIONS
+from ..views.drops_views import format_drops_status
+from ..views.new_member_views import format_new_member_status
+from ..actions.structure import info_action
 from .panel_branding import PANEL_TITLE, PANEL_DESCRIPTION
 from storage.settings.config_manager import get_config_manager
-from .actions.embed_config_actions import EmbedConfigActions
-from .actions.wyr_actions import WYRConfigActions
-from .actions.new_member_actions import NewMemberActions
-from .actions.announcement_actions import AnnouncementActions
-from .actions.suggestion_actions import SuggestionActions
-from .actions.suggestion_nodes import (
+from ..actions.embed_config_actions import EmbedConfigActions
+from ..actions.wyr_actions import WYRConfigActions
+from ..actions.new_member_actions import NewMemberActions
+from ..actions.announcement_actions import AnnouncementActions
+from ..bot_specific.codex.suggestions import (
+    SuggestionActions,
     build_suggestion_update_status_node,
     build_suggestion_export_node,
     build_suggestion_status_node,
 )
-from .actions.guide_actions import GuideActions
-from .actions.drops_actions import DropsActions
-from .actions.color_set_actions import ColorSetActions
+from ..actions.guide_actions import GuideActions
+from ..actions.drops_actions import DropsActions
+from ..actions.color_set_actions import ColorSetActions
 from storage.setup_gatekeeper import setup_gatekeeper
 from Features.NewMembers.welcome_schema import validate_welcome_schema
 from Features.Guide.guide_schema import validate_guide_schema

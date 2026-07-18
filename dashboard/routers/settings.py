@@ -1,6 +1,6 @@
 """Per-guild settings GET/PUT — reads + writes Settings.GuildConfig.
 
-Mirrors the panel groups defined in commands/admin/panel_configs.py but
+Mirrors the panel groups defined in admin/settings/panel_configs.py but
 exposes them through a single section-keyed JSON endpoint suitable for
 the web dashboard. Admin tier may edit every mutable section; mod tier
 is gated to MOD_ALLOWED_SECTIONS (currently empty).

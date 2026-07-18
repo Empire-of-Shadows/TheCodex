@@ -1,7 +1,13 @@
+# ───────────────────────────────────────────────────────────────────────────
+# VENDORED from admin_engine/ — DO NOT EDIT HERE.
+# Edit the master at <repo-root>/admin_engine/ and run:
+#     python tools/sync_admin_engine.py
+# Drift is enforced by:  python tools/sync_admin_engine.py --check
+# ───────────────────────────────────────────────────────────────────────────
 """
 Suggestion Actions - Business logic for Suggestion configuration via admin panel.
 
-All read/write goes through storage.config_manager (GuildConfigManager).
+All read/write goes through storage.settings.config_manager (GuildConfigManager).
 Suggestion settings live inside config.suggestions on the GuildConfig dataclass.
 """
 

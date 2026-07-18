@@ -29,8 +29,8 @@ from discord.ext import commands
 # All bot-specific backends (config, audit, premium, cache invalidation, panel-role
 # resolution, branding text, mod-tier set) are reached through this per-bot seam, so
 # this engine file stays byte-identical across every bot. Each bot ships its own
-# admin/bindings.py wiring these to its real backend.
-from .bindings import (
+# admin/settings/bindings.py wiring these to its real backend.
+from .settings.bindings import (
     MOD_ALLOWED_CATEGORIES,
     OVERVIEW_FOOTER,
     SETUP_GUIDE_TEXT,
@@ -43,7 +43,7 @@ from .bindings import (
 )
 from .permission_checks import check_channel_permissions, check_role_permissions
 from .auth import effective_mod_allowed
-from .panel_configs import MAIN_PANEL
+from .settings.panel_configs import MAIN_PANEL
 from .views.panel_engine import (
     PanelNode,
     ActionContext,
@@ -197,6 +197,14 @@ class AdminCog(commands.Cog):
             f"(role={panel_role})"
         )
 
+        # Building the overview reads config for every panel node, which on a cold
+        # cache can exceed Discord's 3s interaction window (error 10062 "Unknown
+        # interaction"). Acknowledge immediately with a deferred ephemeral response,
+        # then deliver the panel via edit_original_response below. Using the ORIGINAL
+        # response (not a followup) keeps it the same message the refresh handlers
+        # (e.g. on_main_select -> interaction.edit_original_response) already edit.
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
         # Fetch setup guide visibility state
         guide_state = {"hidden": bool(await get_setting("hide_setup_guide", guild.id, default=False))}
 
@@ -335,7 +343,9 @@ class AdminCog(commands.Cog):
             return layout
 
         layout = await _build_overview()
-        await interaction.response.send_message(view=layout, ephemeral=True)
+        # Deferred above, so edit the original (thinking) response into the panel
+        # instead of send_message. This is the message edit_original_response targets.
+        await interaction.edit_original_response(view=layout)
         session.touch()
 
     # -- Category Menu on Message 2 --------------------------------------------
@@ -594,7 +604,7 @@ class AdminCog(commands.Cog):
                 else:
                     await interaction.response.send_message(view=notice, ephemeral=True)
             except Exception:
-                pass
+                logger.exception("failed to send action failure notice for %s", node.key)
 
     # -- Node Kind Handlers ----------------------------------------------------
     # -- Menu nodes (on message 2, e.g. counting_roles sub-menu) ---------------
@@ -622,6 +632,20 @@ class AdminCog(commands.Cog):
             n.label for n in (grandparent_node, parent_node, node) if n is not None
         ) if parent_node is not None else None
 
+        async def _resolve_menu_description():
+            """Live description for this menu when the node defines an
+            ``async_description`` (async (guild) -> str). Returns None to fall
+            back to the node's static description / description_builder inside
+            build_menu_view. Re-resolved on every (re)render so the summary
+            reflects current state."""
+            if node.async_description is None:
+                return None
+            try:
+                return await node.async_description(guild)
+            except Exception:
+                logger.exception("async_description failed for %s", node.key)
+                return None
+
         async def _build_current_view():
             new_summary = await self._gather_summaries(node, guild.id)
             new_locked = await self._compute_locked_keys(node, guild.id)
@@ -635,6 +659,7 @@ class AdminCog(commands.Cog):
                 guild=guild,
                 is_premium=await self._is_premium(guild.id),
                 breadcrumb=breadcrumb,
+                description_override=await _resolve_menu_description(),
             )
 
         async def on_select(sel_interaction: discord.Interaction, child_key: str):
@@ -750,6 +775,7 @@ class AdminCog(commands.Cog):
             guild=guild,
             is_premium=await self._is_premium(guild.id),
             breadcrumb=breadcrumb,
+            description_override=await _resolve_menu_description(),
         )
         if session:
             session.register_view(layout)
@@ -1696,8 +1722,14 @@ class AdminCog(commands.Cog):
                 else:
                     try:
                         await pick_interaction.edit_original_response(view=await _build_region_layout())
-                    except discord.HTTPException:
-                        pass
+                    except discord.HTTPException as e:
+                        # Best-effort UI refresh: the original response may be gone/expired.
+                        logger.debug(
+                            "Skipping grouped region refresh for %s in guild %s due to HTTPException: %s",
+                            node.key,
+                            guild.id,
+                            e,
+                        )
                 if refresh_parent:
                     await refresh_parent()
             else:
@@ -1842,6 +1874,19 @@ class AdminCog(commands.Cog):
             cat_data: dict[str, str | dict[str, str]] = {}
             for child_key, child_node in cat_node.children.items():
                 if child_node.kind == "menu":
+                    # Pure feature-toggle menu (a switch with no sub-settings):
+                    # report its on/off state, never "Not configured".
+                    if child_node.toggle_get and not child_node.children:
+                        try:
+                            enabled = await child_node.toggle_get(guild_id)
+                        except Exception:
+                            enabled = None
+                        cat_data[child_key] = (
+                            ("Enabled" if enabled else "Disabled")
+                            if enabled is not None
+                            else "Not configured"
+                        )
+                        continue
                     # Sub-menu: gather each sub-child
                     sub_data: dict[str, str] = {}
                     for sub_key, sub_node in child_node.children.items():
@@ -1924,6 +1969,17 @@ class AdminCog(commands.Cog):
                 except Exception:
                     summary_map[key] = []
             elif child.kind == "menu":
+                # A menu that exists purely to host a feature toggle (no
+                # sub-settings) is summarized by its on/off state, never
+                # "Not configured" - a toggle is always enabled or disabled.
+                if child.toggle_get and not child.children:
+                    try:
+                        enabled = await child.toggle_get(guild_id)
+                    except Exception:
+                        enabled = None
+                    if enabled is not None:
+                        summary_map[key] = ["__toggle_on__" if enabled else "__toggle_off__"]
+                        continue
                 # Recursively check sub-children to count customized settings
                 customized = []
                 has_stored_value = False

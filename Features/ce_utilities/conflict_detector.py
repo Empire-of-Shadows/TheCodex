@@ -51,7 +51,7 @@ async def check_color_uniqueness(
         ConflictResult with status "ok" or "breaking".
     """
     # Late import to avoid circular dependency at module level.
-    from commands.admin.actions.color_set_actions import ColorSetActions
+    from admin.actions.color_set_actions import ColorSetActions
     from Features.ce_utilities.color_normalizer import color_int_to_hex
 
     try:
@@ -98,7 +98,7 @@ async def check_tier_exclusivity(
     Returns:
         ConflictResult with status "ok" or "breaking".
     """
-    from commands.admin.actions.color_set_actions import ColorSetActions
+    from admin.actions.color_set_actions import ColorSetActions
 
     try:
         assignments = await ColorSetActions.list_assignments(guild_id, set_id=color_set_id)

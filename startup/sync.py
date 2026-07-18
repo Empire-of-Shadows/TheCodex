@@ -26,7 +26,7 @@ logger = get_logger("Sync")
 
 # Cog discovery roots. Priority cogs load first (sequential) for DB-dependent setup;
 # the rest load in parallel for a faster boot.
-COG_DIRECTORIES = ["./commands", "./Features"]
+COG_DIRECTORIES = ["./commands", "./admin", "./Features"]
 PRIORITY_COG_DIRECTORIES: list[str] = []
 
 

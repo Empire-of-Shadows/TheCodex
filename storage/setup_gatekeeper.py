@@ -438,7 +438,7 @@ class SetupGatekeeper:
         Returns a Message-3 style notice (orange container) per
         ADMIN_PANEL_STANDARD.md §0.1 — no embeds on admin panels.
         """
-        from commands.admin.views.base import build_notice_layout
+        from admin.views.base import build_notice_layout
 
         tier_label = tier_name.replace("_", " ").title()  # "tier_3" → "Tier 3"
         body = (

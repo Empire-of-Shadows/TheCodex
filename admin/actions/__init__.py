@@ -11,7 +11,6 @@ from .tracker_actions import TrackerActions
 from .drops_actions import DropsActions
 from .color_set_actions import ColorSetActions
 from .announcement_actions import AnnouncementActions
-from .suggestion_actions import SuggestionActions
 
 __all__ = [
     "EmbedConfigActions",
@@ -21,5 +20,4 @@ __all__ = [
     "DropsActions",
     "ColorSetActions",
     "AnnouncementActions",
-    "SuggestionActions",
 ]
