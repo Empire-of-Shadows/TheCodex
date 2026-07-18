@@ -25,6 +25,19 @@ OPTION3_EMOJI = "3️⃣"  # Reaction for option 3
 logger = get_logger("WYR")
 
 
+def _channel_allows_nsfw(channel) -> bool:
+    """Whether NSFW questions may be posted in this channel.
+
+    Only Discord's own age-restriction flag counts. Threads inherit the flag
+    from their parent channel. Anything that cannot answer the question (DMs,
+    a partially-resolved channel) is treated as not age-restricted.
+    """
+    try:
+        return bool(channel.is_nsfw())
+    except AttributeError:
+        return False
+
+
 def _format_wyr_string(template: str, question: dict, now: "datetime") -> str:
     """Substitute supported placeholders in a WYR thread format string."""
     tags = question.get("tags") or []
@@ -70,10 +83,27 @@ class WYRCommandGroup(app_commands.Group):
                 if category is None:
                     category = guild_config.wyr.get("default_category", "sfw")
 
+                # NSFW questions only go to age-restricted channels. An explicit
+                # NSFW request is refused outright rather than quietly answered
+                # with an SFW question, so the admin knows why.
+                allow_nsfw = _channel_allows_nsfw(interaction.channel)
+                if category == "nsfw" and not allow_nsfw:
+                    logger.warning(
+                        f"Blocked NSFW WYR post by {interaction.user} in non-age-restricted "
+                        f"channel {interaction.channel_id}"
+                    )
+                    await interaction.response.send_message(
+                        "❌ NSFW questions can only be posted in age-restricted channels. "
+                        "Enable **Age-Restricted Channel** in this channel's settings, or pick "
+                        "the `sfw` category.",
+                        ephemeral=True,
+                    )
+                    return
+
                 if random_pick:
-                    question = await self.cog.get_random_question(category, guild_id=guild_id)
+                    question = await self.cog.get_random_question(category, guild_id=guild_id, allow_nsfw=allow_nsfw)
                 else:
-                    question = await self.cog.get_next_question(category, guild_id=guild_id)
+                    question = await self.cog.get_next_question(category, guild_id=guild_id, allow_nsfw=allow_nsfw)
 
                 if not question:
                     logger.warning(f"No {category} questions available for manual post by {interaction.user}")
@@ -663,16 +693,28 @@ class WYR(commands.Cog):
 
         try:
             with PerformanceLogger(logger, f"wyr_post_guild_{guild_id}"):
-                category = guild_config.wyr.get("default_category", "sfw")
-
-                question = await self.get_next_question(category, guild_id=guild_id)
-                if not question:
-                    logger.warning(f"No {category} questions available for guild {guild_id} - skipping")
-                    return False
-
                 channel = self.bot.get_channel(guild_config.wyr["channel_id"])
                 if not channel:
                     logger.warning(f"WYR channel {guild_config.wyr['channel_id']} not found for guild {guild_id}")
+                    return False
+
+                category = guild_config.wyr.get("default_category", "sfw")
+
+                # The daily post is unattended, so an NSFW-only category aimed at
+                # a channel that is not age-restricted falls back to SFW rather
+                # than skipping the day entirely. A "mixed" category needs no
+                # special case - the fetch narrows it to SFW on its own.
+                allow_nsfw = _channel_allows_nsfw(channel)
+                if category == "nsfw" and not allow_nsfw:
+                    logger.warning(
+                        f"Guild {guild_id} has WYR category 'nsfw' but channel "
+                        f"{channel.id} is not age-restricted - posting an SFW question instead"
+                    )
+                    category = "sfw"
+
+                question = await self.get_next_question(category, guild_id=guild_id, allow_nsfw=allow_nsfw)
+                if not question:
+                    logger.warning(f"No {category} questions available for guild {guild_id} - skipping")
                     return False
 
                 embed = self.create_question_embed(question)
@@ -775,18 +817,45 @@ class WYR(commands.Cog):
         except Exception as e:
             logger.error(f"Error updating user leaderboard for {user_id} in guild {guild_id}: {e}", exc_info=True)
 
-    async def get_next_question(self, category="sfw", guild_id=None, exclude_used=False):
+    @staticmethod
+    def _build_category_query(category: str, allow_nsfw: bool) -> dict | None:
+        """Build the question filter for a category.
+
+        `allow_nsfw` reflects the destination channel's age restriction and is
+        the last word: unless it is True the filter always pins `nsfw: False`,
+        so no category (including tag categories, which can name anything) can
+        pull an NSFW question into a channel that is not age-restricted.
+        Returns None when the category itself is NSFW-only and NSFW is not
+        allowed, since there is no safe question to serve.
+        """
+        if category == "sfw":
+            query = {"nsfw": False}
+        elif category == "nsfw":
+            if not allow_nsfw:
+                return None
+            query = {"nsfw": True}
+        elif category == "mixed":
+            query = {}
+        else:
+            query = {"tags": category}
+
+        if not allow_nsfw:
+            query["nsfw"] = False
+        return query
+
+    async def get_next_question(self, category="sfw", guild_id=None, exclude_used=False, allow_nsfw=False):
         """
         Fetch the next "Would You Rather" question for a guild — least-used in that guild first.
         """
         try:
             with PerformanceLogger(logger, f"get_next_question_{category}_{guild_id}"):
-                if category == "sfw":
-                    query = {"nsfw": False}
-                elif category == "nsfw":
-                    query = {"nsfw": True}
-                else:
-                    query = {"tags": category}
+                query = self._build_category_query(category, allow_nsfw)
+                if query is None:
+                    logger.warning(
+                        f"Refusing to serve an NSFW question for guild {guild_id}: "
+                        f"category is {category} but the channel is not age-restricted"
+                    )
+                    return None
 
                 gid_str = str(guild_id) if guild_id is not None else None
                 used_path = f"guilds.{gid_str}.used_count" if gid_str else "used_count"
@@ -819,18 +888,20 @@ class WYR(commands.Cog):
             logger.error(f"Error fetching next WYR question ({category}, guild {guild_id}): {e}", exc_info=True)
             return None
 
-    async def get_random_question(self, category="sfw", guild_id=None):
+    async def get_random_question(self, category="sfw", guild_id=None, allow_nsfw=False):
         """
         Get a random question from the specified category using the new DatabaseManager.
         """
         try:
             with PerformanceLogger(logger, f"get_random_question_{category}"):
-                if category == "sfw":
-                    match_filter = {"nsfw": False}
-                elif category == "nsfw":
-                    match_filter = {"nsfw": True}
-                else:
-                    match_filter = {"tags": category}
+                match_filter = self._build_category_query(category, allow_nsfw)
+                if match_filter is None:
+                    logger.warning(
+                        f"Refusing to serve a random NSFW question for guild {guild_id}: "
+                        f"category is {category} but the channel is not age-restricted"
+                    )
+                    return None
+
                 pipeline = [
                     {"$match": match_filter},
                     {"$sample": {"size": 1}}

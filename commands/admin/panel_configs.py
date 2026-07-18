@@ -522,7 +522,11 @@ WYR_CATEGORY_CONFIG = PanelNode(
     key="wyr_category",
     label="WYR Category",
     kind="option_select",
-    description="Default question category for this server.",
+    description=(
+        "Default question category for this server.\n"
+        "NSFW questions are only ever posted in age-restricted channels. If the "
+        "WYR channel is not age-restricted, SFW questions are posted instead."
+    ),
     options=_WYR_CATEGORY_OPTIONS,
     get_values=WYRConfigActions.get_category_as_list,
     set_values=lambda gid, vals: WYRConfigActions.set_category(gid, vals[0]),

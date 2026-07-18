@@ -935,6 +935,7 @@ function WyrTab({
           options={WYR_CATEGORY_OPTIONS}
           disabled={readOnly}
           onChange={(v) => onChange({ ...value, default_category: v })}
+          description="NSFW questions are only posted in age-restricted channels. If the WYR channel is not age-restricted, SFW questions are posted instead."
         />
       </div>
 

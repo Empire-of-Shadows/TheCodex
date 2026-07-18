@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased] - 2026-07-17
+
+### Fixed
+- Would You Rather now keeps adult questions out of channels that are not age-restricted. If a server's WYR channel is not marked **Age-Restricted** in Discord, the daily question is always a safe-for-work one, even if the category is set to NSFW or Mixed. Posting one by hand with `/wyr post category:nsfw` in a channel that is not age-restricted is turned down with a note explaining why, instead of posting.
+- The **Mixed** WYR category works now. It was never posting anything at all, so servers using it saw no daily question. It now draws from both safe-for-work and adult questions in an age-restricted channel, and from safe-for-work questions only everywhere else.
+
 ## [Unreleased] - 2026-07-12
 
 ### Changed
