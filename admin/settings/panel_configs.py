@@ -17,6 +17,7 @@ from ..views.embed_views import TIER_NAMES, TIER_LABELS, FEATURE_OPTIONS
 from ..views.drops_views import format_drops_status
 from ..views.new_member_views import format_new_member_status
 from ..actions.structure import info_action
+from ..actions.features import panel_roles_pair
 from .panel_branding import PANEL_TITLE, PANEL_DESCRIPTION
 from storage.settings.config_manager import get_config_manager
 from ..actions.embed_config_actions import EmbedConfigActions
@@ -939,55 +940,13 @@ GUIDE_ENABLED_CONFIG = PanelNode(
 
 # ── Panel Access (admin/mod role) get_values for dashboard summary ───────────
 
-async def _get_panel_role(guild_id: int, role_field: str) -> list:
-    cm = await get_config_manager()
-    cfg = await cm.get_config(guild_id)
-    return [int(r) for r in (cfg.roles.get(role_field) or [])]
-
-
-async def _set_panel_role(guild_id: int, ids: list, role_field: str) -> bool:
-    cm = await get_config_manager()
-    cfg = await cm.get_config(guild_id)
-    cfg.roles[role_field] = [int(r) for r in ids]
-    return await cm.save_config(cfg)
-
-
-async def _clear_panel_role(guild_id: int, role_field: str) -> bool:
-    cm = await get_config_manager()
-    cfg = await cm.get_config(guild_id)
-    cfg.roles[role_field] = []
-    return await cm.save_config(cfg)
-
-
-ADMIN_ROLES_CONFIG = PanelNode(
-    key="admin_roles",
-    label="Panel Access Roles",
-    kind="role_select",
-    description=(
-        "Grants full admin panel access (same as Manage Server). "
-        "Members holding any of these roles can open `/admin panel`."
-    ),
-    get_values=lambda gid: _get_panel_role(gid, "admin_role_ids"),
-    set_values=lambda gid, ids: _set_panel_role(gid, ids, "admin_role_ids"),
-    clear_values=lambda gid: _clear_panel_role(gid, "admin_role_ids"),
-    min_values=0,
-    max_values=10,
-)
-
-MOD_ROLES_CONFIG = PanelNode(
-    key="mod_roles",
-    label="Mod Access Roles",
-    kind="role_select",
-    description=(
-        "Optional — grants limited (mod-tier) panel access to sections opted in "
-        "by your admins. Leave blank to disable the Mod tier."
-    ),
-    get_values=lambda gid: _get_panel_role(gid, "mod_role_ids"),
-    set_values=lambda gid, ids: _set_panel_role(gid, ids, "mod_role_ids"),
-    clear_values=lambda gid: _clear_panel_role(gid, "mod_role_ids"),
-    min_values=0,
-    max_values=10,
-)
+# Built from the shared engine factory (panel_roles_pair) rather than hand-rolled
+# get/set/clear helpers. The default pre_check gates changes to who has panel access
+# behind Manage Server; keys, labels and role paths match what codex used before, and
+# the config-seam work lets these leaves reach the structured roles.* fields.
+_PANEL_ROLE_NODES = panel_roles_pair()
+ADMIN_ROLES_CONFIG = _PANEL_ROLE_NODES["admin_roles"]
+MOD_ROLES_CONFIG = _PANEL_ROLE_NODES["mod_roles"]
 
 
 # ── Status / bespoke stubs (handler-driven; dashboard summary only) ──────────
