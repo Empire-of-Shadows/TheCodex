@@ -20,7 +20,11 @@ from typing import Any
 
 import discord
 
-from storage.settings.config_manager import get_config, get_config_manager
+from storage.settings.config_manager import (
+    _STRUCTURED_KEYS,
+    get_config,
+    get_config_manager,
+)
 from storage.audit_log import get_audit_logger
 from storage.setup_gatekeeper import setup_gatekeeper
 
@@ -28,7 +32,8 @@ import logging
 
 # Re-export the static branding text the engine reads by name.
 from .panel_branding import OVERVIEW_FOOTER, SETUP_GUIDE_TEXT
-from . import role_auth
+# Reuse the engine's shared tier resolver instead of a hand-rolled per-bot copy.
+from ..auth import resolve_panel_role_from_config
 
 logger = logging.getLogger("AdminBindings")
 
@@ -37,9 +42,10 @@ logger = logging.getLogger("AdminBindings")
 
 BOT_NAME = "The Codex"
 
-# Mod-tier sections come from the declarative ``mod_allowed`` flags on panel nodes; the
-# legacy category set falls back to role_auth's (empty) section set.
-MOD_ALLOWED_CATEGORIES: set[str] = set(role_auth.MOD_ALLOWED_SECTIONS)
+# Mod-tier access is declared per-node via ``PanelNode.mod_allowed`` flags in panel_configs
+# (the engine's ``auth.effective_mod_allowed`` reads them); this legacy top-level-category
+# fallback is intentionally empty. No section grants blanket mod access by category.
+MOD_ALLOWED_CATEGORIES: set[str] = set()
 
 # OVERVIEW_FOOTER / SETUP_GUIDE_TEXT are re-exported from panel_branding above.
 
@@ -47,10 +53,14 @@ MOD_ALLOWED_CATEGORIES: set[str] = set(role_auth.MOD_ALLOWED_SECTIONS)
 # ── Tier resolution ──────────────────────────────────────────────────────────────
 
 async def resolve_panel_role(user: discord.Member, guild_id: int) -> str:
-    """Return "admin" | "mod" | "none" using TheCodex's role logic (Manage Server, then the
-    canonical ``GuildConfig.roles`` admin/mod id lists)."""
-    cfg = await get_config(int(guild_id))
-    return role_auth.get_panel_role(user, cfg)
+    """Return "admin" | "mod" | "none".
+
+    Delegates to the shared engine resolver (``auth.resolve_panel_role_from_config``), which
+    reads the admin/mod role-id lists from config via ``config_get`` at the canonical paths
+    ``roles.admin_role_ids`` / ``roles.mod_role_ids`` (Manage Server always resolves to
+    "admin"). Those are structured ``GuildConfig`` fields; ``config_get`` below routes them to
+    the typed store, so the engine reads the very lists the role-picker writes."""
+    return await resolve_panel_role_from_config(user, int(guild_id))
 
 
 # ── Dashboard flags (setup-guide toggle, etc.) ───────────────────────────────────
@@ -108,21 +118,86 @@ async def audit_log_entry(
     )
 
 
-# ── Config access (over the flat per-guild settings store) ───────────────────────
-# TheCodex's panel leaves use the config manager via bot-specific action classes; these
-# generic doers back the flat settings collection for engine-contract completeness.
+# ── Config access (dotted-path, backend-agnostic) ────────────────────────────────
+# TheCodex keeps one document per guild split in two: structured top-level keys (the typed
+# ``GuildConfig`` — ``roles``, ``wyr``, …) reached via ``get_config`` / ``save_config``, and
+# flat "legacy/misc" keys reached via ``get_setting`` / ``set_setting``. The engine's config
+# contract is a single dotted-path getter/setter, so these doers route a path to the right
+# half by its head key: ``roles.admin_role_ids`` -> the typed store, ``hide_setup_guide`` ->
+# the flat store. This seam adapter is what lets the shared resolver read ``roles.*`` (see
+# ``resolve_panel_role`` above). Codex's structured writes normally flow through bot-specific
+# action classes; the structured branch of ``config_set`` / ``config_unset`` exists so the
+# generic engine doers honor the same contract.
+
+
+def _dig(section, dotted: str, default):
+    """Read a nested value from a structured section by a dotted sub-path."""
+    cur = section
+    for part in dotted.split("."):
+        if isinstance(cur, dict) and part in cur:
+            cur = cur[part]
+        else:
+            return default
+    return cur
+
+
+def _bury(section: dict, dotted: str, value) -> None:
+    """Write ``value`` into a structured section at a dotted sub-path, creating dicts."""
+    parts = dotted.split(".")
+    cur = section
+    for part in parts[:-1]:
+        nxt = cur.get(part)
+        if not isinstance(nxt, dict):
+            nxt = {}
+            cur[part] = nxt
+        cur = nxt
+    cur[parts[-1]] = value
+
 
 async def config_get(guild_id: int, path: str, default=None):
+    head, _, rest = path.partition(".")
+    if head in _STRUCTURED_KEYS:
+        cfg = await get_config(int(guild_id))
+        section = getattr(cfg, head, None)
+        if not rest:
+            return section if section is not None else default
+        return _dig(section, rest, default)
     cm = await get_config_manager()
     return await cm.get_setting(path, int(guild_id), default=default)
 
 
 async def config_set(guild_id: int, path: str, value) -> bool:
+    head, _, rest = path.partition(".")
+    if head in _STRUCTURED_KEYS:
+        cm = await get_config_manager()
+        cfg = await cm.get_config(int(guild_id))
+        if not rest:
+            setattr(cfg, head, value)
+        else:
+            section = getattr(cfg, head, None)
+            if not isinstance(section, dict):
+                return False
+            _bury(section, rest, value)
+        return await cm.save_config(cfg)
     cm = await get_config_manager()
     return await cm.set_setting(path, value, int(guild_id))
 
 
 async def config_unset(guild_id: int, path: str) -> bool:
+    head, _, rest = path.partition(".")
+    if head in _STRUCTURED_KEYS:
+        cm = await get_config_manager()
+        cfg = await cm.get_config(int(guild_id))
+        section = getattr(cfg, head, None)
+        if rest and isinstance(section, dict):
+            parts = rest.split(".")
+            cur = section
+            for part in parts[:-1]:
+                cur = cur.get(part) if isinstance(cur, dict) else None
+                if not isinstance(cur, dict):
+                    return True  # nothing to unset — treat as done
+            cur.pop(parts[-1], None)
+        return await cm.save_config(cfg)
     cm = await get_config_manager()
     return await cm.set_setting(path, None, int(guild_id))
 

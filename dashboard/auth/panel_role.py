@@ -1,8 +1,9 @@
 """Panel-role resolution for the Codex dashboard.
 
-Mirrors `admin/settings/role_auth.py` for the web side. TheCodex stores admin
-and moderator roles as lists in `GuildConfig.roles = {"admin_role_ids": [...], "mod_role_ids": [...]}`,
-so resolution checks set overlap rather than a single id.
+The web-side counterpart of the Discord panel's tier resolution (the engine's
+`auth.resolve_panel_role_from_config`). TheCodex stores admin and moderator roles as lists in
+`GuildConfig.roles = {"admin_role_ids": [...], "mod_role_ids": [...]}`, so resolution checks
+set overlap rather than a single id.
 
 Tiers:
   - "admin": MANAGE_GUILD OR overlap with cfg.roles["admin_role_ids"]
