@@ -11,9 +11,34 @@ from typing import Any, Callable, Awaitable, Dict, List
 
 import discord
 
-from admin.views.base import create_unique_id, AdminLayoutBuilder
+from admin.views.base import create_unique_id, AdminLayoutBuilder, build_notice_layout
 
 DROPS_PER_PAGE = 5
+
+
+def attach_timeout_expiry_msg(
+    view: discord.ui.LayoutView,
+    message: discord.Message,
+) -> discord.ui.LayoutView:
+    """When ``view`` times out, edit ``message`` to show a session-expired notice.
+
+    The drops panel is a bespoke per-feature view, not part of the PanelNode admin
+    panel, so it manages its own timeout expiry rather than using ``PanelSession``.
+    Replaces the admin engine's removed legacy helper of the same name.
+    """
+
+    async def on_timeout() -> None:
+        try:
+            await message.edit(view=build_notice_layout(
+                "Drops Panel - Session Expired",
+                "This panel timed out after 5 minutes of inactivity.\n"
+                "Use `/drop` to open a new one.",
+            ))
+        except Exception:
+            pass  # Message may have been deleted or the interaction expired.
+
+    view.on_timeout = on_timeout
+    return view
 
 
 def _format_drop_entry(drop: Dict[str, Any]) -> str:

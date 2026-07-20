@@ -12,7 +12,6 @@ from discord import app_commands
 from discord.ext import commands
 
 from admin.actions.drops_actions import DropsActions
-from admin.views.panel_views import attach_timeout_expiry_msg
 from storage.settings.config_manager import get_config
 from storage.settings.collections import db_manager
 from storage.log import get_logger
@@ -20,6 +19,7 @@ from storage.log import get_logger
 from .drop_views import (
     build_drops_browse_view,
     build_unsent_drops_view,
+    attach_timeout_expiry_msg,
     DROPS_PER_PAGE,
 )
 

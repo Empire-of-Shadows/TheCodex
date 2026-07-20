@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased] - 2026-07-19
+
+### Fixed
+- The `/drop` command works again. It had stopped loading entirely after a recent admin-panel update, so browsing Prime Gaming drops (and the manager-only test and unsent-drops views) were unavailable. When one of these drop panels sits unused for five minutes it now shows a clear "session timed out, use `/drop` again" notice instead of leaving dead buttons.
+
 ## [Unreleased] - 2026-07-17
 
 ### Fixed
