@@ -16,7 +16,9 @@ intents.emojis = True
 intents.guild_messages = True
 
 bot = commands.Bot(
-    command_prefix=".",
+    # Slash-only: no "." text-command surface. The owner-only load_cogs utility is
+    # still reachable by mentioning the bot (matches the relay reference).
+    command_prefix=commands.when_mentioned,
     intents=intents,
     help_command=None,
     shard_id=0,
