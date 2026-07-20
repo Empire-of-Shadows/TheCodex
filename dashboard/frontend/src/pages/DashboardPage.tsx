@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, fetchPublicStats, type PublicStats } from "../api/client";
 import type { User, Guild, UserActivity } from "../api/types";
 import AppHeader from "../components/AppHeader";
-import { formatError } from "../utils/formatError";
+import { formatError } from "../_engine/api/formatError";
 
 function GuildIcon({
   id,

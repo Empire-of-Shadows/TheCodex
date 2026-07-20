@@ -1,42 +1,48 @@
 /* ══════════════════════════════════════════════════════════════════════
    EcomBackend-aligned purple glassmorphism theme
-   NOTE: .dc-* classes are UNTOUCHED — they render Discord previews.
+   NOTE: .dc-* classes are UNTOUCHED - they render Discord previews.
    ══════════════════════════════════════════════════════════════════════ */
 
 :root {
+  /* Design tokens aliased to the canonical --eos-* set (eos-tokens.css, imported
+     first in main.tsx) so a token change there propagates here instead of silently
+     diverging - the same pattern relay's site-theme.css uses. Values are identical
+     to the former hardcoded set, so this is a no-visual-change refactor. The --dc-*
+     Discord-preview palette below stays literal (its .dc-* components use those names). */
+
   /* ── Backgrounds ─────────────────────────────────────────────────── */
-  --bg-1: #0f0f12;
-  --bg-2: #1a1a1f;
-  --bg-card: rgba(255, 255, 255, 0.08);
-  --bg-floating: #0a0a0d;
-  --bg-input: #140f26;
+  --bg-1: var(--eos-bg-1);
+  --bg-2: var(--eos-bg-2);
+  --bg-card: var(--eos-bg-card);
+  --bg-floating: var(--eos-bg-0);
+  --bg-input: var(--eos-bg-input);
 
   /* ── Text ────────────────────────────────────────────────────────── */
-  --text-1: #ffffff;
-  --text-2: #cfd3e1;
-  --text-muted: #9aa3b2;
-  --text-accent: #a97dff;
+  --text-1: var(--eos-fg-1);
+  --text-2: var(--eos-fg-2);
+  --text-muted: var(--eos-fg-muted);
+  --text-accent: var(--eos-fg-accent);
 
   /* ── Brand / Accent ─────────────────────────────────────────────── */
-  --brand: #4d0eb3;
-  --brand-light: #7a3df0;
-  --brand-gradient: linear-gradient(135deg, #4d0eb3, #7a3df0);
-  --ring: rgba(125, 74, 255, 0.35);
+  --brand: var(--eos-brand);
+  --brand-light: var(--eos-brand-light);
+  --brand-gradient: var(--eos-brand-gradient);
+  --ring: var(--eos-brand-ring);
 
   /* ── Semantic ────────────────────────────────────────────────────── */
-  --success: #3ddc97;
-  --danger: #ff6b6b;
-  --warning: #ffb86b;
+  --success: var(--eos-success);
+  --danger: var(--eos-danger);
+  --warning: var(--eos-warning);
 
   /* ── Glass / borders ────────────────────────────────────────────── */
-  --glass: rgba(255, 255, 255, 0.06);
-  --glass-heavy: rgba(255, 255, 255, 0.08);
-  --border-subtle: rgba(255, 255, 255, 0.06);
+  --glass: var(--eos-glass);
+  --glass-heavy: var(--eos-glass-heavy);
+  --border-subtle: var(--eos-border-subtle);
 
   /* ── Shape ───────────────────────────────────────────────────────── */
-  --radius: 14px;
-  --radius-sm: 10px;
-  --shadow: 0 8px 28px rgba(0, 0, 0, 0.35), 0 2px 8px rgba(0, 0, 0, 0.2);
+  --radius: var(--eos-radius);
+  --radius-sm: var(--eos-radius-sm);
+  --shadow: var(--eos-shadow);
 
   /* ── Discord preview (unchanged) ────────────────────────────────── */
   --dc-bg-primary: #313338;
@@ -487,7 +493,7 @@ body::before {
   letter-spacing: 0.02em;
 }
 
-/* Builder header — slim toolbar treatment (no Cinzel display title,
+/* Builder header - slim toolbar treatment (no Cinzel display title,
    no logomark) since the builder lives in its own focused workspace. */
 .app-layout--builder .app-header {
   padding: 8px 16px;
@@ -1315,37 +1321,7 @@ body::before {
 
 /* ── Toast ──────────────────────────────────────────────────────────── */
 
-.toast-stack {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  z-index: 1000;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: flex-end;
-  pointer-events: none;
-}
-
-.toast {
-  padding: 12px 20px;
-  border-radius: var(--radius-sm);
-  color: white;
-  font-size: 14px;
-  font-weight: 500;
-  animation: toast-in 0.2s ease-out;
-  box-shadow: var(--shadow);
-  pointer-events: auto;
-}
-
-.toast.success { background: var(--success); color: #0f0f12; }
-.toast.error { background: var(--danger); }
-.toast.info { background: var(--brand-gradient); }
-
-@keyframes toast-in {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
+/* Toast styles live in the shared engine: _engine/components/styles/ToastStack.css */
 
 /* ── Login hero ─────────────────────────────────────────────────────── */
 /* Shared layout with TheHost dashboard. Open-bottom panel: visual structure
@@ -1588,7 +1564,7 @@ body::before {
   height: 20px;
   border-radius: 50%;
 }
-/* Bot-not-installed cue — dashed + dimmed. */
+/* Bot-not-installed cue - dashed + dimmed. */
 .guild-pill--setup {
   opacity: 0.7;
   border-style: dashed;
@@ -1872,33 +1848,7 @@ body::before {
   margin-top: 12px;
 }
 
-.site-footer {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.4rem;
-  text-align: center;
-  padding: 1.25rem;
-  color: var(--text-muted);
-  font-size: 0.85rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
-}
-
-.site-footer__links {
-  display: inline-flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.site-footer__links a {
-  color: var(--text-muted);
-  text-decoration: none;
-  transition: color 0.2s ease;
-}
-
-.site-footer__links a:hover {
-  color: var(--brand-light);
-}
+/* Footer styles live in the shared engine: _engine/components/styles/AppFooter.css */
 
 /* Legal documents (Terms, Privacy Policy): readable prose width */
 .legal-doc {
@@ -2279,16 +2229,6 @@ body::before {
 .save-btn { transition: background 160ms ease; }
 .save-btn--saved { background: #2d8c4d !important; }
 .save-btn--error { background: #c0392b !important; }
-
-/* Toast close button */
-.toast { display: flex; align-items: center; gap: 12px; }
-.toast-msg { flex: 1; }
-.toast-close {
-  background: transparent; border: 0; color: inherit;
-  font-size: 18px; line-height: 1; cursor: pointer; padding: 4px 8px;
-  border-radius: 4px;
-}
-.toast-close:hover { background: rgba(255,255,255,0.1); }
 
 /* Empty state */
 .empty-state {

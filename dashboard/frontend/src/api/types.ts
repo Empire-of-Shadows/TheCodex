@@ -1,10 +1,10 @@
 // ── User & Guild ──────────────────────────────────────────────────────────
 
-export interface User {
-  id: string;
+import type { SessionUser } from "../_engine/api/types";
+
+export interface User extends SessionUser {
+  // codex's backend always populates these; narrow them back to non-null.
   username: string;
-  global_name: string | null;
-  avatar: string | null;
   discriminator: string;
   can_access_admin_any: boolean;
   can_access_mod_any: boolean;

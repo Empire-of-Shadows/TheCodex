@@ -17,8 +17,8 @@ if not DASHBOARD_CLIENT_SECRET:
 
 # Codex bot token - used to check which guilds the bot is in
 BOT_TOKEN = os.getenv("DISCORD_TOKEN", "")
-REDIRECT_URI = os.getenv(
-    "GATEKEEPER_REDIRECT_URI",
+REDIRECT_URI = os.getenv("GATEKEEPER_REDIRECT_URI") or os.getenv(
+    "REDIRECT_URI",
     "http://localhost:54010/auth/discord/callback",
 )
 DISCORD_API_BASE = "https://discord.com/api/v10"
@@ -33,15 +33,21 @@ if not SECRET_KEY:
 SESSION_COOKIE_NAME = os.getenv("SESSION_COOKIE_NAME", "eos_session")
 SESSION_MAX_AGE_DAYS = int(os.getenv("SESSION_MAX_AGE_DAYS", "30"))
 
-# Cookie domain — set to ".eosofficial.club" in production for cross-subdomain SSO
+# Cookie domain - set to ".eosofficial.club" in production for cross-subdomain SSO
 COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN", None)
-IS_PRODUCTION = os.getenv("ENVIRONMENT", "development").lower() == "production"
+# Production mode drives the Secure flag on the shared session cookie. Accept either
+# convention (ENVIRONMENT=production OR IS_PRODUCTION=1/true/yes) so codex and relay
+# behave identically regardless of which spelling a deployment sets.
+IS_PRODUCTION = (
+    os.getenv("ENVIRONMENT", "").lower() == "production"
+    or os.getenv("IS_PRODUCTION", "").lower() in ("1", "true", "yes")
+)
 
 # Server
-HOST = os.getenv("DASHBOARD_HOST", "0.0.0.0")
-PORT = int(os.getenv("DASHBOARD_PORT", "54010"))
+HOST = os.getenv("DASHBOARD_HOST") or os.getenv("HOST", "0.0.0.0")
+PORT = int(os.getenv("DASHBOARD_PORT") or os.getenv("PORT", "54010"))
 
-# CORS — filter falsy entries so an unset BASE_URL doesn't leak an empty origin.
+# CORS - filter falsy entries so an unset BASE_URL doesn't leak an empty origin.
 CORS_ORIGINS = [
     o
     for o in [

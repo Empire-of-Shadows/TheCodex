@@ -1,8 +1,9 @@
 import { lazy, Suspense } from "react";
-import { Routes, Route, Navigate, Link, useParams } from "react-router-dom";
+import { Routes, Route, Navigate, useParams } from "react-router-dom";
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import PageSkeleton from "./components/PageSkeleton";
+import { AppFooter } from "./_engine/components/AppFooter";
 
 const BuilderPage = lazy(() => import("./pages/BuilderPage"));
 const AdminAuditLogPage = lazy(() => import("./pages/AdminAuditLogPage"));
@@ -33,13 +34,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </Suspense>
-      <footer className="site-footer">
-        <span className="site-footer__brand">Empire of Shadows &middot; TheCodex Dashboard</span>
-        <nav className="site-footer__links" aria-label="Legal">
-          <Link to="/terms">Terms of Service</Link>
-          <Link to="/privacy">Privacy Policy</Link>
-        </nav>
-      </footer>
+      <AppFooter brand="Empire of Shadows · TheCodex Dashboard" />
     </>
   );
 }

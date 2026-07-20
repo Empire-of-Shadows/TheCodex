@@ -35,7 +35,8 @@ import PropertyPanel from "../components/builder/PropertyPanel";
 import ValidationErrors from "../components/builder/ValidationErrors";
 import DocsPanel from "../components/builder/DocsPanel";
 import ConfirmDialog from "../components/ConfirmDialog";
-import { formatError } from "../utils/formatError";
+import { formatError } from "../_engine/api/formatError";
+import { useToast, ToastStack } from "../_engine/components/ToastStack";
 
 // Import file-size ceilings — mirror the backend byte limits
 // (guide_schema.py _MAX_GUIDE_BYTES / welcome_schema.py _MAX_WELCOME_BYTES).
@@ -379,7 +380,7 @@ export default function BuilderPage() {
   const [accentColor, setAccentColor] = useState<string | undefined>();
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
-  const [toasts, setToasts] = useState<{ id: number; msg: string; type: "success" | "error" | "info" }[]>([]);
+  const { toasts, push: pushToast, dismiss: dismissToast } = useToast();
   const [savedSigs, setSavedSigs] = useState<{ guide: string; welcome: string }>({ guide: "", welcome: "" });
   const [loading, setLoading] = useState(true);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
@@ -401,19 +402,6 @@ export default function BuilderPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
-
-  const dismissToast = useCallback((id: number) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }, []);
-
-  const pushToast = useCallback((msg: string, type: "success" | "error" | "info" = "info", duration?: number) => {
-    const id = Date.now() + Math.random();
-    setToasts((prev) => [...prev, { id, msg, type }]);
-    const effective = duration ?? (type === "error" ? 10000 : 3000);
-    if (effective > 0) {
-      setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), effective);
-    }
-  }, []);
 
   // ── Panel resize ──────────────────────────────────────────────────────
   const resizing = useRef(false);
@@ -1358,27 +1346,7 @@ export default function BuilderPage() {
         </DragOverlay>
       </DndContext>
 
-      {toasts.length > 0 && (
-        <div className="toast-stack">
-          {toasts.map((t) => (
-            <div
-              key={t.id}
-              className={`toast ${t.type}`}
-              role={t.type === "error" ? "alert" : "status"}
-            >
-              <span className="toast-msg">{t.msg}</span>
-              <button
-                type="button"
-                className="toast-close"
-                aria-label="Dismiss notification"
-                onClick={() => dismissToast(t.id)}
-              >
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
 
       <ConfirmDialog
         open={pendingNav !== null}

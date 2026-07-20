@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { AuditLogEntry } from "../api/types";
-import { formatError } from "../utils/formatError";
+import { formatError } from "../_engine/api/formatError";
 
 const SECTIONS = [
   "",

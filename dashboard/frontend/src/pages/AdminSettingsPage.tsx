@@ -20,7 +20,7 @@ import type {
   WyrSection,
 } from "../api/types";
 import AppHeader from "../components/AppHeader";
-import { formatError } from "../utils/formatError";
+import { formatError } from "../_engine/api/formatError";
 
 // ── Tab definitions ────────────────────────────────────────────────────────
 
