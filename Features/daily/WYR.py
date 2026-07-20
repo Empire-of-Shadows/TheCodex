@@ -303,11 +303,12 @@ class WYRCommandGroup(app_commands.Group):
             await interaction.response.send_message("Invalid message ID or message not found.", ephemeral=True)
         except Exception as e:
             logger.error(f"Error fetching WYR results for message {message_id}: {e}", exc_info=True)
-            await interaction.response.send_message(f"Error fetching results: {e}", ephemeral=True)
+            await interaction.response.send_message("An error occurred while fetching results.", ephemeral=True)
 
     @app_commands.command(name="leaderboard", description="Show the WYR voting leaderboard")
     @app_commands.describe(limit="Number of users to show in leaderboard (default: 10)")
-    async def wyr_leaderboard(self, interaction: discord.Interaction, limit: int = 10):
+    async def wyr_leaderboard(self, interaction: discord.Interaction,
+                              limit: app_commands.Range[int, 1, 25] = 10):
         """
         Show the WYR voting leaderboard using the dedicated leaderboard collection.
         """
@@ -340,7 +341,7 @@ class WYRCommandGroup(app_commands.Group):
                         emoji = "" if i == 1 else "" if i == 2 else "" if i == 3 else ""
                         vote_count = user_data["total_votes"]
                         leaderboard_text += f"{emoji} **{i}.** {user.mention} - {vote_count:,} votes\n"
-                    except:
+                    except Exception:
                         vote_count = user_data["total_votes"]
                         leaderboard_text += f" **{i}.** Unknown User - {vote_count:,} votes\n"
                         logger.warning(f"Could not fetch user data for user ID {user_data.get('user_id')}")
@@ -399,8 +400,12 @@ class WYR(commands.Cog):
         self.bot = bot
         self._posted_today: set = set()
         self._last_cleanup_date: str = ""
-        self.bot.loop.create_task(self.initialize_database())
-        self.bot.loop.create_task(self._register_views())
+        # Track startup tasks so cog_unload can cancel them (they wait_until_ready and
+        # would otherwise linger past an unload/reload).
+        self._bg_tasks = [
+            self.bot.loop.create_task(self.initialize_database()),
+            self.bot.loop.create_task(self._register_views()),
+        ]
         # Add the command group to the bot
         self.wyr_commands = WYRCommandGroup(self)
         self.bot.tree.add_command(self.wyr_commands)
@@ -410,6 +415,9 @@ class WYR(commands.Cog):
     async def cog_unload(self):
         """Clean up when cog is unloaded"""
         logger.info("WYR cog unloading - cleaning up")
+
+        for task in getattr(self, "_bg_tasks", []):
+            task.cancel()
 
         if self.wyr_tick.is_running():
             self.wyr_tick.cancel()

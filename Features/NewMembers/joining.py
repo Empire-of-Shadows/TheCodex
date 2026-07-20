@@ -587,10 +587,11 @@ class GuildEventHandler:
         # Update guild metrics (handles human/bot distinction internally)
         await self.update_guild_metrics(member.guild, "member_remove", member=member)
 
-        # NEW: Clean up rate limit data for users who leave (humans only)
-        if not member.bot and member.id in self.dm_rate_limits:
-            del self.dm_rate_limits[member.id]
-            self.logger.info(f"Cleaned up rate limit data for {member.id}")
+        # NOTE: deliberately do NOT clear dm_rate_limits here. The age-gate auto-kick
+        # itself fires on_member_remove, so wiping the counters would hand every rejoin
+        # a fresh DM allowance and reset the 24h block -- defeating the throttle for
+        # exactly the rejoin-loop accounts it exists to slow down. The limiter's own
+        # time windows expire these entries.
 
         try:
             # Update members cache for this guild

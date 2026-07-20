@@ -12,13 +12,43 @@ and embed settings are now fully absorbed into the structured config.
 """
 
 import asyncio
+import copy
 from datetime import datetime, timezone
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from storage.log import get_logger
 
 logger = get_logger("GuildConfig")
+
+
+def _config_update_ops(old: Dict[str, Any], new: Dict[str, Any],
+                       prefix: str = "") -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """Diff two config dicts into surgical MongoDB ``$set`` / ``$unset`` operations.
+
+    Returns ``(sets, unsets)`` keyed by dotted path. Nested dicts recurse so only the
+    leaves that actually changed are written; lists and scalars are treated as atomic.
+    This lets a bot-side save touch ONLY the fields this caller changed, so it can no
+    longer revert an unrelated concurrent dashboard edit back to a stale value.
+    """
+    sets: Dict[str, Any] = {}
+    unsets: Dict[str, Any] = {}
+    for key, new_val in new.items():
+        path = f"{prefix}{key}"
+        if key not in old:
+            sets[path] = new_val
+            continue
+        old_val = old[key]
+        if isinstance(old_val, dict) and isinstance(new_val, dict):
+            sub_sets, sub_unsets = _config_update_ops(old_val, new_val, path + ".")
+            sets.update(sub_sets)
+            unsets.update(sub_unsets)
+        elif old_val != new_val:
+            sets[path] = new_val
+    for key in old:
+        if key not in new:
+            unsets[f"{prefix}{key}"] = ""
+    return sets, unsets
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Per-guild flat setting defaults  (kept minimal — most settings are structured)
@@ -73,6 +103,7 @@ def _default_wyr() -> Dict[str, Any]:
         ),
         "thread_auto_archive": 1440,
         "mapping_cleanup_days": 30,
+        "skip_initial_post": False,
     }
 
 
@@ -259,6 +290,7 @@ class GuildConfig:
             "thread_starter_message": stored.get("thread_starter_message", dw["thread_starter_message"]),
             "thread_auto_archive": stored.get("thread_auto_archive", dw["thread_auto_archive"]),
             "mapping_cleanup_days": stored.get("mapping_cleanup_days", dw["mapping_cleanup_days"]),
+            "skip_initial_post": stored.get("skip_initial_post", dw["skip_initial_post"]),
         }
         wyr["enabled"] = stored["enabled"] if "enabled" in stored else bool(wyr["channel_id"])
 
@@ -463,6 +495,9 @@ class GuildConfigManager:
 
             if doc:
                 config = GuildConfig.from_dict(doc)
+                # Snapshot the loaded state so save_config can write only the leaves
+                # THIS caller changes (see BUG-C1 / _config_update_ops).
+                config._loaded_snapshot = copy.deepcopy(config.to_dict())
                 async with self._cache_lock:
                     self._settings_cache[guild_id] = {
                         k: v for k, v in doc.items() if k not in _STRUCTURED_KEYS
@@ -470,6 +505,8 @@ class GuildConfigManager:
                 logger.debug(f"Loaded config from database for guild {guild_id}")
             else:
                 config = GuildConfig(guild_id=guild_id)
+                # No persisted baseline -> save_config falls back to a full write.
+                config._loaded_snapshot = None
                 async with self._cache_lock:
                     self._settings_cache.setdefault(guild_id, {})
                 logger.debug(f"Using default config for unconfigured guild {guild_id}")
@@ -494,13 +531,33 @@ class GuildConfigManager:
         try:
             now = datetime.now(timezone.utc)
             existing = await self._collection.find_one({"guild_id": config.guild_id})
+            snapshot = getattr(config, "_loaded_snapshot", None)
 
             if existing:
                 config.updated_at = now
-                await self._collection.update_one(
-                    {"guild_id": config.guild_id},
-                    {"$set": config.to_dict()},
-                )
+                new_doc = config.to_dict()
+                if snapshot is not None:
+                    # Surgical save: write only the leaves this caller actually changed
+                    # relative to what it loaded, so we never clobber a concurrent
+                    # dashboard edit to an unrelated field back to a stale value.
+                    sets, unsets = _config_update_ops(snapshot, new_doc)
+                    # created_at is insert-only; guild_id never changes.
+                    for immutable in ("created_at", "guild_id"):
+                        sets.pop(immutable, None)
+                        unsets.pop(immutable, None)
+                    sets["updated_at"] = now
+                    update: Dict[str, Any] = {"$set": sets}
+                    if unsets:
+                        update["$unset"] = unsets
+                    await self._collection.update_one({"guild_id": config.guild_id}, update)
+                else:
+                    # No baseline to diff against: fall back to a full write, but never
+                    # $set created_at (a default-constructed config would blank it).
+                    new_doc.pop("created_at", None)
+                    await self._collection.update_one(
+                        {"guild_id": config.guild_id},
+                        {"$set": new_doc},
+                    )
                 logger.info(f"Updated config for guild {config.guild_id}")
             else:
                 config.created_at = now
@@ -513,6 +570,9 @@ class GuildConfigManager:
                 self._cache[config.guild_id] = config
                 self._cache_time[config.guild_id] = saved_at
                 self._cache_checked[config.guild_id] = saved_at
+                # Re-baseline: subsequent saves of this same object diff against the
+                # state we just persisted.
+                config._loaded_snapshot = copy.deepcopy(config.to_dict())
 
             return True
 
@@ -565,6 +625,23 @@ class GuildConfigManager:
             return True
         except Exception as e:
             logger.error(f"Error setting '{key}' for guild {guild_id}: {e}", exc_info=True)
+            return False
+
+    async def unset_setting(self, key: str, guild_id: int) -> bool:
+        """Remove a per-guild flat setting via MongoDB ``$unset`` (so it reads back as
+        its default, rather than being stored as an explicit ``null``)."""
+        if not self._initialized:
+            await self.initialize()
+        try:
+            await self._collection.update_one(
+                {"guild_id": guild_id},
+                {"$unset": {key: ""}},
+            )
+            async with self._cache_lock:
+                self._settings_cache.get(guild_id, {}).pop(key, None)
+            return True
+        except Exception as e:
+            logger.error(f"Error unsetting '{key}' for guild {guild_id}: {e}", exc_info=True)
             return False
 
     async def set_many_settings(self, settings: Dict[str, Any], guild_id: int) -> bool:

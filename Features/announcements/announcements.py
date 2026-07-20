@@ -20,7 +20,8 @@ class AnnouncementThreadCog(commands.Cog):
     async def on_message(self, message):
         """Listen for messages in the announcement channel and create threads automatically"""
 
-        logger.info(
+        # Fires for every message in every guild, so keep it at debug (not info).
+        logger.debug(
             f"Message received in channel {message.channel.id} - Author: {message.author} - Bot: {message.author.bot}")
 
         # Ignore messages from bots to prevent loops

@@ -1,7 +1,7 @@
 import discord
 from discord import app_commands
 from discord.ext import commands, tasks
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any, cast
 import uuid
 import os
@@ -761,6 +761,7 @@ class SuggestionCog(commands.Cog):
     # ==================== Standalone Commands ====================
 
     @app_commands.command(name="suggest", description="Submit a suggestion (opens a form, or pass text directly)")
+    @app_commands.guild_only()
     @app_commands.describe(
         suggestion_text="The text of your suggestion",
         anonymous="Submit anonymously",
@@ -805,6 +806,7 @@ class SuggestionCog(commands.Cog):
             await interaction.response.send_message(view=view, ephemeral=True)
 
     @app_commands.command(name="suggest-search", description="Search suggestions")
+    @app_commands.guild_only()
     @app_commands.describe(
         query="Search terms",
         category="Filter by category",
@@ -871,6 +873,7 @@ class SuggestionCog(commands.Cog):
         await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="suggest-mine", description="View your suggestion history")
+    @app_commands.guild_only()
     async def suggest_mine_command(self, interaction: discord.Interaction):
         """View user's suggestion history."""
         logger.info(f"User {interaction.user.id} requested their suggestion history")
@@ -908,7 +911,11 @@ class SuggestionCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        """Add persistent views when bot starts"""
+        """Add persistent views when bot starts (once; on_ready refires on every
+        gateway reconnect, so guard against re-initializing each time)."""
+        if getattr(self, "_ready_done", False):
+            return
+        self._ready_done = True
         logger.info("Adding persistent views for suggestion system")
         # Initialize database manager on bot ready
         await self.db_manager._ensure_initialized()
@@ -1115,6 +1122,17 @@ class SuggestionCog(commands.Cog):
                 else:
                     await interaction.response.send_message(error_message, ephemeral=True)
 
+    @staticmethod
+    def _notification_expired(notification: dict, max_age_hours: int = 24) -> bool:
+        """True if a pending notification is old enough to abandon, so transient
+        delivery failures can't keep it retrying every cycle forever."""
+        created = notification.get("created_at")
+        if not isinstance(created, datetime):
+            return False
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        return datetime.now(timezone.utc) - created > timedelta(hours=max_age_hours)
+
     @tasks.loop(minutes=5)
     async def notification_task(self):
         """Process pending notifications"""
@@ -1127,44 +1145,62 @@ class SuggestionCog(commands.Cog):
 
                 for notification in notifications:
                     try:
+                        # get_user is cache-only; fall back to the API so an uncached
+                        # recipient isn't retried every 5 minutes forever.
                         user = self.bot.get_user(notification["user_id"])
-                        if user:
-                            embed = discord.Embed(
-                                title="📬 Suggestion Update",
-                                color=discord.Color.blue()
-                            )
-
-                            embed.add_field(
-                                name="Suggestion ID",
-                                value=notification["suggestion_id"][:8],
-                                inline=True
-                            )
-
-                            embed.add_field(
-                                name="New Status",
-                                value=notification["status"],
-                                inline=True
-                            )
-
-                            if notification.get("reason"):
-                                embed.add_field(
-                                    name="Reason",
-                                    value=notification["reason"],
-                                    inline=False
-                                )
-
+                        if user is None:
                             try:
-                                await user.send(embed=embed)
-                                await self.db_manager.mark_notification_sent(notification["_id"])
-                                logger.info(
-                                    f"Sent notification to user {notification['user_id']} for suggestion {notification['suggestion_id']}")
-                            except discord.Forbidden:
-                                # User has DMs disabled, mark as sent anyway
+                                user = await self.bot.fetch_user(notification["user_id"])
+                            except discord.NotFound:
+                                # Account no longer exists -> stop retrying.
                                 await self.db_manager.mark_notification_sent(notification["_id"])
                                 logger.warning(
-                                    f"Could not send DM to user {notification['user_id']} (DMs disabled), marking as sent")
-                        else:
-                            logger.warning(f"User {notification['user_id']} not found for notification")
+                                    f"User {notification['user_id']} no longer exists; abandoning notification")
+                                continue
+                            except discord.HTTPException as fetch_exc:
+                                # Transient: retry next cycle, but give up if it has been
+                                # pending too long so it can't loop indefinitely.
+                                if self._notification_expired(notification):
+                                    await self.db_manager.mark_notification_sent(notification["_id"])
+                                    logger.warning(
+                                        f"Notification {notification.get('_id')} expired after repeated "
+                                        f"fetch failures ({fetch_exc}); abandoning")
+                                else:
+                                    logger.warning(
+                                        f"Could not fetch user {notification['user_id']} ({fetch_exc}); will retry")
+                                continue
+
+                        embed = discord.Embed(
+                            title="📬 Suggestion Update",
+                            color=discord.Color.blue()
+                        )
+                        embed.add_field(
+                            name="Suggestion ID",
+                            value=notification["suggestion_id"][:8],
+                            inline=True
+                        )
+                        embed.add_field(
+                            name="New Status",
+                            value=notification["status"],
+                            inline=True
+                        )
+                        if notification.get("reason"):
+                            embed.add_field(
+                                name="Reason",
+                                value=notification["reason"],
+                                inline=False
+                            )
+
+                        try:
+                            await user.send(embed=embed)
+                            await self.db_manager.mark_notification_sent(notification["_id"])
+                            logger.info(
+                                f"Sent notification to user {notification['user_id']} for suggestion {notification['suggestion_id']}")
+                        except discord.Forbidden:
+                            # User has DMs disabled, mark as sent anyway
+                            await self.db_manager.mark_notification_sent(notification["_id"])
+                            logger.warning(
+                                f"Could not send DM to user {notification['user_id']} (DMs disabled), marking as sent")
 
                     except Exception as e:
                         logger.error(f"Error sending notification {notification.get('_id')}: {e}", exc_info=True)

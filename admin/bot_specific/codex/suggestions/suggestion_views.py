@@ -1,9 +1,9 @@
-# ───────────────────────────────────────────────────────────────────────────
-# VENDORED from admin_engine/ — DO NOT EDIT HERE.
+# ---------------------------------------------------------------------------
+# VENDORED from admin_engine/ - DO NOT EDIT HERE.
 # Edit the master at <repo-root>/admin_engine/ and run:
 #     python tools/sync_admin_engine.py
 # Drift is enforced by:  python tools/sync_admin_engine.py --check
-# ───────────────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
 """
 Suggestion Config Views using Discord Components v2.
 
@@ -143,15 +143,12 @@ class SuggestionStatusUpdateModal(discord.ui.Modal):
 
         if not matched:
             valid_list = " | ".join(self.ALLOWED_STATUSES)
-            err_title = f"Invalid status: {valid_list}"
-            retry = SuggestionStatusUpdateModal(
-                callback=self._callback,
-                prefill_id=sid,
-                prefill_status=status,
-                prefill_reason=reason,
-                title=err_title if len(err_title) <= 45 else err_title[:42] + "...",
+            # Discord forbids responding to a MODAL_SUBMIT interaction with another
+            # modal, so report the validation error as an ephemeral message instead.
+            await interaction.response.send_message(
+                f"Invalid status. Choose one of: {valid_list}",
+                ephemeral=True,
             )
-            await interaction.response.send_modal(retry)
             return
 
         await self._callback(interaction, sid, matched, reason)

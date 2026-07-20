@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased] - 2026-07-20
+
+### Fixed
+- Uploading a custom **Welcome Message** or **Guide** JSON file in the admin panel works again. Every upload was failing behind the scenes, so custom layouts could never be saved. Uploads are now checked against the expected format before saving, and a bad or non-JSON file gives a clear explanation instead of a generic error.
+- Changing a suggestion's status from the admin panel no longer throws an error when you type a status it doesn't recognise. It now replies with the list of valid statuses so you can try again.
+- When you enter a value the admin panel rejects (for example a number outside the allowed range), it now shows a short "Invalid Input" note explaining the problem, instead of failing with a generic error and losing what you typed.
+
 ## [Unreleased] - 2026-07-19
 
 ### Fixed

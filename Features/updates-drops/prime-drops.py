@@ -218,12 +218,14 @@ class PrimeDrops(commands.Cog):
                     if now_local.hour != hour or now_local.minute != minute:
                         continue
 
-                    self._posted_today.add(today_key)
                     logger.info(
                         f"Scheduled drops post for guild {guild_id} "
                         f"({hour:02d}:{minute:02d} {tz_name})"
                     )
+                    # Mark as posted only AFTER a successful send, so a send that raises
+                    # isn't recorded as done (which would skip the guild for the day).
                     await self.send_drops_for_guild(guild_id, guild_config)
+                    self._posted_today.add(today_key)
 
                 except Exception as e:
                     logger.error(

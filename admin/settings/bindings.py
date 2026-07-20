@@ -22,6 +22,7 @@ import discord
 
 from storage.settings.config_manager import (
     _STRUCTURED_KEYS,
+    GuildConfig,
     get_config,
     get_config_manager,
 )
@@ -188,18 +189,25 @@ async def config_unset(guild_id: int, path: str) -> bool:
     if head in _STRUCTURED_KEYS:
         cm = await get_config_manager()
         cfg = await cm.get_config(int(guild_id))
-        section = getattr(cfg, head, None)
-        if rest and isinstance(section, dict):
-            parts = rest.split(".")
-            cur = section
-            for part in parts[:-1]:
-                cur = cur.get(part) if isinstance(cur, dict) else None
-                if not isinstance(cur, dict):
-                    return True  # nothing to unset — treat as done
-            cur.pop(parts[-1], None)
+        if not rest:
+            # Unset a whole structured section -> reset it to its declared default,
+            # rather than silently doing nothing and returning success.
+            default_cfg = GuildConfig(guild_id=int(guild_id))
+            setattr(cfg, head, getattr(default_cfg, head))
+        else:
+            section = getattr(cfg, head, None)
+            if isinstance(section, dict):
+                parts = rest.split(".")
+                cur = section
+                for part in parts[:-1]:
+                    cur = cur.get(part) if isinstance(cur, dict) else None
+                    if not isinstance(cur, dict):
+                        return True  # nothing to unset - treat as done
+                cur.pop(parts[-1], None)
         return await cm.save_config(cfg)
     cm = await get_config_manager()
-    return await cm.set_setting(path, None, int(guild_id))
+    # $unset (not a null write) so the key reads back as its default.
+    return await cm.unset_setting(path, int(guild_id))
 
 
 # ── Collection access (inert — TheCodex's panel has no engine collection actions) ─

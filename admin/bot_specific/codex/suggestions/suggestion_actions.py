@@ -1,9 +1,9 @@
-# ───────────────────────────────────────────────────────────────────────────
-# VENDORED from admin_engine/ — DO NOT EDIT HERE.
+# ---------------------------------------------------------------------------
+# VENDORED from admin_engine/ - DO NOT EDIT HERE.
 # Edit the master at <repo-root>/admin_engine/ and run:
 #     python tools/sync_admin_engine.py
 # Drift is enforced by:  python tools/sync_admin_engine.py --check
-# ───────────────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
 """
 Suggestion Actions - Business logic for Suggestion configuration via admin panel.
 
@@ -14,6 +14,7 @@ Suggestion settings live inside config.suggestions on the GuildConfig dataclass.
 import csv
 import io
 import json
+import re
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
@@ -121,7 +122,16 @@ class SuggestionActions:
 
         try:
             votes_cm = db_manager.get_collection_manager("suggestions_votes")
-            total_votes = await votes_cm.count_documents({"guild_id": guild_id})
+            suggestions_cm = db_manager.get_collection_manager("suggestions_suggestions")
+            # Vote docs key off suggestion_id, not guild_id, so join through this
+            # guild's suggestions to count its votes (mirrors the guild-cleanup join).
+            suggestion_ids = await suggestions_cm.collection.distinct(
+                "suggestion_id", {"guild_id": guild_id}
+            )
+            if suggestion_ids:
+                total_votes = await votes_cm.count_documents(
+                    {"suggestion_id": {"$in": suggestion_ids}}
+                )
         except Exception as e:
             logger.warning("Failed to query votes collection: %s", e)
 
@@ -211,7 +221,10 @@ class SuggestionActions:
                     try:
                         thread = bot.get_channel(suggestion["thread_id"])
                         if thread and hasattr(thread, "edit"):
-                            await thread.edit(name=f"[{status}] {thread.name}")
+                            # Strip any existing "[Status]" prefix first so repeated
+                            # status changes don't accumulate (and blow the 100-char cap).
+                            base_name = re.sub(r"^\[[^\]]*\]\s*", "", thread.name)
+                            await thread.edit(name=f"[{status}] {base_name}"[:100])
                     except Exception as thread_err:
                         logger.warning("Could not rename thread %s: %s", suggestion["thread_id"], thread_err)
 

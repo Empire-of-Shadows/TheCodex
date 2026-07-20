@@ -31,6 +31,7 @@ class DropCog(commands.Cog):
         self.bot = bot
 
     @app_commands.command(name="drop", description="Browse Prime Gaming drops")
+    @app_commands.guild_only()
     async def drop_command(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
 

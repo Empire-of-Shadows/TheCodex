@@ -210,10 +210,10 @@ async def _handle_browse_drops(interaction, params: dict):
         now = datetime.now(timezone.utc)
         drops = await cog.collection_manager.find_many(
             {"$or": [
-                {"expires_at": {"$gte": now}},
-                {"expires_at": {"$exists": False}},
+                {"expires": {"$gte": now}},
+                {"expires": {"$exists": False}},
             ]},
-            sort=[("expires_at", 1)],
+            sort=[("expires", 1)],
         )
     except Exception:
         drops = []
