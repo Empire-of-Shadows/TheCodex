@@ -9,14 +9,23 @@ Structured fields are managed through GuildConfig / save_config().
 Flat settings (legacy or miscellaneous) can still be written through
 get_setting() / set_setting() for any remaining callers, but all WYR
 and embed settings are now fully absorbed into the structured config.
+
+Storage goes through the engine ``GuildConfigStore`` over the
+``settings_guild_config`` collection manager: reads are hit-first cached
+by the manager (30s TTL, copy-on-read), writes are surgical dotted
+``$set``/``$unset`` that invalidate the cache, and ``guild_id`` is the
+canonical STRING form at the storage boundary (int callers are coerced).
+The stored documents were normalized int -> str by migration
+``m4_guildconfig_guild_id_to_str``; this module must not ship ahead of
+that migration being applied.
 """
 
-import asyncio
 import copy
 from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from storage.config.guild_config_store import GuildConfigStore
 from storage.log import get_logger
 
 logger = get_logger("GuildConfig")
@@ -219,8 +228,11 @@ def _as_int_id_list(values: Any) -> List[int]:
 
 @dataclass
 class GuildConfig:
-    """Represents configuration for a single guild."""
-    guild_id: int
+    """Represents configuration for a single guild.
+
+    ``guild_id`` is held (and stored) in the canonical STRING form; the
+    ``__post_init__`` coercion accepts int-passing callers."""
+    guild_id: str
     roles: Dict[str, Any]        = field(default_factory=_default_roles)
     server: Dict[str, Any]       = field(default_factory=_default_server)
     wyr: Dict[str, Any]          = field(default_factory=_default_wyr)
@@ -236,6 +248,10 @@ class GuildConfig:
     color_tiers_seeded: bool     = False
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+    def __post_init__(self):
+        if self.guild_id is not None:
+            self.guild_id = str(self.guild_id)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for database storage."""
@@ -423,24 +439,16 @@ class GuildConfigManager:
 
     Flat key-value settings (legacy or miscellaneous) can still be
     accessed via get_setting() / set_setting() for any remaining callers.
-    Both share the ``settings_guild_config`` collection.
+    Both share the ``settings_guild_config`` collection, reached through
+    the engine ``GuildConfigStore`` (no second cache layer here: reads
+    ride the collection manager's hit-first cache, writes invalidate it).
     """
 
     def __init__(self, db_manager):
         self.db_manager = db_manager
-        self._cache: Dict[int, GuildConfig] = {}
-        self._cache_time: Dict[int, datetime] = {}
-        # Last time we verified a cached config against the DB's updated_at.
-        # Within _cache_grace_seconds we trust the in-memory copy and skip the
-        # per-call Mongo round-trip (hot paths: member joins, the WYR tick, the
-        # tag loop). Bot-side writes update the cache directly; only external
-        # (dashboard) edits take up to this long to propagate.
-        self._cache_checked: Dict[int, datetime] = {}
-        self._cache_grace_seconds = 30
-        self._settings_cache: Dict[int, Dict] = {}
         self._collection = None
+        self._store: Optional[GuildConfigStore] = None
         self._initialized = False
-        self._cache_lock = asyncio.Lock()
 
     async def initialize(self) -> None:
         """Initialize the manager and connect to the collection."""
@@ -448,6 +456,12 @@ class GuildConfigManager:
             return
         try:
             self._collection = self.db_manager.get_collection_manager('settings_guild_config')
+            # cache_ttl=30 preserves the old typed cache's 30s staleness bound for
+            # external (dashboard) writes; bot-side writes through the manager
+            # invalidate the cache immediately.
+            self._store = GuildConfigStore(
+                self._collection, id_field="guild_id", cache_ttl=30
+            )
             self._initialized = True
             logger.info("GuildConfigManager initialized successfully")
         except Exception as e:
@@ -457,309 +471,141 @@ class GuildConfigManager:
     # ── Structured config ────────────────────────────────────────────────────
 
     async def get_config(self, guild_id: int, use_cache: bool = True) -> GuildConfig:
-        """Get the structured configuration for a guild."""
+        """Get the structured configuration for a guild.
+
+        Each call returns a fresh ``GuildConfig`` built from the store's cached
+        document (30s TTL, copy-on-read), so concurrent callers never share a
+        mutable object and every instance carries its own save baseline."""
         if not self._initialized:
             await self.initialize()
 
-        if use_cache and guild_id in self._cache:
-            # Check if DB has been updated externally (e.g. by dashboard)
-            now = datetime.now(timezone.utc)
-            cache_ts = self._cache_time.get(guild_id)
-            last_check = self._cache_checked.get(guild_id)
-            # Within the grace window, trust the in-memory copy and skip the
-            # staleness probe that otherwise made every "cache hit" a DB call.
-            if last_check and (now - last_check).total_seconds() < self._cache_grace_seconds:
-                return self._cache[guild_id]
-            if cache_ts:
-                doc_meta = await self._collection.find_one(
-                    {"guild_id": guild_id}, projection={"updated_at": 1}
-                )
-                self._cache_checked[guild_id] = now
-                db_updated = doc_meta.get("updated_at") if doc_meta else None
-                if db_updated and isinstance(db_updated, datetime):
-                    if db_updated.tzinfo is None:
-                        db_updated = db_updated.replace(tzinfo=timezone.utc)
-                    if db_updated > cache_ts:
-                        logger.debug(f"Config stale for guild {guild_id}, refetching")
-                    else:
-                        logger.debug(f"Cache hit for guild {guild_id}")
-                        return self._cache[guild_id]
-                else:
-                    logger.debug(f"Cache hit for guild {guild_id}")
-                    return self._cache[guild_id]
-            else:
-                return self._cache[guild_id]
-
         try:
-            doc = await self._collection.find_one({"guild_id": guild_id})
-
+            doc = await self._store.get_doc(guild_id, use_cache=use_cache)
             if doc:
                 config = GuildConfig.from_dict(doc)
                 # Snapshot the loaded state so save_config can write only the leaves
                 # THIS caller changes (see BUG-C1 / _config_update_ops).
                 config._loaded_snapshot = copy.deepcopy(config.to_dict())
-                async with self._cache_lock:
-                    self._settings_cache[guild_id] = {
-                        k: v for k, v in doc.items() if k not in _STRUCTURED_KEYS
-                    }
-                logger.debug(f"Loaded config from database for guild {guild_id}")
             else:
                 config = GuildConfig(guild_id=guild_id)
                 # No persisted baseline -> save_config falls back to a full write.
                 config._loaded_snapshot = None
-                async with self._cache_lock:
-                    self._settings_cache.setdefault(guild_id, {})
                 logger.debug(f"Using default config for unconfigured guild {guild_id}")
-
-            async with self._cache_lock:
-                now = datetime.now(timezone.utc)
-                self._cache[guild_id] = config
-                self._cache_time[guild_id] = now
-                self._cache_checked[guild_id] = now
-
             return config
 
         except Exception as e:
             logger.error(f"Error fetching config for guild {guild_id}: {e}", exc_info=True)
-            return GuildConfig(guild_id=guild_id)
+            config = GuildConfig(guild_id=guild_id)
+            config._loaded_snapshot = None
+            return config
 
     async def save_config(self, config: GuildConfig) -> bool:
         """Save a guild's structured configuration to the database."""
         if not self._initialized:
             await self.initialize()
 
+        gid = str(config.guild_id)
         try:
-            now = datetime.now(timezone.utc)
-            existing = await self._collection.find_one({"guild_id": config.guild_id})
+            existing = await self._store.get_doc(gid, use_cache=False)
             snapshot = getattr(config, "_loaded_snapshot", None)
 
             if existing:
-                config.updated_at = now
                 new_doc = config.to_dict()
                 if snapshot is not None:
                     # Surgical save: write only the leaves this caller actually changed
                     # relative to what it loaded, so we never clobber a concurrent
                     # dashboard edit to an unrelated field back to a stale value.
+                    # One atomic $set+$unset via store.apply.
                     sets, unsets = _config_update_ops(snapshot, new_doc)
-                    # created_at is insert-only; guild_id never changes.
-                    for immutable in ("created_at", "guild_id"):
-                        sets.pop(immutable, None)
-                        unsets.pop(immutable, None)
-                    sets["updated_at"] = now
-                    update: Dict[str, Any] = {"$set": sets}
-                    if unsets:
-                        update["$unset"] = unsets
-                    await self._collection.update_one({"guild_id": config.guild_id}, update)
+                    # created_at is insert-only; guild_id never changes; updated_at
+                    # is stamped by the CollectionManager on every write.
+                    for managed in ("created_at", "guild_id", "updated_at"):
+                        sets.pop(managed, None)
+                        unsets.pop(managed, None)
+                    if sets or unsets:
+                        if not await self._store.apply(gid, sets, list(unsets)):
+                            return False
                 else:
-                    # No baseline to diff against: fall back to a full write, but never
-                    # $set created_at (a default-constructed config would blank it).
-                    new_doc.pop("created_at", None)
-                    await self._collection.update_one(
-                        {"guild_id": config.guild_id},
-                        {"$set": new_doc},
-                    )
-                logger.info(f"Updated config for guild {config.guild_id}")
+                    # No baseline to diff against: fall back to a full write of the
+                    # top-level sections, minus the managed fields (so a
+                    # default-constructed config can never blank created_at).
+                    payload = {
+                        k: v for k, v in new_doc.items()
+                        if k not in ("created_at", "updated_at", "guild_id")
+                    }
+                    if not await self._store.update(gid, payload, upsert=False):
+                        return False
+                logger.info(f"Updated config for guild {gid}")
             else:
+                now = datetime.now(timezone.utc)
                 config.created_at = now
                 config.updated_at = now
                 await self._collection.create_one(config.to_dict())
-                logger.info(f"Created config for guild {config.guild_id}")
+                logger.info(f"Created config for guild {gid}")
 
-            async with self._cache_lock:
-                saved_at = datetime.now(timezone.utc)
-                self._cache[config.guild_id] = config
-                self._cache_time[config.guild_id] = saved_at
-                self._cache_checked[config.guild_id] = saved_at
-                # Re-baseline: subsequent saves of this same object diff against the
-                # state we just persisted.
-                config._loaded_snapshot = copy.deepcopy(config.to_dict())
-
+            # Re-baseline: subsequent saves of this same object diff against the
+            # state we just persisted.
+            config._loaded_snapshot = copy.deepcopy(config.to_dict())
             return True
 
         except Exception as e:
-            logger.error(f"Error saving config for guild {config.guild_id}: {e}", exc_info=True)
+            logger.error(f"Error saving config for guild {gid}: {e}", exc_info=True)
             return False
+
+    async def has_config(self, guild_id: int) -> bool:
+        """True if a config document exists for the guild (unlike get_config,
+        which fabricates a default for unconfigured guilds)."""
+        if not self._initialized:
+            await self.initialize()
+        return await self._store.get_doc(guild_id) is not None
 
     # ── Flat settings (legacy / miscellaneous) ───────────────────────────────
-
-    async def _load_settings_cache(self, guild_id: int) -> None:
-        """Load flat settings from DB into _settings_cache for a guild."""
-        try:
-            doc = await self._collection.find_one({"guild_id": guild_id})
-            async with self._cache_lock:
-                if doc:
-                    self._settings_cache[guild_id] = {
-                        k: v for k, v in doc.items() if k not in _STRUCTURED_KEYS
-                    }
-                else:
-                    self._settings_cache[guild_id] = {}
-        except Exception as e:
-            logger.error(f"Error loading settings cache for guild {guild_id}: {e}", exc_info=True)
-            async with self._cache_lock:
-                self._settings_cache[guild_id] = {}
-
-    # A dotted flat key ("a.b") is written to Mongo as a nested path -- i.e.
-    # {"$set": {"a.b": v}} stores {"a": {"b": v}}. The in-memory cache is rebuilt
-    # straight from that raw doc on reload, so it must mirror the same nested
-    # shape; otherwise a value written under a literal "a.b" cache key is lost on
-    # the next reload and reads fall through to the default. These helpers keep
-    # the cache representation consistent with Mongo for dotted keys.
-    @staticmethod
-    def _dotted_get(doc: Dict[str, Any], dotted_key: str) -> Tuple[bool, Any]:
-        """Return (found, value) by traversing nested dicts along a dotted key."""
-        cur: Any = doc
-        for part in dotted_key.split("."):
-            if isinstance(cur, dict) and part in cur:
-                cur = cur[part]
-            else:
-                return False, None
-        return True, cur
-
-    @staticmethod
-    def _dotted_set(doc: Dict[str, Any], dotted_key: str, value: Any) -> None:
-        """Set a value into nested dicts, creating intermediate dicts as needed."""
-        parts = dotted_key.split(".")
-        cur = doc
-        for part in parts[:-1]:
-            nxt = cur.get(part)
-            if not isinstance(nxt, dict):
-                nxt = {}
-                cur[part] = nxt
-            cur = nxt
-        cur[parts[-1]] = value
-
-    @staticmethod
-    def _dotted_unset(doc: Dict[str, Any], dotted_key: str) -> None:
-        """Remove a nested key along a dotted path; no-op if the path is absent."""
-        parts = dotted_key.split(".")
-        cur = doc
-        for part in parts[:-1]:
-            nxt = cur.get(part)
-            if not isinstance(nxt, dict):
-                return
-            cur = nxt
-        cur.pop(parts[-1], None)
+    # Thin passthroughs to the store: dotted keys are handled natively (Mongo
+    # ``$set`` on a dotted path stores the nested shape; the store's reader digs
+    # the same shape back out), and every write invalidates the manager cache.
+    # NOTE: unlike the old flat cache, the store reads the WHOLE document, so a
+    # flat read of a structured head would return the section; callers route
+    # structured paths through get_config (see admin/settings/bindings.py).
 
     async def get_setting(self, key: str, guild_id: int, default: Any = None) -> Any:
-        """Get a per-guild flat setting. Dotted keys traverse the nested shape
-        MongoDB stores them under, so the value survives a cache reload."""
+        """Get a per-guild flat setting (dotted keys traverse the nested shape)."""
         if not self._initialized:
             await self.initialize()
-        if guild_id not in self._settings_cache:
-            await self._load_settings_cache(guild_id)
-        cache = self._settings_cache[guild_id]
-        if "." in key:
-            found, val = self._dotted_get(cache, key)
-            if found:
-                return val
-            return DEFAULT_SETTINGS.get(key, default)
-        return cache.get(key, DEFAULT_SETTINGS.get(key, default))
+        return await self._store.get_setting(
+            key, guild_id, DEFAULT_SETTINGS.get(key, default)
+        )
 
     async def set_setting(self, key: str, value: Any, guild_id: int) -> bool:
-        """Set a per-guild flat setting using MongoDB $set."""
+        """Set a per-guild flat setting using MongoDB $set (upserts)."""
         if not self._initialized:
             await self.initialize()
-        try:
-            now = datetime.now(timezone.utc)
-            await self._collection.update_one(
-                {"guild_id": guild_id},
-                {
-                    "$set": {key: value},
-                    "$setOnInsert": {"guild_id": guild_id, "created_at": now},
-                },
-                upsert=True,
-            )
-            async with self._cache_lock:
-                cache = self._settings_cache.setdefault(guild_id, {})
-                if "." in key:
-                    self._dotted_set(cache, key, value)
-                else:
-                    cache[key] = value
-            return True
-        except Exception as e:
-            logger.error(f"Error setting '{key}' for guild {guild_id}: {e}", exc_info=True)
-            return False
+        return await self._store.set_setting(key, value, guild_id)
 
     async def unset_setting(self, key: str, guild_id: int) -> bool:
         """Remove a per-guild flat setting via MongoDB ``$unset`` (so it reads back as
         its default, rather than being stored as an explicit ``null``)."""
         if not self._initialized:
             await self.initialize()
-        try:
-            await self._collection.update_one(
-                {"guild_id": guild_id},
-                {"$unset": {key: ""}},
-            )
-            async with self._cache_lock:
-                cache = self._settings_cache.get(guild_id, {})
-                if "." in key:
-                    self._dotted_unset(cache, key)
-                else:
-                    cache.pop(key, None)
-            return True
-        except Exception as e:
-            logger.error(f"Error unsetting '{key}' for guild {guild_id}: {e}", exc_info=True)
-            return False
+        # The store reports False for an already-absent key; that is a successful
+        # unset from the caller's point of view (real errors are logged store-side).
+        await self._store.unset(guild_id, [key])
+        return True
 
     async def set_many_settings(self, settings: Dict[str, Any], guild_id: int) -> bool:
-        """Set multiple per-guild flat settings atomically."""
+        """Set multiple per-guild flat settings in one write."""
         if not self._initialized:
             await self.initialize()
-        try:
-            now = datetime.now(timezone.utc)
-            await self._collection.update_one(
-                {"guild_id": guild_id},
-                {
-                    "$set": settings,
-                    "$setOnInsert": {"guild_id": guild_id, "created_at": now},
-                },
-                upsert=True,
-            )
-            async with self._cache_lock:
-                cache = self._settings_cache.setdefault(guild_id, {})
-                for k, v in settings.items():
-                    if "." in k:
-                        self._dotted_set(cache, k, v)
-                    else:
-                        cache[k] = v
-            return True
-        except Exception as e:
-            logger.error(f"Error setting multiple settings for guild {guild_id}: {e}", exc_info=True)
-            return False
+        return await self._store.set_many(settings, guild_id)
 
     # ── Nested helpers (utility) ─────────────────────────────────────────────
 
     async def get_nested(self, parent_key: str, sub_key: str, guild_id: int, default: Any = None) -> Any:
         """Get a nested flat setting value."""
-        parent = await self.get_setting(parent_key, guild_id, {})
-        if isinstance(parent, dict):
-            return parent.get(sub_key, default)
-        return default
+        return await self.get_setting(f"{parent_key}.{sub_key}", guild_id, default)
 
     async def set_nested(self, parent_key: str, sub_key: str, value: Any, guild_id: int) -> bool:
         """Set a nested flat setting using MongoDB dot-notation $set."""
-        dot_key = f"{parent_key}.{sub_key}"
-        if not self._initialized:
-            await self.initialize()
-        try:
-            now = datetime.now(timezone.utc)
-            await self._collection.update_one(
-                {"guild_id": guild_id},
-                {
-                    "$set": {dot_key: value},
-                    "$setOnInsert": {"guild_id": guild_id, "created_at": now},
-                },
-                upsert=True,
-            )
-            async with self._cache_lock:
-                cache = self._settings_cache.setdefault(guild_id, {})
-                if parent_key not in cache or not isinstance(cache[parent_key], dict):
-                    cache[parent_key] = {}
-                cache[parent_key][sub_key] = value
-            return True
-        except Exception as e:
-            logger.error(f"Error setting nested '{dot_key}' for guild {guild_id}: {e}", exc_info=True)
-            return False
+        return await self.set_setting(f"{parent_key}.{sub_key}", value, guild_id)
 
     # ── Structured-config helpers ────────────────────────────────────────────
 
@@ -784,50 +630,53 @@ class GuildConfigManager:
         return await self.save_config(config)
 
     async def set_role(self, guild_id: int, role_type: str, role_id: int, action: str = "add") -> bool:
-        """Add or remove a global permission role (admin or moderator)."""
-        config = await self.get_config(guild_id)
+        """Add or remove a global permission role (admin or moderator).
 
-        if role_type == "admin":
-            if action == "add" and role_id not in config.roles["admin_role_ids"]:
-                config.roles["admin_role_ids"].append(role_id)
-            elif action == "remove" and role_id in config.roles["admin_role_ids"]:
-                config.roles["admin_role_ids"].remove(role_id)
-        elif role_type == "moderator":
-            if action == "add" and role_id not in config.roles["mod_role_ids"]:
-                config.roles["mod_role_ids"].append(role_id)
-            elif action == "remove" and role_id in config.roles["mod_role_ids"]:
-                config.roles["mod_role_ids"].remove(role_id)
-        else:
+        Routed through the store's atomic ``$addToSet`` / ``$pull`` at the
+        canonical ``roles.admin_role_ids`` / ``roles.mod_role_ids`` paths, so
+        two concurrent role edits can never lose each other's update the way
+        the old read-modify-write save could."""
+        if not self._initialized:
+            await self.initialize()
+        kind = {"admin": "admin", "moderator": "mod"}.get(role_type)
+        if kind is None:
             logger.warning(f"Invalid role type: {role_type}")
             return False
-
-        return await self.save_config(config)
+        if action == "add":
+            return await self._store.add_role(guild_id, kind, role_id)
+        if action == "remove":
+            return await self._store.remove_role(guild_id, kind, role_id)
+        logger.warning(f"Invalid role action: {action}")
+        return False
 
     async def invalidate_cache(self, guild_id: int) -> None:
-        """Remove a guild from all caches, forcing fresh fetches."""
-        async with self._cache_lock:
-            self._cache.pop(guild_id, None)
-            self._cache_time.pop(guild_id, None)
-            self._cache_checked.pop(guild_id, None)
-            self._settings_cache.pop(guild_id, None)
-            logger.debug(f"Cache invalidated for guild {guild_id}")
+        """Drop the guild's cached document, forcing a fresh fetch."""
+        if not self._initialized:
+            await self.initialize()
+        self._store.invalidate(guild_id)
+        logger.debug(f"Cache invalidated for guild {guild_id}")
 
     async def clear_cache(self) -> None:
-        """Clear all cached configs and settings."""
-        async with self._cache_lock:
-            self._cache.clear()
-            self._cache_time.clear()
-            self._cache_checked.clear()
-            self._settings_cache.clear()
-            logger.info("All guild config cache cleared")
+        """Clear every cached document for the config collection."""
+        if not self._initialized:
+            await self.initialize()
+        self._store.clear()
+        logger.info("All guild config cache cleared")
 
     async def get_all_configured_guilds(self) -> List[int]:
-        """Get list of all guild IDs that have been configured."""
+        """Get list of all configured guild IDs, as ints (bot-side callers hand
+        them to ``bot.get_guild``; storage holds the canonical string form)."""
         if not self._initialized:
             await self.initialize()
         try:
-            docs = await self._collection.find_many({})
-            return [doc["guild_id"] for doc in docs if "guild_id" in doc]
+            docs = await self._collection.find_many({}, projection={"guild_id": 1})
+            out: List[int] = []
+            for doc in docs:
+                try:
+                    out.append(int(doc["guild_id"]))
+                except (KeyError, TypeError, ValueError):
+                    continue
+            return out
         except Exception as e:
             logger.error(f"Error fetching configured guilds: {e}", exc_info=True)
             return []
@@ -895,84 +744,9 @@ class GuildConfigManager:
         config = await self.get_config(guild_id)
         return config.wyr.get("mapping_cleanup_days", 30)
 
-    # ── Typed accessors (sync, from cache only) ───────────────────────────────
-
-    def get_sync(self, key: str, guild_id: int, default: Any = None) -> Any:
-        """Get a flat setting synchronously from cache (does NOT hit the DB)."""
-        cache = self._settings_cache.get(guild_id, {})
-        return cache.get(key, DEFAULT_SETTINGS.get(key, default))
-
-    def embed_description_limits_sync(self, guild_id: int) -> Dict[str, Any]:
-        config = self._cache.get(guild_id)
-        if config:
-            return config.embed.get("description_limits", {"default_limit": 500, "limits": {}})
-        return {"default_limit": 500, "limits": {}}
-
-    def embed_color_tiers_sync(self, guild_id: int) -> Dict[str, Dict[str, str]]:
-        config = self._cache.get(guild_id)
-        if config:
-            return config.embed.get("color_tiers", {})
-        return {}
-
-    def embed_feature_access_sync(self, guild_id: int) -> Dict[str, list]:
-        config = self._cache.get(guild_id)
-        if config:
-            return config.embed.get("feature_access", {})
-        return {}
-
-    def setup_complete_sync(self, guild_id: int) -> bool:
-        config = self._cache.get(guild_id)
-        if config:
-            return config.setup_complete
-        return False
-
-    def wyr_post_hour_sync(self, guild_id: int) -> int:
-        config = self._cache.get(guild_id)
-        if config:
-            return config.wyr.get("post_hour", 6)
-        return 6
-
-    def wyr_post_minute_sync(self, guild_id: int) -> int:
-        config = self._cache.get(guild_id)
-        if config:
-            return config.wyr.get("post_minute", 0)
-        return 0
-
-    def wyr_timezone_sync(self, guild_id: int) -> str:
-        config = self._cache.get(guild_id)
-        if config:
-            return config.wyr.get("timezone", "America/Chicago")
-        return "America/Chicago"
-
-    def wyr_default_category_sync(self, guild_id: int) -> str:
-        config = self._cache.get(guild_id)
-        if config:
-            return config.wyr.get("default_category", "sfw")
-        return "sfw"
-
-    def wyr_thread_name_format_sync(self, guild_id: int) -> str:
-        config = self._cache.get(guild_id)
-        if config:
-            return config.wyr.get("thread_name_format", _default_wyr()["thread_name_format"])
-        return _default_wyr()["thread_name_format"]
-
-    def wyr_thread_starter_message_sync(self, guild_id: int) -> str:
-        config = self._cache.get(guild_id)
-        if config:
-            return config.wyr.get("thread_starter_message", _default_wyr()["thread_starter_message"])
-        return _default_wyr()["thread_starter_message"]
-
-    def wyr_thread_auto_archive_sync(self, guild_id: int) -> int:
-        config = self._cache.get(guild_id)
-        if config:
-            return config.wyr.get("thread_auto_archive", 1440)
-        return 1440
-
-    def wyr_mapping_cleanup_days_sync(self, guild_id: int) -> int:
-        config = self._cache.get(guild_id)
-        if config:
-            return config.wyr.get("mapping_cleanup_days", 30)
-        return 30
+    # NOTE: the old ``get_sync`` / ``*_sync`` cache-only accessors are gone with
+    # the hand-rolled typed cache; they had no callers anywhere in the bot. New
+    # hot paths read through the async accessors above (store-cached, 30s TTL).
 
 
 # ─────────────────────────────────────────────────────────────────────────────

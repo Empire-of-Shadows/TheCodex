@@ -328,8 +328,7 @@ class GuildEventHandler:
             manager = await get_guild_config_manager()
 
             # Skip if a config was already saved for this guild
-            existing = await manager._collection.find_one({'guild_id': guild.id})
-            if existing:
+            if await manager.has_config(guild.id):
                 self.logger.info(f"\n{s}Guild {guild.name} already has a config, skipping seed\n")
                 return
 
@@ -688,7 +687,7 @@ class GuildEventHandler:
         try:
             # --- Settings ---
             # delete_one returns bool; delete_many returns int (deleted count directly)
-            totals["settings_guild_config"] = 1 if await col("settings_guild_config").delete_one({"guild_id": guild_id}) else 0
+            totals["settings_guild_config"] = 1 if await col("settings_guild_config").delete_one({"guild_id": str(guild_id)}) else 0
 
             # Invalidate in-memory config cache
             manager = await get_guild_config_manager()

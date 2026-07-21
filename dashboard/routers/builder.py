@@ -80,7 +80,7 @@ async def put_guide(
 @router.get("/guilds/{guild_id}/welcome")
 async def get_welcome(guild_id: str, _session: dict = Depends(require_guild_admin)):
     """Fetch welcome components from GuildConfig."""
-    doc = await db.guild_config().find_one({"guild_id": int(guild_id)})
+    doc = await db.guild_config().find_one({"guild_id": str(int(guild_id))})
     if doc is None:
         return {"welcome_data": None}
     new_members = doc.get("new_members", {})
@@ -105,9 +105,9 @@ async def put_welcome(
     # upsert + guild_id in $set so the save still lands if the config doc was
     # never seeded (or was removed by guild-data cleanup) - matches put_guide.
     await db.guild_config().update_one(
-        {"guild_id": int(guild_id)},
+        {"guild_id": str(int(guild_id))},
         {"$set": {
-            "guild_id": int(guild_id),
+            "guild_id": str(int(guild_id)),
             "new_members.welcome_components": welcome_data,
             "updated_at": datetime.now(timezone.utc),
         }},

@@ -192,7 +192,7 @@ class SettingsPatch(BaseModel):
 @router.get("/guilds/{guild_id}/settings")
 async def get_settings(guild_id: str, session: dict = Depends(get_current_user)):
     role = await require_panel_access(session, guild_id)
-    gid = int(guild_id)
+    gid = str(int(guild_id))
     doc = await db.guild_config().find_one({"guild_id": gid})
     return {
         "config": _serialize_config(doc),
@@ -209,7 +209,10 @@ async def update_settings(
     session: dict = Depends(get_current_user),
 ):
     role = await require_panel_access(session, guild_id)
-    gid = int(guild_id)
+    # Config queries are string-keyed (migration m4); the audit log still
+    # stores int guild_id until its own normalization pass.
+    gid = str(int(guild_id))
+    audit_gid = int(guild_id)
     doc = await db.guild_config().find_one({"guild_id": gid})
 
     payload = patch.model_dump(exclude_none=True)
@@ -288,7 +291,7 @@ async def update_settings(
         try:
             audit_docs = [
                 {
-                    "guild_id": gid,
+                    "guild_id": audit_gid,
                     "actor_id": int(actor_id),
                     "actor_name": str(actor_name)[:128],
                     "source": "dashboard",

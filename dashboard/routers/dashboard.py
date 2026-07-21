@@ -127,7 +127,7 @@ async def _guild_ids_with_config(guild_ids: list[str]) -> set[str]:
         return set()
 
     cursor = db.guild_config().find(
-        {"guild_id": {"$in": [int(gid) for gid in guild_ids]}},
+        {"guild_id": {"$in": [str(gid) for gid in guild_ids]}},
         {"guild_id": 1},
     )
     return {str(doc["guild_id"]) async for doc in cursor}

@@ -11,6 +11,13 @@ TheCodex stores guild/user/role/channel IDs as raw ints in most collections. The
 collections are the exception - they already use strings. The ecosystem ruling
 (`EmpireSystems/README.md` "Settled standard") makes string IDs canonical everywhere.
 
+> **Partially done (2026-07-21):** `Settings.GuildConfig.guild_id` is covered by the
+> WRITTEN migration `scripts/m4_guildconfig_guild_id_to_str.py` (DU-2 Phase C). The
+> config layer, dashboard routers, and cleanup paths are already flipped to string
+> keys in code; that code and the m4 `--apply` MUST deploy together with the bot and
+> dashboard down. Everything else below (other collections, role-id lists, actor_id,
+> audit-log guild_id) remains pending.
+
 - **Before writing:** audit EVERY collection in `storage/settings/collections.py`
   field-by-field for int-typed ID fields. Known int-ID areas:
   - `serverdata_*` snapshot collections: `id`, `guild_id`, `owner_id`, `top_role_id`,

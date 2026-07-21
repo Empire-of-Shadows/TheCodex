@@ -140,10 +140,10 @@ async def _get_tag_status(
         return []
 
     cursor = db.guild_config().find(
-        {"guild_id": {"$in": check_ids}},
+        {"guild_id": {"$in": [str(g) for g in check_ids]}},
         {"guild_id": 1, "tag_tracker": 1},
     )
-    configs: dict[int, dict] = {doc["guild_id"]: doc async for doc in cursor}
+    configs: dict[int, dict] = {int(doc["guild_id"]): doc async for doc in cursor}
 
     # First pass: gather active tag configs and queue role-check tasks.
     entries: list[dict] = []

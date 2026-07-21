@@ -24,7 +24,9 @@ from dashboard.auth.dependencies import get_current_user
 async def _guild_role_lists(guild_id: str) -> tuple[frozenset[str], frozenset[str]]:
     """Return (admin_role_ids, mod_role_ids) configured for the guild."""
     try:
-        gid = int(guild_id)
+        # Validate as a snowflake, query by the canonical string form (the
+        # GuildConfig collection is string-keyed since migration m4).
+        gid = str(int(guild_id))
     except (TypeError, ValueError):
         return (frozenset(), frozenset())
     doc = await db.guild_config().find_one({"guild_id": gid}, projection={"roles": 1})
