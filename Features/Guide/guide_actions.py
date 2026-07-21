@@ -73,7 +73,7 @@ def decode_select_value(value: str) -> tuple[str, str]:
 	Values are encoded as ``action:target``, e.g. ``nav:page-id``, ``channel:123``, ``role:456``.
 
 	Returns:
-		(action, target) — e.g. ("nav", "page-id"), ("channel", "123456"), ("role", "789")
+		(action, target) - e.g. ("nav", "page-id"), ("channel", "123456"), ("role", "789")
 	"""
 	if ":" in value:
 		action, target = value.split(":", 1)

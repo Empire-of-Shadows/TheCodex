@@ -1,4 +1,4 @@
-"""Docs API — serves builder documentation markdown files."""
+"""Docs API - serves builder documentation markdown files."""
 
 import os
 from pathlib import Path

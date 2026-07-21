@@ -52,7 +52,7 @@ export default function PropertyPanel({ component, mode, pages, channels, roles,
 
   return (
     <div className="property-panel">
-      <h3>Properties — {component.type}</h3>
+      <h3>Properties - {component.type}</h3>
 
       {component.type === "text" && (
         <div className="property-group">
@@ -356,7 +356,7 @@ function ButtonEditor({
         >
           <option value="">Select action...</option>
           {Object.entries(VALID_ACTIONS).map(([key, val]) => (
-            <option key={key} value={key}>{key} — {val.description}</option>
+            <option key={key} value={key}>{key} - {val.description}</option>
           ))}
         </select>
       )}
@@ -451,7 +451,7 @@ function SelectEditor({
             >
               <option value="">Select action...</option>
               {Object.entries(VALID_ACTIONS).map(([key, val]) => (
-                <option key={key} value={key}>{key} — {val.description}</option>
+                <option key={key} value={key}>{key} - {val.description}</option>
               ))}
             </select>
           )}

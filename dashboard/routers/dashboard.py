@@ -1,4 +1,4 @@
-"""Dashboard API routes — user info and guild listing."""
+"""Dashboard API routes - user info and guild listing."""
 
 import asyncio
 import time
@@ -214,7 +214,7 @@ async def bot_invite_url():
                     _bot_id_cache["id"] = bot_id
                     _bot_id_cache["ts"] = now
 
-    # Least-privilege invite — the specific permissions TheCodex uses, NOT
+    # Least-privilege invite - the specific permissions TheCodex uses, NOT
     # Administrator (8). Covers posting messages/embeds, managing its own
     # discussion threads, managing the whitelist/tag/guide roles, and kicking
     # under-age accounts.

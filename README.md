@@ -11,7 +11,7 @@
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
 
 Information hub, daily engagement, suggestions, announcements, new member screening,
-boost tracking, and more — all configurable per guild through slash commands and an admin panel.
+boost tracking, and more - all configurable per guild through slash commands and an admin panel.
 
 A companion **web dashboard** lets admins build and preview guide pages with a drag-and-drop editor.
 
@@ -95,7 +95,7 @@ A companion **web dashboard** lets admins build and preview guide pages with a d
 </table>
 
 ### :gear: Admin Panel
-> `/admin` command with grouped settings for every feature — channels, roles, toggles, guide template upload, and more — all through interactive menus.
+> `/admin` command with grouped settings for every feature - channels, roles, toggles, guide template upload, and more - all through interactive menus.
 
 ---
 

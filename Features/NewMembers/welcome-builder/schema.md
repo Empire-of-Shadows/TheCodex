@@ -1,16 +1,16 @@
-# Welcome Builder — Schema Reference
+# Welcome Builder - Schema Reference
 
 ## Top-level object
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `accent_color` | string or integer | No | Left-side accent bar color |
-| `components` | array | **Yes** | Layout components, 1–10 items |
+| `components` | array | **Yes** | Layout components, 1-10 items |
 
 ### `accent_color`
 
 - **Hex string:** `"#RRGGBB"` (e.g. `"#5865F2"`)
-- **Integer:** `0`–`16777215` (e.g. `5793266`)
+- **Integer:** `0`-`16777215` (e.g. `5793266`)
 
 ---
 
@@ -36,8 +36,8 @@ A standalone text display block.
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
-| `type` | `"text"` | Yes | — |
-| `content` | string | **Yes** | 1–4000 characters; supports markdown; placeholders resolved |
+| `type` | `"text"` | Yes | - |
+| `content` | string | **Yes** | 1-4000 characters; supports markdown; placeholders resolved |
 
 ```json
 {"type": "text", "content": "Welcome, {member}!"}
@@ -47,19 +47,19 @@ A standalone text display block.
 
 ### `section`
 
-A row with 1–3 text objects on the left and a required accessory on the right.
+A row with 1-3 text objects on the left and a required accessory on the right.
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
-| `type` | `"section"` | Yes | — |
-| `content` | array of text objects | **Yes** | 1–3 items; each must be `{"type": "text", "content": "..."}` |
-| `accessory` | thumbnail or button object | **Yes** | — |
+| `type` | `"section"` | Yes | - |
+| `content` | array of text objects | **Yes** | 1-3 items; each must be `{"type": "text", "content": "..."}` |
+| `accessory` | thumbnail or button object | **Yes** | - |
 
 #### Thumbnail accessory
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
-| `type` | `"thumbnail"` | Yes | — |
+| `type` | `"thumbnail"` | Yes | - |
 | `media` | string | **Yes** | `"member_avatar"` (resolved at render time) or any `https://` URL |
 | `description` | string | No | Alt text for the image |
 
@@ -75,8 +75,8 @@ A row containing either buttons **or** a select menu (mutually exclusive).
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
-| `type` | `"action_row"` | Yes | — |
-| `buttons` | array of button objects | **One required** | 1–5 items |
+| `type` | `"action_row"` | Yes | - |
+| `buttons` | array of button objects | **One required** | 1-5 items |
 | `select` | string_select object | **One required** | A single select menu |
 
 You must provide exactly one of `buttons` or `select`, not both.
@@ -89,8 +89,8 @@ Groups multiple components inside a styled box. Containers **cannot** be nested.
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
-| `type` | `"container"` | Yes | — |
-| `components` | array | **Yes** | 1–10 child components |
+| `type` | `"container"` | Yes | - |
+| `components` | array | **Yes** | 1-10 child components |
 | `accent_color` | string or integer | No | Same format as top-level `accent_color` |
 | `spoiler` | boolean | No | Defaults to `false` |
 
@@ -111,12 +111,12 @@ Allowed child types: `separator`, `text`, `section`, `action_row`, `media_galler
 
 ### `media_gallery`
 
-Displays 1–10 media items in a gallery layout.
+Displays 1-10 media items in a gallery layout.
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
-| `type` | `"media_gallery"` | Yes | — |
-| `items` | array | **Yes** | 1–10 items |
+| `type` | `"media_gallery"` | Yes | - |
+| `items` | array | **Yes** | 1-10 items |
 
 Each item:
 
@@ -143,7 +143,7 @@ Displays a single media file.
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
-| `type` | `"file"` | Yes | — |
+| `type` | `"file"` | Yes | - |
 | `media` | string | **Yes** | Must be an `https://` URL |
 | `spoiler` | boolean | No | Defaults to `false` |
 
@@ -161,7 +161,7 @@ Used inside `action_row.buttons` and as a `section.accessory`.
 |---|---|---|---|
 | `type` | `"button"` | (implied) | Only required when used as section accessory |
 | `style` | string | **Yes** | `"primary"`, `"secondary"`, `"success"`, `"danger"`, `"link"` |
-| `label` | string | **Yes** | 1–80 characters; placeholders resolved |
+| `label` | string | **Yes** | 1-80 characters; placeholders resolved |
 | `emoji` | string | No | Unicode emoji or Discord emoji string |
 | `disabled` | boolean | No | Defaults to `false` |
 | `url` | string | Link buttons only | Must start with `https://` |
@@ -170,7 +170,7 @@ Used inside `action_row.buttons` and as a `section.accessory`.
 **Rules:**
 - `"link"` style buttons require `url` and must **not** have `action`
 - All other styles require `action` and must **not** have `url`
-- The old `custom_id` field is no longer accepted — use `action` instead
+- The old `custom_id` field is no longer accepted - use `action` instead
 
 ---
 
@@ -181,15 +181,15 @@ Used inside `action_row.select`.
 | Field | Type | Required | Constraints |
 |---|---|---|---|
 | `placeholder` | string | No | Max 150 characters |
-| `options` | array | **Yes** | 1–25 option objects |
-| `min_values` | integer | No | 1–25, defaults to 1 |
-| `max_values` | integer | No | 1–25, defaults to 1 |
+| `options` | array | **Yes** | 1-25 option objects |
+| `min_values` | integer | No | 1-25, defaults to 1 |
+| `max_values` | integer | No | 1-25, defaults to 1 |
 
 ### Select option
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
-| `label` | string | **Yes** | 1–100 characters; placeholders resolved |
+| `label` | string | **Yes** | 1-100 characters; placeholders resolved |
 | `action` | string | **Yes** | Must be a valid action name |
 | `description` | string | No | Max 100 characters |
 | `emoji` | string | No | Unicode or Discord emoji |
@@ -232,15 +232,15 @@ Text content and button labels support placeholder substitution at render time.
 
 | Constraint | Limit |
 |---|---|
-| Total components | 1–10 |
-| `text.content` length | 1–4000 characters |
-| `section.content` items | 1–3 |
-| `action_row.buttons` items | 1–5 |
-| `action_row.select.options` items | 1–25 |
-| `button.label` length | 1–80 characters |
-| `select option.label` length | 1–100 characters |
-| `select.placeholder` length | 1–150 characters |
-| `container.components` items | 1–10 |
-| `media_gallery.items` items | 1–10 |
-| `media_gallery item.description` length | 1–256 characters |
-| `accent_color` integer range | 0–16777215 |
+| Total components | 1-10 |
+| `text.content` length | 1-4000 characters |
+| `section.content` items | 1-3 |
+| `action_row.buttons` items | 1-5 |
+| `action_row.select.options` items | 1-25 |
+| `button.label` length | 1-80 characters |
+| `select option.label` length | 1-100 characters |
+| `select.placeholder` length | 1-150 characters |
+| `container.components` items | 1-10 |
+| `media_gallery.items` items | 1-10 |
+| `media_gallery item.description` length | 1-256 characters |
+| `accent_color` integer range | 0-16777215 |

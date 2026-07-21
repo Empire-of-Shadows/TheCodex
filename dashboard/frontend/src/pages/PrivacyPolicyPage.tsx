@@ -35,7 +35,7 @@ export default function PrivacyPolicyPage() {
             the bot or the web dashboard, how we use it, and the choices you have. TheCodex is part
             of the Empire of Shadows ecosystem and is designed to work in any Discord server. To
             power features such as suggestions and polls, the bot uses Discord's <strong>Message
-            Content</strong> intent — see "Information we collect" below for exactly what is kept.
+            Content</strong> intent - see "Information we collect" below for exactly what is kept.
           </p>
         </section>
 
@@ -61,8 +61,8 @@ export default function PrivacyPolicyPage() {
               features.
             </li>
             <li>
-              <strong>A cached copy of server structure</strong> — member, role, and channel lists
-              for the servers the bot is in — kept so the dashboard and bot can resolve names and
+              <strong>A cached copy of server structure</strong> - member, role, and channel lists
+              for the servers the bot is in - kept so the dashboard and bot can resolve names and
               permissions quickly, along with usage analytics.
             </li>
             <li><strong>A session cookie</strong> that keeps you signed in to the dashboard.</li>

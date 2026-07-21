@@ -1,9 +1,9 @@
 /**
- * Client-side component validators — port of utils/component_validators.py
+ * Client-side component validators - port of utils/component_validators.py
  *
  * Error messages use human-readable paths:
  *   - Arrow (→) separates path segments: "Container #1 → Text #2"
- *   - Dash (—) separates path from error: "Button #1 — label must be a non-empty string."
+ *   - Dash (-) separates path from error: "Button #1 - label must be a non-empty string."
  */
 
 export interface ValidationResult {
@@ -60,7 +60,7 @@ function optionLabel(opt: unknown, idx: number): string {
 export function validateAccentColor(value: unknown): ValidationResult {
   if (typeof value === "number") {
     if (value >= 0 && value <= 16777215) return OK;
-    return { valid: false, error: `accent_color integer ${value} is out of range (0–16777215).` };
+    return { valid: false, error: `accent_color integer ${value} is out of range (0-16777215).` };
   }
   if (typeof value === "string") {
     if (ACCENT_COLOR_RE.test(value)) return OK;
@@ -72,10 +72,10 @@ export function validateAccentColor(value: unknown): ValidationResult {
 export function validateText(comp: Record<string, unknown>, prefix: string): ValidationResult {
   const content = comp.content;
   if (typeof content !== "string" || !content) {
-    return { valid: false, error: `${prefix} — content must be a non-empty string.` };
+    return { valid: false, error: `${prefix} - content must be a non-empty string.` };
   }
   if (content.length > 4000) {
-    return { valid: false, error: `${prefix} — content exceeds 4000 characters.` };
+    return { valid: false, error: `${prefix} - content exceeds 4000 characters.` };
   }
   return OK;
 }
@@ -83,10 +83,10 @@ export function validateText(comp: Record<string, unknown>, prefix: string): Val
 export function validateThumbnail(comp: Record<string, unknown>, prefix: string): ValidationResult {
   const media = comp.media;
   if (typeof media !== "string" || !media) {
-    return { valid: false, error: `${prefix} — media must be a non-empty string.` };
+    return { valid: false, error: `${prefix} - media must be a non-empty string.` };
   }
   if (media !== "member_avatar") {
-    return { valid: false, error: `${prefix} — media must be "member_avatar".` };
+    return { valid: false, error: `${prefix} - media must be "member_avatar".` };
   }
   return OK;
 }
@@ -94,19 +94,19 @@ export function validateThumbnail(comp: Record<string, unknown>, prefix: string)
 function validateButtonStructure(comp: Record<string, unknown>, prefix: string): ValidationResult {
   const style = comp.style as string;
   if (!VALID_BUTTON_STYLES.has(style)) {
-    return { valid: false, error: `${prefix} — style "${style}" is invalid. Valid: ${[...VALID_BUTTON_STYLES].sort().join(", ")}.` };
+    return { valid: false, error: `${prefix} - style "${style}" is invalid. Valid: ${[...VALID_BUTTON_STYLES].sort().join(", ")}.` };
   }
   const label = comp.label;
   if (typeof label !== "string" || !label) {
-    return { valid: false, error: `${prefix} — label must be a non-empty string.` };
+    return { valid: false, error: `${prefix} - label must be a non-empty string.` };
   }
   if (label.length > 80) {
-    return { valid: false, error: `${prefix} — label exceeds 80 characters.` };
+    return { valid: false, error: `${prefix} - label exceeds 80 characters.` };
   }
   if (style === "link") {
     const url = comp.url;
     if (typeof url !== "string" || !url.startsWith("https://")) {
-      return { valid: false, error: `${prefix} — url is required for link buttons and must start with https://.` };
+      return { valid: false, error: `${prefix} - url is required for link buttons and must start with https://.` };
     }
   }
   return OK;
@@ -114,22 +114,22 @@ function validateButtonStructure(comp: Record<string, unknown>, prefix: string):
 
 function validateSelectOptionStructure(opt: unknown, prefix: string): ValidationResult {
   if (typeof opt !== "object" || opt === null) {
-    return { valid: false, error: `${prefix} — must be an object.` };
+    return { valid: false, error: `${prefix} - must be an object.` };
   }
   const o = opt as Record<string, unknown>;
   const label = o.label;
   if (typeof label !== "string" || !label) {
-    return { valid: false, error: `${prefix} — label must be a non-empty string.` };
+    return { valid: false, error: `${prefix} - label must be a non-empty string.` };
   }
   if (label.length > 100) {
-    return { valid: false, error: `${prefix} — label exceeds 100 characters.` };
+    return { valid: false, error: `${prefix} - label exceeds 100 characters.` };
   }
   if (o.description !== undefined && o.description !== null) {
-    if (typeof o.description !== "string") return { valid: false, error: `${prefix} — description must be a string.` };
-    if ((o.description as string).length > 100) return { valid: false, error: `${prefix} — description exceeds 100 characters.` };
+    if (typeof o.description !== "string") return { valid: false, error: `${prefix} - description must be a string.` };
+    if ((o.description as string).length > 100) return { valid: false, error: `${prefix} - description exceeds 100 characters.` };
   }
   if (o.emoji !== undefined && o.emoji !== null && typeof o.emoji !== "string") {
-    return { valid: false, error: `${prefix} — emoji must be a string.` };
+    return { valid: false, error: `${prefix} - emoji must be a string.` };
   }
   return OK;
 }
@@ -140,19 +140,19 @@ export function validateStringSelect(
   optionValidator?: ActionValidator
 ): ValidationResult {
   if (typeof comp !== "object" || comp === null) {
-    return { valid: false, error: `${prefix} — must be an object.` };
+    return { valid: false, error: `${prefix} - must be an object.` };
   }
   const c = comp as Record<string, unknown>;
   if (c.placeholder !== undefined && c.placeholder !== null) {
-    if (typeof c.placeholder !== "string") return { valid: false, error: `${prefix} — placeholder must be a string.` };
-    if ((c.placeholder as string).length > 150) return { valid: false, error: `${prefix} — placeholder exceeds 150 characters.` };
+    if (typeof c.placeholder !== "string") return { valid: false, error: `${prefix} - placeholder must be a string.` };
+    if ((c.placeholder as string).length > 150) return { valid: false, error: `${prefix} - placeholder exceeds 150 characters.` };
   }
   const options = c.options;
   if (!Array.isArray(options) || options.length === 0) {
-    return { valid: false, error: `${prefix} — options must be a non-empty array.` };
+    return { valid: false, error: `${prefix} - options must be a non-empty array.` };
   }
   if (options.length > 25) {
-    return { valid: false, error: `${prefix} — options has ${options.length} items; max is 25.` };
+    return { valid: false, error: `${prefix} - options has ${options.length} items; max is 25.` };
   }
   for (let i = 0; i < options.length; i++) {
     const optPfx = `${prefix} → ${optionLabel(options[i], i)}`;
@@ -165,7 +165,7 @@ export function validateStringSelect(
     const val = c[field];
     if (val !== undefined && val !== null) {
       if (typeof val !== "number" || val < 1 || val > 25) {
-        return { valid: false, error: `${prefix} — ${field} must be an integer between 1 and 25.` };
+        return { valid: false, error: `${prefix} - ${field} must be an integer between 1 and 25.` };
       }
     }
   }
@@ -179,26 +179,26 @@ export function validateSection(
 ): ValidationResult {
   const content = comp.content;
   if (!Array.isArray(content) || content.length === 0) {
-    return { valid: false, error: `${prefix} — content must be a non-empty array.` };
+    return { valid: false, error: `${prefix} - content must be a non-empty array.` };
   }
   if (content.length > 3) {
-    return { valid: false, error: `${prefix} — content has ${content.length} items; max is 3.` };
+    return { valid: false, error: `${prefix} - content has ${content.length} items; max is 3.` };
   }
   for (let i = 0; i < content.length; i++) {
     const item = content[i] as Record<string, unknown>;
     const itemPrefix = `${prefix} → Text #${i + 1}`;
     if (typeof item !== "object" || item === null || item.type !== "text") {
-      return { valid: false, error: `${itemPrefix} — must be a text component.` };
+      return { valid: false, error: `${itemPrefix} - must be a text component.` };
     }
     const r = validateText(item, itemPrefix);
     if (!r.valid) return r;
   }
   const accessory = comp.accessory;
   if (accessory === undefined || accessory === null) {
-    return { valid: false, error: `${prefix} — accessory is required.` };
+    return { valid: false, error: `${prefix} - accessory is required.` };
   }
   if (typeof accessory !== "object") {
-    return { valid: false, error: `${prefix} → Accessory — must be an object.` };
+    return { valid: false, error: `${prefix} → Accessory - must be an object.` };
   }
   const acc = accessory as Record<string, unknown>;
   const accPrefix = `${prefix} → Accessory`;
@@ -208,7 +208,7 @@ export function validateSection(
       ? actionValidator(acc, accPrefix)
       : validateButtonStructure(acc, accPrefix);
   }
-  return { valid: false, error: `${accPrefix} — type "${acc.type}" is invalid; must be "thumbnail" or "button".` };
+  return { valid: false, error: `${accPrefix} - type "${acc.type}" is invalid; must be "thumbnail" or "button".` };
 }
 
 export function validateActionRow(
@@ -220,10 +220,10 @@ export function validateActionRow(
   const hasButtons = "buttons" in comp;
   const hasSelect = "select" in comp;
   if (hasButtons && hasSelect) {
-    return { valid: false, error: `${prefix} — cannot have both "buttons" and "select".` };
+    return { valid: false, error: `${prefix} - cannot have both "buttons" and "select".` };
   }
   if (!hasButtons && !hasSelect) {
-    return { valid: false, error: `${prefix} — must have either "buttons" or "select".` };
+    return { valid: false, error: `${prefix} - must have either "buttons" or "select".` };
   }
   if (hasSelect) {
     const selectPrefix = `${prefix} → Select menu`;
@@ -233,10 +233,10 @@ export function validateActionRow(
   }
   const buttons = comp.buttons;
   if (!Array.isArray(buttons) || buttons.length === 0) {
-    return { valid: false, error: `${prefix} — buttons must be a non-empty array.` };
+    return { valid: false, error: `${prefix} - buttons must be a non-empty array.` };
   }
   if (buttons.length > 5) {
-    return { valid: false, error: `${prefix} — buttons has ${buttons.length} items; max is 5.` };
+    return { valid: false, error: `${prefix} - buttons has ${buttons.length} items; max is 5.` };
   }
   for (let i = 0; i < buttons.length; i++) {
     const btnPfx = `${prefix} → ${buttonLabel(buttons[i], i)}`;
@@ -251,26 +251,26 @@ export function validateActionRow(
 export function validateMediaGallery(comp: Record<string, unknown>, prefix: string): ValidationResult {
   const items = comp.items;
   if (!Array.isArray(items) || items.length === 0) {
-    return { valid: false, error: `${prefix} — items must be a non-empty array.` };
+    return { valid: false, error: `${prefix} - items must be a non-empty array.` };
   }
   if (items.length > 10) {
-    return { valid: false, error: `${prefix} — items has ${items.length} items; max is 10.` };
+    return { valid: false, error: `${prefix} - items has ${items.length} items; max is 10.` };
   }
   for (let i = 0; i < items.length; i++) {
     const item = items[i] as Record<string, unknown>;
     const itemPrefix = `${prefix} → Image #${i + 1}`;
     if (typeof item !== "object" || item === null) {
-      return { valid: false, error: `${itemPrefix} — must be an object.` };
+      return { valid: false, error: `${itemPrefix} - must be an object.` };
     }
     if (typeof item.media !== "string" || !(item.media as string).startsWith("https://")) {
-      return { valid: false, error: `${itemPrefix} — media must be an https:// URL.` };
+      return { valid: false, error: `${itemPrefix} - media must be an https:// URL.` };
     }
     if (item.description !== undefined && item.description !== null) {
-      if (typeof item.description !== "string") return { valid: false, error: `${itemPrefix} — description must be a string.` };
-      if ((item.description as string).length > 256) return { valid: false, error: `${itemPrefix} — description exceeds 256 characters.` };
+      if (typeof item.description !== "string") return { valid: false, error: `${itemPrefix} - description must be a string.` };
+      if ((item.description as string).length > 256) return { valid: false, error: `${itemPrefix} - description exceeds 256 characters.` };
     }
     if ("spoiler" in item && typeof item.spoiler !== "boolean") {
-      return { valid: false, error: `${itemPrefix} — spoiler must be a boolean.` };
+      return { valid: false, error: `${itemPrefix} - spoiler must be a boolean.` };
     }
   }
   return OK;
@@ -284,27 +284,27 @@ export function validateContainer(
 ): ValidationResult {
   if ("accent_color" in comp) {
     const r = validateAccentColor(comp.accent_color);
-    if (!r.valid) return { valid: false, error: `${prefix} — ${r.error}` };
+    if (!r.valid) return { valid: false, error: `${prefix} - ${r.error}` };
   }
   if ("spoiler" in comp && typeof comp.spoiler !== "boolean") {
-    return { valid: false, error: `${prefix} — spoiler must be a boolean.` };
+    return { valid: false, error: `${prefix} - spoiler must be a boolean.` };
   }
   const components = comp.components;
   if (!Array.isArray(components) || components.length === 0) {
-    return { valid: false, error: `${prefix} — components must be a non-empty array.` };
+    return { valid: false, error: `${prefix} - components must be a non-empty array.` };
   }
   if (components.length > 10) {
-    return { valid: false, error: `${prefix} — components has ${components.length} items; max is 10.` };
+    return { valid: false, error: `${prefix} - components has ${components.length} items; max is 10.` };
   }
   const allowed = new Set(["separator", "text", "section", "action_row", "media_gallery"]);
   for (let i = 0; i < components.length; i++) {
     const child = components[i] as Record<string, unknown>;
     const childPrefix = `${prefix} → ${componentLabel(child, i)}`;
     if (typeof child !== "object" || child === null) {
-      return { valid: false, error: `${childPrefix} — must be an object.` };
+      return { valid: false, error: `${childPrefix} - must be an object.` };
     }
     if (!allowed.has(child.type as string)) {
-      return { valid: false, error: `${childPrefix} — type "${child.type}" is invalid inside a container.` };
+      return { valid: false, error: `${childPrefix} - type "${child.type}" is invalid inside a container.` };
     }
     if (child.type === "separator") continue;
     const r = validateChildComponent(child, child.type as string, childPrefix, actionValidator, selectValidator);
@@ -338,11 +338,11 @@ export function validateTopLevelComponent(
 ): ValidationResult {
   const prefix = componentLabel(comp, idx);
   if (typeof comp !== "object" || comp === null) {
-    return { valid: false, error: `${prefix} — must be an object.` };
+    return { valid: false, error: `${prefix} - must be an object.` };
   }
   const c = comp as Record<string, unknown>;
   if (!VALID_TOP_LEVEL_TYPES.has(c.type as string)) {
-    return { valid: false, error: `${prefix} — type "${c.type}" is invalid.` };
+    return { valid: false, error: `${prefix} - type "${c.type}" is invalid.` };
   }
   if (c.type === "separator") return OK;
   return validateChildComponent(c, c.type as string, prefix, actionValidator, selectValidator);

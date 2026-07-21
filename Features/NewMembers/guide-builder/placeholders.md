@@ -1,4 +1,4 @@
-# Guide Builder — Placeholder Reference
+# Guide Builder - Placeholder Reference
 
 Placeholders are substituted at render time (when the member views the guide). They are case-sensitive and must appear exactly as shown, including the curly braces.
 
@@ -20,10 +20,10 @@ Placeholders are substituted at render time (when the member views the guide). T
 | `text.content` | Yes |
 | `section.content[].content` (text objects inside sections) | Yes |
 | `button.label` | Yes |
-| `thumbnail.description` | No — not substituted |
-| `thumbnail.media` URL | No — only `"member_avatar"` is a special token |
-| `page.label` | No — labels are static |
-| `page.description` | No — descriptions are static |
+| `thumbnail.description` | No - not substituted |
+| `thumbnail.media` URL | No - only `"member_avatar"` is a special token |
+| `page.label` | No - labels are static |
+| `page.description` | No - descriptions are static |
 
 ## Notes
 

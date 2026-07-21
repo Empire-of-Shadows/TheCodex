@@ -1,5 +1,5 @@
 """
-Guide Store — DB CRUD for guide_content collection.
+Guide Store - DB CRUD for guide_content collection.
 
 One document per guild containing the entire guide page tree.
 Loads the default template from defaults/guide_template.json on first access.

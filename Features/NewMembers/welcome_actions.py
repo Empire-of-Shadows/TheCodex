@@ -259,10 +259,10 @@ async def _handle_role_info(interaction, params: dict):
 
     # Cap at 20 to avoid embed limits
     displayed = roles[:20]
-    role_lines = [f"{r.mention} — {len(r.members)} member{'s' if len(r.members) != 1 else ''}" for r in displayed]
+    role_lines = [f"{r.mention} - {len(r.members)} member{'s' if len(r.members) != 1 else ''}" for r in displayed]
 
     embed = discord.Embed(
-        title=f"{guild.name} — Roles Overview",
+        title=f"{guild.name} - Roles Overview",
         description="\n".join(role_lines),
         color=discord.Color.blurple(),
     )
@@ -298,7 +298,7 @@ async def dispatch_welcome_action(interaction) -> bool:
     """
     component_type = interaction.data.get("component_type")
 
-    if component_type == 3:  # Select menu — action is in the selected value
+    if component_type == 3:  # Select menu - action is in the selected value
         values = interaction.data.get("values", [])
         if not values:
             return False

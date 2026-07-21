@@ -403,7 +403,7 @@ export default function DashboardPage() {
         </div>
       ) : (
         <div className="empty-state" role="status" style={{ padding: "32px 24px" }}>
-          No activity yet — once you use Codex features (WYR, suggestions, tag tracker, boosts), they'll show up here.
+          No activity yet - once you use Codex features (WYR, suggestions, tag tracker, boosts), they'll show up here.
         </div>
       )}
 

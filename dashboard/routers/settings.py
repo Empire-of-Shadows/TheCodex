@@ -1,4 +1,4 @@
-"""Per-guild settings GET/PUT — reads + writes Settings.GuildConfig.
+"""Per-guild settings GET/PUT - reads + writes Settings.GuildConfig.
 
 Mirrors the panel groups defined in admin/settings/panel_configs.py but
 exposes them through a single section-keyed JSON endpoint suitable for
@@ -32,7 +32,7 @@ logger = get_logger("dashboard.routers.settings")
 router = APIRouter(tags=["settings"])
 
 # Sections the dashboard may mutate. welcome_components is intentionally
-# excluded — the builder route owns that field. embed is also excluded
+# excluded - the builder route owns that field. embed is also excluded
 # from the simple settings form (managed via Discord panel for now).
 _MUTABLE_SECTIONS: frozenset[str] = frozenset({
     "roles",
@@ -269,7 +269,7 @@ async def update_settings(
                 })
 
     if not update_set:
-        # Nothing actually changed — return the current config unchanged.
+        # Nothing actually changed - return the current config unchanged.
         return {"config": _serialize_config(doc)}
 
     now = datetime.now(timezone.utc)

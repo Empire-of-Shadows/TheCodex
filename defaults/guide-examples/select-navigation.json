@@ -39,7 +39,7 @@
       "icon": "📺",
       "content": {
         "components": [
-          {"type": "text", "content": "# Channel Guide\n\n- **General** — Casual conversation\n- **Gaming** — Game discussions\n- **Media** — Share content"}
+          {"type": "text", "content": "# Channel Guide\n\n- **General** - Casual conversation\n- **Gaming** - Game discussions\n- **Media** - Share content"}
         ]
       }
     },
@@ -49,7 +49,7 @@
       "icon": "🤖",
       "content": {
         "components": [
-          {"type": "text", "content": "# Bot Commands\n\n- `/help` — Show this guide\n- `/suggest` — Submit a suggestion\n- `/info` — Server information"}
+          {"type": "text", "content": "# Bot Commands\n\n- `/help` - Show this guide\n- `/suggest` - Submit a suggestion\n- `/info` - Server information"}
         ]
       }
     },

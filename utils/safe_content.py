@@ -1,5 +1,5 @@
 """
-Content-safety scan — shared guard against payloads that pass the structural
+Content-safety scan - shared guard against payloads that pass the structural
 schema but are "not what we intend to be uploaded".
 
 Mirror of dashboard/frontend/src/validators/safeContent.ts (keep the two in sync).
@@ -20,7 +20,7 @@ from typing import Any, Tuple
 
 _DANGEROUS_KEYS = {"__proto__", "constructor", "prototype"}
 
-# Invisible / bidi control chars. Deliberately EXCLUDES U+200C/U+200D (ZWNJ/ZWJ) —
+# Invisible / bidi control chars. Deliberately EXCLUDES U+200C/U+200D (ZWNJ/ZWJ) -
 # those are required by emoji sequences and scripts like Persian and Indic.
 _INVISIBLE_CTRL = re.compile("[\u00AD\u200B\u200E\u200F\u202A-\u202E\u2060\u2066-\u2069\uFEFF]")
 

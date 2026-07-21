@@ -1,4 +1,4 @@
-# Welcome Builder — Example Layouts
+# Welcome Builder - Example Layouts
 
 ---
 

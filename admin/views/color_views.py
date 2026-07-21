@@ -1,5 +1,5 @@
 """
-Color Set Panel Views — Discord Components v2 LayoutViews.
+Color Set Panel Views - Discord Components v2 LayoutViews.
 
 Provides all view builders and modals for the Color Set admin panel:
   - build_color_sets_menu      → top-level list/create
@@ -131,7 +131,7 @@ def build_default_color_setup_view(
     """
     builder = AdminLayoutBuilder()
 
-    builder.add_header("## Color Tiers — Setup Required")
+    builder.add_header("## Color Tiers - Setup Required")
     builder.add_text(
         "Before managing Color Tiers, you must set a **server default color**.\n\n"
         "This is a base color that **every member** always has access to, "
@@ -177,7 +177,7 @@ def build_color_sets_menu(
         sets:               List of color set dicts from ColorSetActions.
         assignment_counts:  {set_id: count} pre-computed assignment counts.
         default_color:      Server default color int (always available to all members).
-        tier_per_set:       {set_id: tier_name | None} — the tier each set is assigned to.
+        tier_per_set:       {set_id: tier_name | None} - the tier each set is assigned to.
         on_create:          Callback for the "Create Color Set" button.
         on_select_set:      Async callback (interaction, set_id) when a set is selected.
         on_change_default:  Callback to open the change-default-color modal.
@@ -204,7 +204,7 @@ def build_color_sets_menu(
             else:
                 tier_badge = " · Unassigned"
             lines.append(
-                f"- **{s['name']}** — {color_count} color(s){tier_badge}"
+                f"- **{s['name']}** - {color_count} color(s){tier_badge}"
             )
         builder.add_text("\n".join(lines))
     else:
@@ -308,7 +308,7 @@ def build_color_set_detail(
     else:
         builder.add_text("*No colors in this set yet.*")
 
-    # Assignments display (no mode column — always additive)
+    # Assignments display (no mode column - always additive)
     if assignments:
         assign_lines = []
         for a in assignments:
@@ -337,7 +337,7 @@ def build_color_set_detail(
             discord.SelectOption(
                 label=(f"{c['name']} ({color_int_to_hex(c['value'])})"
                        if c.get("name") else color_int_to_hex(c["value"]))[:100],
-                value=str(i),  # index-based — unambiguous even with duplicate values
+                value=str(i),  # index-based - unambiguous even with duplicate values
                 description=f"Remove {color_int_to_hex(c['value'])} from this set",
             )
             for i, c in enumerate(colors[:25])
@@ -449,10 +449,10 @@ def build_role_assign_view(
     """
     builder = AdminLayoutBuilder()
 
-    builder.add_header(f"## Assign to Role — {color_set_name}")
+    builder.add_header(f"## Assign to Role - {color_set_name}")
     builder.add_text(
-        "**This is a privilege override.** Use this to grant specific roles — such as moderators, "
-        "admins, or other privileged members — direct access to this color set, bypassing the tier "
+        "**This is a privilege override.** Use this to grant specific roles - such as moderators, "
+        "admins, or other privileged members - direct access to this color set, bypassing the tier "
         "system entirely.\n\n"
         "Members with the selected role will have access to all colors in this set in addition to "
         "any colors they already receive from their tier."
@@ -502,7 +502,7 @@ def build_tier_assign_view(
     """
     builder = AdminLayoutBuilder()
 
-    builder.add_header(f"## Assign to Tier — {color_set_name}")
+    builder.add_header(f"## Assign to Tier - {color_set_name}")
     builder.add_text(
         "Select a tier below. All members whose roles map to this tier will gain "
         "access to the colors in this set.\n\n"

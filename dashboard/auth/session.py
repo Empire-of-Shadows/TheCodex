@@ -164,7 +164,7 @@ async def refresh_guilds_if_stale(session: dict) -> dict:
     When the snapshot is older than ``GUILDS_REFRESH_TTL_SECONDS`` and the
     session carries an OAuth access token, re-fetch ``/users/@me/guilds``
     (refreshing the access token first if it expired). Every failure path falls
-    back to the cached snapshot — this never raises and never 500s a request.
+    back to the cached snapshot - this never raises and never 500s a request.
     """
     token = session.get("token")
     # Legacy/token-less session (e.g. minted before this rollout): nothing to do.
@@ -174,7 +174,7 @@ async def refresh_guilds_if_stale(session: dict) -> dict:
         return session
 
     async with _refresh_locks[token]:
-        # Re-read under the lock — another request may have refreshed already.
+        # Re-read under the lock - another request may have refreshed already.
         latest = await db.shared_sessions().find_one({"token": token})
         if latest is None:
             return session

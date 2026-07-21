@@ -42,7 +42,7 @@ async def load_cogs_command(ctx):
 def discover_cog_modules(directories: list[str]) -> list[tuple[str, str]]:
     """
     Walk directories and return a list of (module_name, file_path) tuples.
-    Does not load anything — just discovers (skips already-loaded modules).
+    Does not load anything - just discovers (skips already-loaded modules).
     """
     cogs = []
     for base_dir in directories:
@@ -78,7 +78,7 @@ async def load_cogs():
 
     logger.debug(f"Discovered {len(priority_cogs)} priority cogs, {len(regular_cogs)} regular cogs")
 
-    # Phase 2: load priority cogs first (sequential — DB init)
+    # Phase 2: load priority cogs first (sequential - DB init)
     if priority_cogs:
         success_logs.append(f"{s}Loading priority cogs (sequential)...\n")
         for module_name, file_path in priority_cogs:

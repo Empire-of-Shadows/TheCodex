@@ -1,4 +1,4 @@
-"""Builder API routes — GET/PUT guide & welcome data per guild."""
+"""Builder API routes - GET/PUT guide & welcome data per guild."""
 
 import os
 import sys
@@ -103,7 +103,7 @@ async def put_welcome(
     user_id = int(session["user_data"]["id"])
     logger.info("Saving welcome for guild %s by user %s", guild_id, user_id)
     # upsert + guild_id in $set so the save still lands if the config doc was
-    # never seeded (or was removed by guild-data cleanup) — matches put_guide.
+    # never seeded (or was removed by guild-data cleanup) - matches put_guide.
     await db.guild_config().update_one(
         {"guild_id": int(guild_id)},
         {"$set": {

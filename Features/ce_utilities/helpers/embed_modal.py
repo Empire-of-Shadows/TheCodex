@@ -9,7 +9,7 @@ from storage.log import get_logger, log_context, log_performance
 if TYPE_CHECKING:
     from Features.ce_utilities.helpers.embed_config_loader import EmbedConfigLoader
 
-logger = get_logger("EmbedModal", level=logging.INFO, colored_console=True)
+logger = get_logger("EmbedModal", level=logging.INFO)
 
 # Will be set by create_embed.py when the cog loads
 _embed_config: Optional['EmbedConfigLoader'] = None

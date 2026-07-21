@@ -104,7 +104,7 @@ class HelpListener(commands.Cog):
 		member = message.author
 
 		if not clean:
-			# Just a mention with no query — show how-to-use instructions and tips
+			# Just a mention with no query - show how-to-use instructions and tips
 			layout = await guide_manager.get_usage_view(guild_id, user_id, guild=guild, member=member)
 			await message.channel.send(view=layout)
 			return
@@ -117,7 +117,7 @@ class HelpListener(commands.Cog):
 			await message.channel.send(view=layout)
 			return
 
-		# Non-help word (trigger word) — search the guide
+		# Non-help word (trigger word) - search the guide
 		results = await guide_manager.search_content(clean, guild_id, user_id)
 
 		if results and results[0]["score"] >= _CONFIDENCE_THRESHOLD:
@@ -127,7 +127,7 @@ class HelpListener(commands.Cog):
 			await message.channel.send(view=layout)
 			return
 
-		# No match — open the guide's Home page
+		# No match - open the guide's Home page
 		logger.info(f"No matches found for: '{clean}'")
 		layout = await guide_manager.get_home_view(guild_id, user_id, guild=guild, member=member)
 		await message.channel.send(view=layout)

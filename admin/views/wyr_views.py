@@ -106,7 +106,7 @@ def build_wyr_ping_role_view(
 
     builder.add_item(readonly_container(discord.ui.TextDisplay(
         "Role pinged when a WYR question is posted. Leave empty for no ping.\n\n"
-        "-# Don't have a dedicated role? Use **Create Role** to create one — "
+        "-# Don't have a dedicated role? Use **Create Role** to create one - "
         "then go to **Server Settings → Roles** to set its color, icon, and position."
     )))
 

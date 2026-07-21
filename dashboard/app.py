@@ -137,7 +137,7 @@ if os.path.isdir(_frontend_dist):
     app.mount("/assets", StaticFiles(directory=os.path.join(_frontend_dist, "assets")), name="assets")
 
 
-# SPA fallback — any unmatched GET returns index.html for client-side routing.
+# SPA fallback - any unmatched GET returns index.html for client-side routing.
 # Before falling back, serve any real file shipped in `dist/` or `public/`
 # (favicons, brand images, robots.txt, etc.) directly so the SPA fallback
 # doesn't swallow them. `public/` is checked second to cover the case where

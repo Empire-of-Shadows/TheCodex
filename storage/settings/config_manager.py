@@ -51,7 +51,7 @@ def _config_update_ops(old: Dict[str, Any], new: Dict[str, Any],
     return sets, unsets
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Per-guild flat setting defaults  (kept minimal — most settings are structured)
+# Per-guild flat setting defaults  (kept minimal - most settings are structured)
 # ─────────────────────────────────────────────────────────────────────────────
 
 DEFAULT_SETTINGS: Dict[str, Any] = {}
@@ -214,7 +214,7 @@ def _as_int_id_list(values: Any) -> List[int]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# GuildConfig dataclass — structured per-guild settings
+# GuildConfig dataclass - structured per-guild settings
 # ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
@@ -410,7 +410,7 @@ class GuildConfig:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# GuildConfigManager — unified structured + flat settings
+# GuildConfigManager - unified structured + flat settings
 # ─────────────────────────────────────────────────────────────────────────────
 
 class GuildConfigManager:
@@ -843,7 +843,7 @@ class GuildConfigManager:
         admin_set = set(config.roles["admin_role_ids"])
         return bool(user_role_ids & admin_set)
 
-    # ── Typed accessors — Embed Config (async) ───────────────────────────────
+    # ── Typed accessors - Embed Config (async) ───────────────────────────────
 
     async def embed_description_limits(self, guild_id: int) -> Dict[str, Any]:
         config = await self.get_config(guild_id)
@@ -861,7 +861,7 @@ class GuildConfigManager:
         config = await self.get_config(guild_id)
         return config.setup_complete
 
-    # ── Typed accessors — WYR Config (async) ─────────────────────────────────
+    # ── Typed accessors - WYR Config (async) ─────────────────────────────────
 
     async def wyr_post_hour(self, guild_id: int) -> int:
         config = await self.get_config(guild_id)

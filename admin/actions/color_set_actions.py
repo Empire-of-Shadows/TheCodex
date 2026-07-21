@@ -1,12 +1,12 @@
 """
-Color Set Actions — All DB I/O for the Color Set system.
+Color Set Actions - All DB I/O for the Color Set system.
 
 Uses db_manager.get_collection_manager() for the two Color Set collections:
   - color_color_sets
   - color_color_set_assignments
 
 Colors are stored and returned as list[dict] with keys:
-  {"name": str, "value": int}  — name is the admin-given display label
+  {"name": str, "value": int}  - name is the admin-given display label
 
 CollectionManager API:
   find_many(filter, projection, sort, limit, skip)  → list[dict]
@@ -79,7 +79,7 @@ DEFAULT_TIER_PRESETS = [
     {
         "tier": None,
         "name": "Celestial",
-        "description": "Unassigned — space-themed palette",
+        "description": "Unassigned - space-themed palette",
         "colors": [
             {"name": "Nebula",  "value": 0xE91E8C},
             {"name": "Nova",    "value": 0xFF6B35},
@@ -89,7 +89,7 @@ DEFAULT_TIER_PRESETS = [
     {
         "tier": None,
         "name": "Nature",
-        "description": "Unassigned — earth-toned palette",
+        "description": "Unassigned - earth-toned palette",
         "colors": [
             {"name": "Moss",  "value": 0x4A7C59},
             {"name": "Dusk",  "value": 0xB5838D},
@@ -99,7 +99,7 @@ DEFAULT_TIER_PRESETS = [
     {
         "tier": None,
         "name": "Prism",
-        "description": "Unassigned — vivid accent palette",
+        "description": "Unassigned - vivid accent palette",
         "colors": [
             {"name": "Coral", "value": 0xFF6B6B},
             {"name": "Aqua",  "value": 0x4ECDC4},
@@ -277,7 +277,7 @@ class ColorSetActions:
     ) -> bool:
         """Create or update an assignment (unique per guild+set+target).
 
-        Always stores override_mode="additive" — the system is always-additive.
+        Always stores override_mode="additive" - the system is always-additive.
         The field is preserved in the schema for backwards compatibility with
         existing documents, but the resolver ignores it.
         """
@@ -399,7 +399,7 @@ class ColorSetActions:
         """Fetch all data needed for conflict detection and resolution.
 
         Returns:
-            (color_sets, assignments) — both as flat dicts.
+            (color_sets, assignments) - both as flat dicts.
         """
         sets = await ColorSetActions.list_color_sets(guild_id)
         assignments = await ColorSetActions.list_assignments(guild_id)

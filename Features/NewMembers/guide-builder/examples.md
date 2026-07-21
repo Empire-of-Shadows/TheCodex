@@ -1,4 +1,4 @@
-# Guide Builder — Example Layouts
+# Guide Builder - Example Layouts
 
 ## Valid examples
 
@@ -6,7 +6,7 @@ These examples pass schema validation and are ready to use.
 
 ---
 
-### 1. Minimal — single page, one text component
+### 1. Minimal - single page, one text component
 
 The simplest possible guide: one page with one text block.
 
@@ -27,7 +27,7 @@ The simplest possible guide: one page with one text block.
 
 ---
 
-### 2. Navigation buttons — cross-page navigate buttons
+### 2. Navigation buttons - cross-page navigate buttons
 
 Pages that link to each other using navigate buttons.
 
@@ -88,7 +88,7 @@ Pages that link to each other using navigate buttons.
 
 ---
 
-### 3. Nested hierarchy — parent categories with children dropdown
+### 3. Nested hierarchy - parent categories with children dropdown
 
 A hierarchical guide. Parent pages get automatic dropdown navigation for their children.
 
@@ -155,7 +155,7 @@ A hierarchical guide. Parent pages get automatic dropdown navigation for their c
 
 ---
 
-### 4. Rich media — media gallery and thumbnails
+### 4. Rich media - media gallery and thumbnails
 
 Using media galleries and section thumbnails.
 
@@ -196,7 +196,7 @@ Using media galleries and section thumbnails.
 
 ---
 
-### 5. Placeholder showcase — uses all 6 placeholders
+### 5. Placeholder showcase - uses all 6 placeholders
 
 Demonstrates every available placeholder.
 
@@ -227,7 +227,7 @@ Demonstrates every available placeholder.
 
 ---
 
-### 6. Deep nesting — 3 levels of children
+### 6. Deep nesting - 3 levels of children
 
 Three levels of hierarchy: category → subcategory → detail page.
 
@@ -257,7 +257,7 @@ Three levels of hierarchy: category → subcategory → detail page.
               "description": "Events that happen every week",
               "content": {
                 "components": [
-                  {"type": "text", "content": "# Weekly Events\n\n- **Movie Night** — Every Friday at 8 PM\n- **Game Tournament** — Every Saturday at 3 PM\n- **Trivia Night** — Every Wednesday at 7 PM"}
+                  {"type": "text", "content": "# Weekly Events\n\n- **Movie Night** - Every Friday at 8 PM\n- **Game Tournament** - Every Saturday at 3 PM\n- **Trivia Night** - Every Wednesday at 7 PM"}
                 ]
               }
             },
@@ -291,7 +291,7 @@ Three levels of hierarchy: category → subcategory → detail page.
 
 ---
 
-### 7. Mixed content + children — parent page with both
+### 7. Mixed content + children - parent page with both
 
 A parent page that has its own content displayed alongside the children dropdown.
 
@@ -325,7 +325,7 @@ A parent page that has its own content displayed alongside the children dropdown
           "description": "Roles for new members",
           "content": {
             "components": [
-              {"type": "text", "content": "# Starter Roles\n\n🟢 **Newcomer** — Granted on join\n🔵 **Regular** — After 1 week of activity"}
+              {"type": "text", "content": "# Starter Roles\n\n🟢 **Newcomer** - Granted on join\n🔵 **Regular** - After 1 week of activity"}
             ]
           }
         },
@@ -335,7 +335,7 @@ A parent page that has its own content displayed alongside the children dropdown
           "description": "Roles for experienced members",
           "content": {
             "components": [
-              {"type": "text", "content": "# Veteran Roles\n\n🟣 **Veteran** — 1 month of activity\n🟡 **Legend** — 6 months of activity"}
+              {"type": "text", "content": "# Veteran Roles\n\n🟣 **Veteran** - 1 month of activity\n🟡 **Legend** - 6 months of activity"}
             ]
           }
         }
@@ -347,7 +347,7 @@ A parent page that has its own content displayed alongside the children dropdown
 
 ---
 
-### 8. Container styling — containers with accent colors
+### 8. Container styling - containers with accent colors
 
 Using containers to group and style content sections within a page.
 
@@ -404,7 +404,7 @@ Using containers to group and style content sections within a page.
 
 ---
 
-### 9. Select navigation — action_row with select menu
+### 9. Select navigation - action_row with select menu
 
 Using a select menu for page navigation instead of (or alongside) buttons.
 
@@ -450,7 +450,7 @@ Using a select menu for page navigation instead of (or alongside) buttons.
       "icon": "📺",
       "content": {
         "components": [
-          {"type": "text", "content": "# Channel Guide\n\n- **General** — Casual conversation\n- **Gaming** — Game discussions\n- **Media** — Share content"}
+          {"type": "text", "content": "# Channel Guide\n\n- **General** - Casual conversation\n- **Gaming** - Game discussions\n- **Media** - Share content"}
         ]
       }
     },
@@ -460,7 +460,7 @@ Using a select menu for page navigation instead of (or alongside) buttons.
       "icon": "🤖",
       "content": {
         "components": [
-          {"type": "text", "content": "# Bot Commands\n\n- `/help` — Show this guide\n- `/suggest` — Submit a suggestion\n- `/info` — Server information"}
+          {"type": "text", "content": "# Bot Commands\n\n- `/help` - Show this guide\n- `/suggest` - Submit a suggestion\n- `/info` - Server information"}
         ]
       }
     },
@@ -480,7 +480,7 @@ Using a select menu for page navigation instead of (or alongside) buttons.
 
 ---
 
-### 10. Full-featured guide — comprehensive example
+### 10. Full-featured guide - comprehensive example
 
 A guide that uses most available features: multiple levels, media, containers, buttons, sections, and placeholders.
 
@@ -537,7 +537,7 @@ A guide that uses most available features: multiple levels, media, containers, b
             "type": "container",
             "accent_color": "#ED4245",
             "components": [
-              {"type": "text", "content": "1. **Be Respectful** — Treat everyone with kindness\n2. **No Spam** — Keep channels clean and on-topic\n3. **No NSFW** — Keep content appropriate\n4. **Follow Discord TOS** — Always\n5. **Have Fun** — That's what we're here for!"}
+              {"type": "text", "content": "1. **Be Respectful** - Treat everyone with kindness\n2. **No Spam** - Keep channels clean and on-topic\n3. **No NSFW** - Keep content appropriate\n4. **Follow Discord TOS** - Always\n5. **Have Fun** - That's what we're here for!"}
             ]
           }
         ]
@@ -562,7 +562,7 @@ A guide that uses most available features: multiple levels, media, containers, b
           "icon": "💬",
           "content": {
             "components": [
-              {"type": "text", "content": "# Social Channels\n\n- **General Chat** — Casual conversation\n- **Introductions** — Introduce yourself\n- **Memes** — Share funny content"},
+              {"type": "text", "content": "# Social Channels\n\n- **General Chat** - Casual conversation\n- **Introductions** - Introduce yourself\n- **Memes** - Share funny content"},
               {
                 "type": "media_gallery",
                 "items": [
@@ -579,7 +579,7 @@ A guide that uses most available features: multiple levels, media, containers, b
           "icon": "🎮",
           "content": {
             "components": [
-              {"type": "text", "content": "# Gaming Channels\n\n- **Game Chat** — General gaming discussion\n- **LFG** — Looking for group\n- **Clips** — Share your gameplay clips"}
+              {"type": "text", "content": "# Gaming Channels\n\n- **Game Chat** - General gaming discussion\n- **LFG** - Looking for group\n- **Clips** - Share your gameplay clips"}
             ]
           }
         },
@@ -590,7 +590,7 @@ A guide that uses most available features: multiple levels, media, containers, b
           "icon": "🎙",
           "content": {
             "components": [
-              {"type": "text", "content": "# Voice Channels\n\n- **General Voice** — Open to everyone\n- **Gaming Voice** — For playing together\n- **Music** — Listen together\n\nThere are currently **{voice_active}** active channels."}
+              {"type": "text", "content": "# Voice Channels\n\n- **General Voice** - Open to everyone\n- **Gaming Voice** - For playing together\n- **Music** - Listen together\n\nThere are currently **{voice_active}** active channels."}
             ]
           }
         }
@@ -610,7 +610,7 @@ A guide that uses most available features: multiple levels, media, containers, b
           "icon": "🎲",
           "content": {
             "components": [
-              {"type": "text", "content": "# Fun Commands\n\n- `/uno` — Start a UNO game\n- `/hangman` — Play Hangman\n- `/tictactoe` — Play Tic-Tac-Toe"}
+              {"type": "text", "content": "# Fun Commands\n\n- `/uno` - Start a UNO game\n- `/hangman` - Play Hangman\n- `/tictactoe` - Play Tic-Tac-Toe"}
             ]
           }
         },
@@ -621,7 +621,7 @@ A guide that uses most available features: multiple levels, media, containers, b
           "icon": "🔧",
           "content": {
             "components": [
-              {"type": "text", "content": "# Utility Commands\n\n- `/help` — Show this guide\n- `/suggest` — Submit a suggestion\n- `/info` — Server information\n- `/drops` — Browse free gaming drops"}
+              {"type": "text", "content": "# Utility Commands\n\n- `/help` - Show this guide\n- `/suggest` - Submit a suggestion\n- `/info` - Server information\n- `/drops` - Browse free gaming drops"}
             ]
           }
         }
@@ -635,7 +635,7 @@ A guide that uses most available features: multiple levels, media, containers, b
       "order": 5,
       "content": {
         "components": [
-          {"type": "text", "content": "# FAQ\n\n**Q: How do I get roles?**\nCheck the role selection channel for self-assignable roles.\n\n**Q: How do I report someone?**\nUse the modmail system or contact a moderator directly.\n\n**Q: Can I suggest features?**\nYes! Use the `/suggest` command to submit your ideas.\n\n**Q: How do I rank up?**\nJust be active — chat, join voice, and participate in events."},
+          {"type": "text", "content": "# FAQ\n\n**Q: How do I get roles?**\nCheck the role selection channel for self-assignable roles.\n\n**Q: How do I report someone?**\nUse the modmail system or contact a moderator directly.\n\n**Q: Can I suggest features?**\nYes! Use the `/suggest` command to submit your ideas.\n\n**Q: How do I rank up?**\nJust be active - chat, join voice, and participate in events."},
           {"type": "separator"},
           {
             "type": "action_row",

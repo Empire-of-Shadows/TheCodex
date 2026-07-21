@@ -3,10 +3,10 @@ Embed Config Actions - Business logic for embed configuration via admin panel.
 
 All read/write goes through storage.config_manager (GuildConfigManager).
 All embed settings live inside config.embed on the GuildConfig dataclass:
-  embed.role_tier          — role-to-tier mapping
-  embed.description_limits — default_limit, limits, tier_limits
-  embed.color_tiers        — tier → {name: hex_str}
-  embed.feature_access     — feature → [tier_names]
+  embed.role_tier          - role-to-tier mapping
+  embed.description_limits - default_limit, limits, tier_limits
+  embed.color_tiers        - tier → {name: hex_str}
+  embed.feature_access     - feature → [tier_names]
 """
 
 from typing import Any, Dict, List, Optional
@@ -311,7 +311,7 @@ class EmbedConfigActions:
         gcm = await _get_gcm()
         config = await gcm.get_config(guild_id)
 
-        # Role tier mapping — invert to {tier_name: [role_id, ...]}
+        # Role tier mapping - invert to {tier_name: [role_id, ...]}
         raw_mapping = config.embed.get("role_tier", {})
         tier_roles: Dict[str, List[int]] = {t: [] for t in EmbedConfigActions.TIER_NAMES}
         for role_id_str, tiers in raw_mapping.items():

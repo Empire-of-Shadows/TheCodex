@@ -4,12 +4,12 @@ Shared Components V2 Validators
 Reusable validation functions for Discord Components V2 JSON schemas.
 Used by both the welcome-builder and guide-builder systems.
 
-All validators return (bool, str) — True/"" on success, or False/error message.
+All validators return (bool, str) - True/"" on success, or False/error message.
 Button/select action validation is delegated to a feature-specific callback.
 
 Error messages use human-readable paths:
   - Arrow (→) separates path segments: "Container #1 → Text #2"
-  - Dash (—) separates path from error: "Button #1 — label must be a non-empty string."
+  - Dash (-) separates path from error: "Button #1 - label must be a non-empty string."
 """
 
 import re
@@ -105,7 +105,7 @@ def validate_section(
     prefix: str,
     action_validator: Optional[ActionValidator] = None,
 ) -> Tuple[bool, str]:
-    # content: 1–3 text objects
+    # content: 1-3 text objects
     content = comp.get("content")
     if not isinstance(content, list) or len(content) == 0:
         return False, f"{prefix} \u2014 content must be a non-empty array."

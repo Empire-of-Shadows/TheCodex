@@ -32,7 +32,7 @@
           "icon": "📜",
           "content": {
             "components": [
-              {"type": "text", "content": "# Server Rules\n\nPlease follow these guidelines to keep our community welcoming:\n\n1. **Be Respectful** — Treat everyone with kindness\n2. **No Spam** — Keep channels clean and on-topic\n3. **No NSFW** — Keep content appropriate\n4. **Have Fun** — That's what we're here for!"}
+              {"type": "text", "content": "# Server Rules\n\nPlease follow these guidelines to keep our community welcoming:\n\n1. **Be Respectful** - Treat everyone with kindness\n2. **No Spam** - Keep channels clean and on-topic\n3. **No NSFW** - Keep content appropriate\n4. **Have Fun** - That's what we're here for!"}
             ]
           }
         }
@@ -90,7 +90,7 @@
           "description": "Essential commands for everyday use",
           "content": {
             "components": [
-              {"type": "text", "content": "# Basic Commands\n\n- `/help` — Show this guide\n- `/suggest` — Submit a suggestion\n- `/info` — View server information"}
+              {"type": "text", "content": "# Basic Commands\n\n- `/help` - Show this guide\n- `/suggest` - Submit a suggestion\n- `/info` - View server information"}
             ]
           }
         },
@@ -100,7 +100,7 @@
           "description": "Interactive game commands",
           "content": {
             "components": [
-              {"type": "text", "content": "# Game Commands\n\n- `/uno` — Start a UNO game\n- `/hangman` — Play Hangman\n- `/tictactoe` — Play Tic-Tac-Toe"}
+              {"type": "text", "content": "# Game Commands\n\n- `/uno` - Start a UNO game\n- `/hangman` - Play Hangman\n- `/tictactoe` - Play Tic-Tac-Toe"}
             ]
           }
         }

@@ -1,4 +1,4 @@
-"""TheCodex — admin engine bindings (the per-bot seam).
+"""TheCodex - admin engine bindings (the per-bot seam).
 
 The vendored engine (``admin_cog.py``) is byte-identical across every bot; it reaches all of
 TheCodex's backends through the names defined here. See ``admin_engine/bindings_reference.py``
@@ -9,7 +9,7 @@ collection managers): structured per-guild config + flat settings through ``Guil
 and audit entries through the engine ``AuditLog`` service. The panel binds its leaves to bot-specific
 action classes (``EmbedConfigActions``, ``GuideActions``, …) that use the config manager
 directly, so the generic ``config_*`` doers here back the flat settings store and the ``db_*``
-doers are inert (the panel has no engine collection actions — same pattern as TheHost).
+doers are inert (the panel has no engine collection actions - same pattern as TheHost).
 
 TheCodex has no guild-entitlement premium system, so ``is_premium`` is always ``False``.
 """
@@ -135,7 +135,7 @@ async def audit_log_entry(
 
 # ── Config access (dotted-path, backend-agnostic) ────────────────────────────────
 # TheCodex keeps one document per guild split in two: structured top-level keys (the typed
-# ``GuildConfig`` — ``roles``, ``wyr``, …) reached via ``get_config`` / ``save_config``, and
+# ``GuildConfig`` - ``roles``, ``wyr``, …) reached via ``get_config`` / ``save_config``, and
 # flat "legacy/misc" keys reached via ``get_setting`` / ``set_setting``. The engine's config
 # contract is a single dotted-path getter/setter, so these doers route a path to the right
 # half by its head key: ``roles.admin_role_ids`` -> the typed store, ``hide_setup_guide`` ->
@@ -224,7 +224,7 @@ async def config_unset(guild_id: int, path: str) -> bool:
     return await cm.unset_setting(path, int(guild_id))
 
 
-# ── Collection access (inert — TheCodex's panel has no engine collection actions) ─
+# ── Collection access (inert - TheCodex's panel has no engine collection actions) ─
 
 async def db_find(collection: str, query: dict, *, sort=None, limit: int | None = None) -> list[dict]:
     return []

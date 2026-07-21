@@ -112,7 +112,7 @@ class GuildEventHandler:
                             role_dist[role.name] += 1
             cache_data['role_distribution'] = dict(role_dist)
 
-            # Channel activity — scanned in background to avoid blocking init
+            # Channel activity - scanned in background to avoid blocking init
             cache_data['popular_channels'] = {}
             asyncio.create_task(self._scan_channel_activity(guild, cache_data))
 
@@ -335,7 +335,7 @@ class GuildEventHandler:
 
             config = GuildConfig(guild_id=guild.id)
 
-            # Disable all toggleable features — owner turns them on in settings
+            # Disable all toggleable features - owner turns them on in settings
             config.new_members['enabled'] = False
             config.new_members['auto_kick'] = False
             config.new_members['welcome_message_enabled'] = False
@@ -466,7 +466,7 @@ class GuildEventHandler:
             # the DM is strictly best-effort and the old artificial sleeps are
             # gone. (DMs require a mutual guild, so we still send before kicking,
             # but never block the kick on it.) For hard gatekeeping, gate channel
-            # access behind a verification role — an age-kick is a backstop, not
+            # access behind a verification role - an age-kick is a backstop, not
             # a true gate, since it runs after the member is already in.
             can_dm, reason = await self.can_send_dm(member)
             if can_dm:
@@ -546,7 +546,7 @@ class GuildEventHandler:
             welcome_components = guild_config.new_members.get("welcome_components")
             if not welcome_components:
                 self.logger.warning(
-                    f"[WELCOME] No welcome_components configured for guild {member.guild.id} — skipping welcome message for {member}"
+                    f"[WELCOME] No welcome_components configured for guild {member.guild.id} - skipping welcome message for {member}"
                 )
                 return
 
@@ -562,7 +562,7 @@ class GuildEventHandler:
             self.logger.error(f"Error sending Components v2 welcome message: {e}", exc_info=True)
 
     async def handle_interaction(self, interaction: discord.Interaction):
-        """Handle component interactions — routes to welcome or guide dispatchers."""
+        """Handle component interactions - routes to welcome or guide dispatchers."""
         if interaction.type != discord.InteractionType.component:
             return
 
@@ -637,7 +637,7 @@ class GuildEventHandler:
         The wipe runs after GUILD_CLEANUP_GRACE_SECONDS unless the bot rejoins
         first (see cancel_pending_cleanup), so a transient removal doesn't
         irreversibly delete the guild's config and history. In-memory schedules
-        are lost on restart — that errs toward keeping data, the safe default.
+        are lost on restart - that errs toward keeping data, the safe default.
         """
         existing = self._pending_cleanups.get(guild_id)
         if existing and not existing.done():
@@ -744,7 +744,7 @@ class GuildEventHandler:
             deleted_total = sum(totals.values())
             self.logger.info(
                 f"Guild data cleanup complete for {guild_name} ({guild_id}): "
-                f"{deleted_total} records removed — {totals}"
+                f"{deleted_total} records removed - {totals}"
             )
 
         except Exception as e:
@@ -763,7 +763,7 @@ guild_handler = GuildEventHandler(bot)
 
 # ── Event handlers (registered as listeners in setup) ────────────────────────
 # Plain functions, not @bot.event/@bot.listen: registration happens in setup()
-# so loading is explicit. add_listener is additive — it never overrides the
+# so loading is explicit. add_listener is additive - it never overrides the
 # gateway's own interaction/member processing.
 
 async def on_interaction(interaction: discord.Interaction):
@@ -838,7 +838,7 @@ async def setup(bot):
     """Register the guild lifecycle + interaction-routing listeners.
 
     joining.py is a plain manager module (no Cog), so it must be loaded
-    explicitly. Registering here — rather than via import-time @bot.event —
+    explicitly. Registering here - rather than via import-time @bot.event -
     means the member/interaction system loads through the normal cog loader and
     no longer depends on another cog happening to import ``guild_handler``.
     """

@@ -2,7 +2,7 @@
 Color normalization utilities for the Color Set system.
 
 Converts user-provided color input (hex or rgb) to Discord color integers and back.
-All internal storage uses Discord color ints (0x000000–0xFFFFFF).
+All internal storage uses Discord color ints (0x000000-0xFFFFFF).
 
 Supported input formats:
   - Hex: "#FFAA00", "FFAA00", "#FA0" (3-digit shorthand expands to 6)
@@ -63,7 +63,7 @@ def parse_named_colors_string(raw: str) -> tuple[list[dict], list[str]]:
     Lines without a colon are treated as a bare color code; the code itself
     becomes the display name (e.g. "#FF0000" → name="#FF0000").
 
-    Duplicate values (same color int, different names) are silently skipped —
+    Duplicate values (same color int, different names) are silently skipped -
     the first occurrence wins.
 
     Returns:

@@ -36,12 +36,12 @@ def _get_client() -> AsyncMongoClient:
 # Collection accessors matching define_collections.py mappings
 
 def guide_content():
-    """Guide.Content — one document per guild with full page tree."""
+    """Guide.Content - one document per guild with full page tree."""
     return _get_client()["Guide"]["Content"]
 
 
 def guild_config():
-    """Settings.GuildConfig — per-guild configuration."""
+    """Settings.GuildConfig - per-guild configuration."""
     return _get_client()["Settings"]["GuildConfig"]
 
 
@@ -64,20 +64,20 @@ def oauth_states():
 
 
 def wyr_leaderboard():
-    """Daily.WYR_Leaderboard — WYR voting stats per user."""
+    """Daily.WYR_Leaderboard - WYR voting stats per user."""
     return _get_client()["Daily"]["WYR_Leaderboard"]
 
 
 def suggestions_suggestions():
-    """Suggestions.Suggestions — user-submitted suggestions."""
+    """Suggestions.Suggestions - user-submitted suggestions."""
     return _get_client()["Suggestions"]["Suggestions"]
 
 
 def suggestions_userstats():
-    """Suggestions.UserStats — aggregated suggestion user stats."""
+    """Suggestions.UserStats - aggregated suggestion user stats."""
     return _get_client()["Suggestions"]["UserStats"]
 
 
 def serverdata_boosts():
-    """ServerData.Boosts — active boost records."""
+    """ServerData.Boosts - active boost records."""
     return _get_client()["ServerData"]["Boosts"]

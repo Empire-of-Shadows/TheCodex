@@ -27,7 +27,7 @@
           "description": "Roles for new members",
           "content": {
             "components": [
-              {"type": "text", "content": "# Starter Roles\n\n🟢 **Newcomer** — Granted on join\n🔵 **Regular** — After 1 week of activity"}
+              {"type": "text", "content": "# Starter Roles\n\n🟢 **Newcomer** - Granted on join\n🔵 **Regular** - After 1 week of activity"}
             ]
           }
         },
@@ -37,7 +37,7 @@
           "description": "Roles for experienced members",
           "content": {
             "components": [
-              {"type": "text", "content": "# Veteran Roles\n\n🟣 **Veteran** — 1 month of activity\n🟡 **Legend** — 6 months of activity"}
+              {"type": "text", "content": "# Veteran Roles\n\n🟣 **Veteran** - 1 month of activity\n🟡 **Legend** - 6 months of activity"}
             ]
           }
         }

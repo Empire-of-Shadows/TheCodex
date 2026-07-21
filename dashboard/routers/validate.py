@@ -1,4 +1,4 @@
-"""Validation-only endpoints — check JSON without saving."""
+"""Validation-only endpoints - check JSON without saving."""
 
 import os
 import sys

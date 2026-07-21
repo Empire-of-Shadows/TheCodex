@@ -180,8 +180,8 @@ async def require_guild_admin(
     This is the live equivalent of the old session-only MANAGE_GUILD check: a
     configured admin role is verified against Discord via the bot token, so the
     builder enforces the same authority the settings route does. (A MANAGE_GUILD
-    holder is still recognised from the session — the app has no stored OAuth
-    token to re-derive that permission live — but this closes the gap for
+    holder is still recognised from the session - the app has no stored OAuth
+    token to re-derive that permission live - but this closes the gap for
     role-based admins and keeps the two write surfaces consistent.)
     """
     role = await resolve_panel_role(session, guild_id)

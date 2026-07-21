@@ -1,10 +1,10 @@
-"""storage_engine bindings — TheCodex (bot-owned, NOT vendored).
+"""storage_engine bindings - TheCodex (bot-owned, NOT vendored).
 
 The single integration point between the vendored storage engine and this bot's
 environment. The engine (and this bot's own ``collections.py``) import these names. The
-bot-owned (hand-written) storage seam lives in ``storage/settings/`` — ``bindings.py`` /
+bot-owned (hand-written) storage seam lives in ``storage/settings/`` - ``bindings.py`` /
 ``collections.py`` (the registry + the shared ``db_manager``) / ``config_manager.py``;
-everything else under ``storage/`` is vendored engine code — do not edit it here. (Audit
+everything else under ``storage/`` is vendored engine code - do not edit it here. (Audit
 logging uses the engine ``AuditLog`` service; the admin-panel setup gate now lives in the
 admin seam at ``admin/settings/setup_gatekeeper.py``.)
 
@@ -13,7 +13,7 @@ Layout reference: ``Informatinal/Stygian-Relay/storage/settings/``.
 
 Env note: ``MONGO_URI`` is loaded by the entrypoint (``Codex.py`` loads ``docker/.env`` /
 ``.env.local`` before importing ``storage.settings.collections``), so reading it here at
-import time is safe — same ordering the pre-migration ``db_manager = DatabaseManager()``
+import time is safe - same ordering the pre-migration ``db_manager = DatabaseManager()``
 relied on.
 """
 
@@ -55,7 +55,7 @@ def build_cache() -> CacheBackend:
 WATCHED_COLLECTIONS: List[str] = []
 
 
-# ── Audit hook (ENGINE CONTRACT: audit_storage_event) — OPTIONAL ────────────────
+# ── Audit hook (ENGINE CONTRACT: audit_storage_event) - OPTIONAL ────────────────
 async def audit_storage_event(
     *,
     collection: str,

@@ -28,7 +28,7 @@ logger = get_logger("Guide")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Search Engine — indexes V2 page trees
+# Search Engine - indexes V2 page trees
 # ─────────────────────────────────────────────────────────────────────────────
 
 class SearchEngine:
@@ -151,7 +151,7 @@ class SearchEngine:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Navigation Breadcrumbs — per-guild, per-user
+# Navigation Breadcrumbs - per-guild, per-user
 # ─────────────────────────────────────────────────────────────────────────────
 
 class NavigationBreadcrumbs:
@@ -188,7 +188,7 @@ class NavigationBreadcrumbs:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Guide Manager — core orchestrator
+# Guide Manager - core orchestrator
 # ─────────────────────────────────────────────────────────────────────────────
 
 class GuideManager:
@@ -228,7 +228,7 @@ class GuideManager:
 						return self._guide_cache[guild_id]
 				# If we can't compare, fall through to refetch
 			else:
-				# No updated_at in DB — trust cache for 30 min
+				# No updated_at in DB - trust cache for 30 min
 				if datetime.now(timezone.utc) - cache_ts < timedelta(minutes=30):
 					return self._guide_cache[guild_id]
 
@@ -303,7 +303,7 @@ class GuideManager:
 		)
 
 	def _home_page_id(self, pages: List[Dict]) -> Optional[str]:
-		"""Return the Home page id — the top-level page with the lowest ``order``."""
+		"""Return the Home page id - the top-level page with the lowest ``order``."""
 		if not pages:
 			return None
 		return sorted(pages, key=lambda p: p.get("order", 999))[0].get("id")
@@ -329,7 +329,7 @@ class GuideManager:
 		labels = self._get_breadcrumb_labels(pages, page_id)
 		breadcrumb_path = ["Guide"] + (labels or [page.get("label", "")])
 
-		# The Home page (top of the tree) is the root — no Back/Home buttons.
+		# The Home page (top of the tree) is the root - no Back/Home buttons.
 		is_root = page_id == self._home_page_id(pages)
 
 		return GuideRenderer.render_page(
@@ -343,7 +343,7 @@ class GuideManager:
 		guild: discord.Guild = None,
 		member: Union[discord.Member, discord.User] = None,
 	) -> discord.ui.LayoutView:
-		"""Render the guide's Home page — the page at the top of the tree.
+		"""Render the guide's Home page - the page at the top of the tree.
 
 		The top-level page with the lowest ``order`` is the Home page. It is the
 		entry point that ``help`` mentions, the Home button, and unmatched
@@ -353,7 +353,7 @@ class GuideManager:
 		guide_data = await self._get_guide(guild_id)
 		pages = guide_data.get("pages", [])
 		if not pages:
-			# No pages authored yet — show a friendly empty state.
+			# No pages authored yet - show a friendly empty state.
 			return GuideRenderer.render_empty(
 				guide_data,
 				interaction=interaction, guild=guild, member=member,
@@ -489,7 +489,7 @@ class GuideManager:
 		layout.add_item(nav_row)
 		return layout
 
-	# Legacy compatibility — used by guide_mention and welcome_actions
+	# Legacy compatibility - used by guide_mention and welcome_actions
 	async def search_content(self, query: str, guild_id: int, user_id: int = None) -> List[Dict]:
 		"""Search for content. Returns list of result dicts."""
 		await self._get_guide(guild_id)  # Ensure indexed
@@ -638,7 +638,7 @@ async def dispatch_guide_interaction(interaction: discord.Interaction) -> bool:
 	try:
 		# Handle select menus
 		if component_type == 3:  # String select
-			# Auto-generated children / sections / search select — value is a page_id
+			# Auto-generated children / sections / search select - value is a page_id
 			if custom_id in ("g:_select", "g:_sections"):
 				values = interaction.data.get("values", [])
 				if not values:
@@ -648,7 +648,7 @@ async def dispatch_guide_interaction(interaction: discord.Interaction) -> bool:
 				await interaction.response.edit_message(view=layout)
 				return True
 
-			# User-defined select — value encodes action:target
+			# User-defined select - value encodes action:target
 			if custom_id == "g:_uselect":
 				values = interaction.data.get("values", [])
 				if not values:

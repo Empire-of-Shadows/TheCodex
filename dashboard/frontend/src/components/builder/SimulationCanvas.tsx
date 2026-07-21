@@ -19,7 +19,7 @@ interface Props {
 }
 
 // The Home page is the top page of the tree (lowest `order`). A bare mention,
-// the Home button, and unmatched searches all land here — mirrors the bot.
+// the Home button, and unmatched searches all land here - mirrors the bot.
 function homePageId(pages: GuidePage[]): string | null {
   if (pages.length === 0) return null;
   return [...pages].sort((a, b) => (a.order ?? 999) - (b.order ?? 999))[0].id;
@@ -59,7 +59,7 @@ export default function SimulationCanvas({
   onInteract,
 }: Props) {
   if (mode === "guide") {
-    // A null simulation page means "Home" — resolve it to the top page.
+    // A null simulation page means "Home" - resolve it to the top page.
     const activePageId = simulationPageId ?? homePageId(pages);
     return (
       <MessageChrome>
@@ -167,7 +167,7 @@ function GuidePageView({
         <SelectPreview select={sectionsSelect} onInteract={onInteract} />
       )}
 
-      {/* Breadcrumb + Nav row. The Home page (top of the tree) is the root —
+      {/* Breadcrumb + Nav row. The Home page (top of the tree) is the root -
           it hides the Back/Home buttons, matching the bot. */}
       <GuideBreadcrumb labels={breadcrumbs} />
       <GuideNavRow isRoot={isHome} onInteract={onInteract} />

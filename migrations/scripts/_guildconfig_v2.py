@@ -165,7 +165,7 @@ DEFAULT_CONFIG = {
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# GuildConfig dataclass — structured per-guild settings
+# GuildConfig dataclass - structured per-guild settings
 # ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
@@ -311,11 +311,11 @@ class GuildConfig:
         if "new_members" in data and isinstance(data["new_members"], dict):
             stored = data["new_members"]
             if "welcome_channel_id" in stored:
-                # gen3 — all data self-contained
+                # gen3 - all data self-contained
                 nm_welcome_ch = stored.get("welcome_channel_id")
                 nm_whitelist_role = stored.get("whitelist_role_id")
             else:
-                # gen2 — channel/role in outer channels/roles dicts
+                # gen2 - channel/role in outer channels/roles dicts
                 nm_welcome_ch = channels_g2.get("welcome")
                 nm_whitelist_role = roles_g2.get("whitelist")
             _nm_enabled = (
@@ -504,7 +504,7 @@ class GuildConfig:
         if "embed" in data and isinstance(data["embed"], dict):
             stored = data["embed"]
             if "description_limits" in stored or "color_tiers" in stored or "feature_access" in stored:
-                # gen3 — all embed settings inside the embed dict
+                # gen3 - all embed settings inside the embed dict
                 embed = {
                     "default_color": stored.get("default_color"),
                     "role_tier": stored.get("role_tier", legacy_role_tier),
@@ -514,7 +514,7 @@ class GuildConfig:
                 }
                 embed["enabled"] = stored["enabled"] if "enabled" in stored else bool(embed.get("role_tier"))
             else:
-                # gen2 — embed dict exists but flat settings are at top level
+                # gen2 - embed dict exists but flat settings are at top level
                 embed = {
                     "default_color": stored.get("default_color"),
                     "role_tier": stored.get("role_tier", legacy_role_tier),
@@ -570,5 +570,5 @@ class GuildConfig:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# GuildConfigManager — unified structured + flat settings
+# GuildConfigManager - unified structured + flat settings
 # ─────────────────────────────────────────────────────────────────────────────

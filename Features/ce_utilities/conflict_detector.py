@@ -7,11 +7,11 @@ The system is always-additive; the only hard constraints are:
 
   BREAKING:
     - A hex value already exists in another color set in the guild
-      (cross-set color uniqueness — checked on add).
+      (cross-set color uniqueness - checked on add).
     - A color set is already assigned to a different tier
-      (tier exclusivity — one set can be in at most one tier).
+      (tier exclusivity - one set can be in at most one tier).
 
-All conflicts in this module are BREAKING (hard blocks — no confirmation
+All conflicts in this module are BREAKING (hard blocks - no confirmation
 prompts needed).
 """
 
@@ -44,7 +44,7 @@ async def check_color_uniqueness(
     Args:
         guild_id:        Target guild.
         colors:          Proposed colors as list[{"name": str, "value": int}].
-        exclude_set_id:  The set being modified — excluded from the comparison
+        exclude_set_id:  The set being modified - excluded from the comparison
                          so that existing colors in the same set are not flagged.
 
     Returns:
@@ -57,7 +57,7 @@ async def check_color_uniqueness(
     try:
         all_sets = await ColorSetActions.list_color_sets(guild_id)
     except Exception:
-        return ConflictResult(status="ok", message="Could not verify uniqueness — proceeding.")
+        return ConflictResult(status="ok", message="Could not verify uniqueness - proceeding.")
 
     proposed_values = {c["value"] for c in colors}
 
@@ -103,7 +103,7 @@ async def check_tier_exclusivity(
     try:
         assignments = await ColorSetActions.list_assignments(guild_id, set_id=color_set_id)
     except Exception:
-        return ConflictResult(status="ok", message="Could not verify tier exclusivity — proceeding.")
+        return ConflictResult(status="ok", message="Could not verify tier exclusivity - proceeding.")
 
     for a in assignments:
         if a.get("target_type") == "tier" and a.get("target_id") != proposed_tier:

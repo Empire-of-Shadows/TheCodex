@@ -1,5 +1,5 @@
 """
-Guide Renderer — renders a guide page to a discord.ui.LayoutView with navigation chrome.
+Guide Renderer - renders a guide page to a discord.ui.LayoutView with navigation chrome.
 
 Layout structure:
   Container (accent_color):
@@ -8,7 +8,7 @@ Layout structure:
     [user-defined content components from page.content]
   ActionRow (if page has children):
     Select dropdown with child pages as options
-  ActionRow (navigation chrome — always present):
+  ActionRow (navigation chrome - always present):
     [Back] [Home] [Search]
 """
 
@@ -85,7 +85,7 @@ class GuideRenderer:
 		accent_color = resolve_color(guide_data.get("accent_color", "#4D0EB3"))
 
 		# ── Page content ────────────────────────────────────────────────
-		# Components are added directly to the layout — containers as
+		# Components are added directly to the layout - containers as
 		# containers, text/separators/etc. as bare top-level items.
 		content = page.get("content")
 		if content and "components" in content:
@@ -111,7 +111,7 @@ class GuideRenderer:
 				if item is not None:
 					layout.add_item(item)
 		else:
-			# No content — show title/description header
+			# No content - show title/description header
 			label = page.get("label", "Guide")
 			desc = page.get("description", "")
 			header = f"## {label}"
@@ -187,10 +187,10 @@ class GuideRenderer:
 			"server. Here are the ways to use me:\n\n"
 			"**🔎 Ask about a topic**\n"
 			"Mention me with a keyword and I'll take you straight to the closest "
-			"match — for example *rules*, *roles*, or *how do I level up*.\n\n"
+			"match - for example *rules*, *roles*, or *how do I level up*.\n\n"
 			"**📖 Open the guide**\n"
 			"Mention me with **help** (or *guide*, *faq*, *support*) and I'll "
-			"drop you on the guide's Home page — explore everything from there.\n\n"
+			"drop you on the guide's Home page - explore everything from there.\n\n"
 			"**👋 Just mention me**\n"
 			"Mention me on my own (like you just did) to see this quick how-to "
 			"any time."
@@ -202,7 +202,7 @@ class GuideRenderer:
 			"- Tap **🔍 Search** to look through everything by keyword.\n"
 			"- Use **◀ Back** and **🏠 Home** to move around.\n\n"
 			"**💡 Tips**\n"
-			"- The more specific your wording, the better the match — try the "
+			"- The more specific your wording, the better the match - try the "
 			"exact name of what you're after.\n"
 			"- Can't find it? Open the guide and browse, or hit Search."
 		)
@@ -216,7 +216,7 @@ class GuideRenderer:
 		container.accent_colour = accent_color
 		layout.add_item(container)
 
-		# Entry buttons — reuse the existing home/search handlers so no new
+		# Entry buttons - reuse the existing home/search handlers so no new
 		# interaction routing is needed.
 		nav_row = discord.ui.ActionRow()
 		nav_row.add_item(discord.ui.Button(

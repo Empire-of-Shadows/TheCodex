@@ -31,7 +31,7 @@ class BoostTracker(commands.Cog):
 
         Boosts start/stop events only fire via on_member_update while the bot is online.
         On startup we diff guild.premium_subscribers against the DB and backfill the
-        event log in both directions. No channel messages — silent catch-up only.
+        event log in both directions. No channel messages - silent catch-up only.
         """
         await self.bot.wait_until_ready()
         now = datetime.datetime.now(datetime.timezone.utc)
@@ -290,7 +290,7 @@ class BoostTracker(commands.Cog):
                 dur = self._format_duration(now - member.premium_since)
             else:
                 dur = "Unknown"
-            lines.append(f"• {member.mention} — boosting for `{dur}`")
+            lines.append(f"• {member.mention} - boosting for `{dur}`")
 
         # Embed description caps at 4096 chars; trim if a server has tons of boosts.
         description = ""
@@ -304,7 +304,7 @@ class BoostTracker(commands.Cog):
             description += f"\n…and {len(lines) - shown} more."
 
         embed = discord.Embed(
-            title=f"🚀 Current Server Boosters — {len(boosters)}",
+            title=f"🚀 Current Server Boosters - {len(boosters)}",
             description=description,
             color=0xff73fa,
         )
@@ -323,7 +323,7 @@ class BoostTracker(commands.Cog):
         now = datetime.datetime.now(datetime.timezone.utc)
 
         embed = discord.Embed(
-            title=f"Boost History — {target_user.display_name}",
+            title=f"Boost History - {target_user.display_name}",
             color=0xff73fa,
         )
 
@@ -361,7 +361,7 @@ class BoostTracker(commands.Cog):
                 ts_str = ts.strftime('%Y-%m-%d %H:%M') if ts else "?"
                 label = "Started boosting" if ev.get('event_type') == 'boost_start' else "Stopped boosting"
                 extra = f" (lasted {ev['duration']})" if ev.get('duration') else ""
-                history_lines.append(f"`{ts_str}` — {label}{extra}")
+                history_lines.append(f"`{ts_str}` - {label}{extra}")
             embed.add_field(name="Recent Events", value="\n".join(history_lines), inline=False)
 
         if not target_user.premium_since and not events:

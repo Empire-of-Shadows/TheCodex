@@ -319,7 +319,7 @@ class WYRCommandGroup(app_commands.Group):
 
         try:
             with PerformanceLogger(logger, f"wyr_leaderboard_generation_limit_{limit}"):
-                # Get top users from leaderboard collection — filtered to current guild
+                # Get top users from leaderboard collection - filtered to current guild
                 top_users = await db_manager.daily_wyr_leaderboard.find_many(
                     filter_dict={"guild_id": str(interaction.guild_id)},
                     sort=[("total_votes", -1)],
@@ -587,7 +587,7 @@ class WYR(commands.Cog):
                 self._last_cleanup_date = today_str
                 await self.cleanup_old_mappings()
 
-            # Phase 1 — figure out which guilds are due. Cheap (config + one DB
+            # Phase 1 - figure out which guilds are due. Cheap (config + one DB
             # read each) and sequential so the schedule bookkeeping stays simple.
             due: list[tuple] = []
             for guild_id in guilds:
@@ -601,7 +601,7 @@ class WYR(commands.Cog):
             if not due:
                 return
 
-            # Phase 2 — post concurrently with a cap. Mark a guild as posted only
+            # Phase 2 - post concurrently with a cap. Mark a guild as posted only
             # on success so transient failures retry next tick.
             sem = asyncio.Semaphore(self._POST_CONCURRENCY)
 
@@ -640,7 +640,7 @@ class WYR(commands.Cog):
 
         today_key = (guild_id, now.strftime("%Y-%m-%d"))
 
-        # Fast in-memory check — already handled this guild today
+        # Fast in-memory check - already handled this guild today
         if today_key in self._posted_today:
             return None
 
@@ -650,7 +650,7 @@ class WYR(commands.Cog):
         if not (scheduled_now or scheduled_passed):
             return None
 
-        # Check DB for the last post time — skip if already posted today
+        # Check DB for the last post time - skip if already posted today
         last_post = await self.get_last_post_time(guild_id)
 
         if last_post:
@@ -856,7 +856,7 @@ class WYR(commands.Cog):
 
     async def get_next_question(self, category="sfw", guild_id=None, exclude_used=False, allow_nsfw=False):
         """
-        Fetch the next "Would You Rather" question for a guild — least-used in that guild first.
+        Fetch the next "Would You Rather" question for a guild - least-used in that guild first.
         """
         try:
             with PerformanceLogger(logger, f"get_next_question_{category}_{guild_id}"):

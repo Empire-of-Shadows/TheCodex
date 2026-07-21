@@ -12,7 +12,7 @@
       "type": "section",
       "content": [
         {"type": "text", "content": "**Soul #{member_count}**"},
-        {"type": "text", "content": "You're now part of something custom-built from the ground up. No generic bots, no cookie-cutter setups — everything here was coded for this community."},
+        {"type": "text", "content": "You're now part of something custom-built from the ground up. No generic bots, no cookie-cutter setups - everything here was coded for this community."},
         {"type": "text", "content": "Grab some roles, drop an intro, and make yourself at home, **{member_name}**."}
       ],
       "accessory": {
@@ -34,7 +34,7 @@
         },
         {
           "type": "text",
-          "content": "**Games** — UNO, Tic-Tac-Toe, Hangman right here in Discord\n**Daily Polls** — Would You Rather every morning with leaderboards\n**Free Drops** — Prime Gaming loot & free game alerts, never miss a deal\n**Leveling** — XP from chatting, reacting, and hanging in voice\n**Music** — Self-hosted bots with a web dashboard, zero paywalls\n**Voice Hubs** — Create your own private voice channel on the fly"
+          "content": "**Games** - UNO, Tic-Tac-Toe, Hangman right here in Discord\n**Daily Polls** - Would You Rather every morning with leaderboards\n**Free Drops** - Prime Gaming loot & free game alerts, never miss a deal\n**Leveling** - XP from chatting, reacting, and hanging in voice\n**Music** - Self-hosted bots with a web dashboard, zero paywalls\n**Voice Hubs** - Create your own private voice channel on the fly"
         },
         {
           "type": "action_row",

@@ -38,7 +38,7 @@ import ConfirmDialog from "../components/ConfirmDialog";
 import { formatError } from "../_engine/api/formatError";
 import { useToast, ToastStack } from "../_engine/components/ToastStack";
 
-// Import file-size ceilings — mirror the backend byte limits
+// Import file-size ceilings - mirror the backend byte limits
 // (guide_schema.py _MAX_GUIDE_BYTES / welcome_schema.py _MAX_WELCOME_BYTES).
 const MAX_GUIDE_BYTES = 256 * 1024;
 const MAX_WELCOME_BYTES = 64 * 1024;
@@ -396,7 +396,7 @@ export default function BuilderPage() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
 
-  // Local caches — hold full working state (with _ids) so toggling never hits DB
+  // Local caches - hold full working state (with _ids) so toggling never hits DB
   const guideCacheRef = useRef<GuideCache>({ pages: [], currentPageId: null });
   const welcomeCacheRef = useRef<WelcomeCache>({ components: [] });
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -658,7 +658,7 @@ export default function BuilderPage() {
         const subDepth = subtreeDepth(original);
         const ownDepth = depthOfId(working, pageId) ?? 0;
         if (ownDepth + subDepth > MAX_PAGE_DEPTH) {
-          pushToast(`Cannot duplicate — exceeds max depth of ${MAX_PAGE_DEPTH}`, "error");
+          pushToast(`Cannot duplicate - exceeds max depth of ${MAX_PAGE_DEPTH}`, "error");
           return prev;
         }
         const existingIds = collectAllIds(working);
@@ -865,7 +865,7 @@ export default function BuilderPage() {
       };
       if (!file) return;
 
-      // The <input accept=".json"> filter only narrows the OS picker — a renamed
+      // The <input accept=".json"> filter only narrows the OS picker - a renamed
       // or drag-and-dropped file bypasses it. Gate on the extension so non-JSON
       // uploads (.exe/.svg/.html/.gz/…) are rejected up front.
       if (!/\.json$/i.test(file.name)) {
@@ -874,7 +874,7 @@ export default function BuilderPage() {
         return;
       }
 
-      // Reject oversized files before reading them into memory — mirrors the
+      // Reject oversized files before reading them into memory - mirrors the
       // backend byte ceilings (guide 256 KB, welcome 64 KB). This is the primary
       // guard against huge/deeply-nested "bomb" payloads.
       const maxBytes = mode === "guide" ? MAX_GUIDE_BYTES : MAX_WELCOME_BYTES;
@@ -894,24 +894,24 @@ export default function BuilderPage() {
           // processing. The schema validators repeat this for the save path.
           const safe = checkNoDangerousContent(data);
           if (!safe.valid) {
-            pushToast(`Import rejected — ${safe.error}`, "error");
+            pushToast(`Import rejected - ${safe.error}`, "error");
             return;
           }
 
           if (mode === "guide") {
             if (!data.pages || !Array.isArray(data.pages)) {
-              pushToast("Invalid guide JSON — expected { pages: [...] }", "error");
+              pushToast("Invalid guide JSON - expected { pages: [...] }", "error");
               return;
             }
             // Normalize (assign ids/order) then validate BEFORE touching editor
-            // state — mirrors the backend order and reuses the shared validator.
+            // state - mirrors the backend order and reuses the shared validator.
             // The validator caps nesting depth, so a deep tree is rejected safely.
             const normalized = normalizePages(data.pages as GuidePage[]);
             const candidate: GuideData = { pages: normalized };
             if (data.accent_color !== undefined) candidate.accent_color = data.accent_color;
             const r = validateGuideSchema(candidate);
             if (!r.valid) {
-              pushToast(`Import rejected — ${r.error}`, "error");
+              pushToast(`Import rejected - ${r.error}`, "error");
               return;
             }
             const imported = normalized.map((p: GuidePage) => addIdsToPage(p));
@@ -928,14 +928,14 @@ export default function BuilderPage() {
             pushToast(`Imported ${imported.length} pages`, "success");
           } else {
             if (!data.components || !Array.isArray(data.components)) {
-              pushToast("Invalid welcome JSON — expected { components: [...] }", "error");
+              pushToast("Invalid welcome JSON - expected { components: [...] }", "error");
               return;
             }
             const candidate: WelcomeData = { components: data.components };
             if (data.accent_color !== undefined) candidate.accent_color = data.accent_color;
             const r = validateWelcomeSchema(candidate);
             if (!r.valid) {
-              pushToast(`Import rejected — ${r.error}`, "error");
+              pushToast(`Import rejected - ${r.error}`, "error");
               return;
             }
             setComponents(addIds(data.components));
@@ -1103,7 +1103,7 @@ export default function BuilderPage() {
 
     const onKey = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
-      // Ctrl/Cmd+S — save (always intercept)
+      // Ctrl/Cmd+S - save (always intercept)
       if (mod && (e.key === "s" || e.key === "S")) {
         e.preventDefault();
         if (!saving && errors.length === 0 && dirty) save();

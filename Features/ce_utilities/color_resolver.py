@@ -1,10 +1,10 @@
 """
-Color Set Resolution Algorithm — pure functions, no DB calls.
+Color Set Resolution Algorithm - pure functions, no DB calls.
 
 Always-additive model: a user's final color pool is the union of all color
 sets assigned to their roles and tiers via embed_role_tier_mapping.
 
-There is no priority ordering, no override mode, and no tie-breaking —
+There is no priority ordering, no override mode, and no tie-breaking -
 every applicable color set contributes its colors to the pool.
 """
 

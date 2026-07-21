@@ -9,7 +9,7 @@ interface PaletteItemDef {
 
 const ITEMS: PaletteItemDef[] = [
   { type: "text", label: "Text", icon: "T" },
-  { type: "separator", label: "Separator", icon: "―" },
+  { type: "separator", label: "Separator", icon: "-" },
   { type: "section", label: "Section", icon: "☰" },
   { type: "action_row", label: "Action Row", icon: "▣" },
   { type: "container", label: "Container", icon: "☐" },

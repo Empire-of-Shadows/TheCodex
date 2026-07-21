@@ -184,7 +184,7 @@ async def _auto_enable_feature_if_ready(
     cfg = _FEATURE_AUTO_ENABLE[feature_key]
 
     if await cfg["get_enabled"](guild_id):
-        return  # Already enabled — nothing to do
+        return  # Already enabled - nothing to do
 
     if not await cfg["has_config"](guild_id):
         return  # Config still empty (values were cleared, not added)
@@ -227,11 +227,11 @@ async def _warn_unconfigured_feature_tiers(interaction, guild_id: int, selected_
 # ── Description Limits helpers ────────────────────────────────────────────────
 
 def _validate_char_limit(raw: str):
-    """Validator for modal_input: ensures value is an integer in 1–4000."""
+    """Validator for modal_input: ensures value is an integer in 1-4000."""
     try:
         val = int(raw.strip())
     except ValueError:
-        return False, None, "Please enter a valid number (1–4000)."
+        return False, None, "Please enter a valid number (1-4000)."
     if not (1 <= val <= 4000):
         return False, None, "Limit must be between 1 and 4000."
     return True, val, ""
@@ -270,19 +270,19 @@ async def _clear_tier_limit(guild_id: int, tier_name: str) -> bool:
 
 _TIER_DESCRIPTIONS = {
     "tier_1": (
-        "**Widest access.** Assign every role that should unlock basic embed features — typically "
+        "**Widest access.** Assign every role that should unlock basic embed features - typically "
         "all 5 progression roles. Any member holding at least one of these roles gets Tier 1 access."
     ),
     "tier_2": (
-        "**Second tier.** Assign all roles except the entry role (usually roles 2–5). "
+        "**Second tier.** Assign all roles except the entry role (usually roles 2-5). "
         "Members who have progressed past Tier 1 will automatically qualify."
     ),
     "tier_3": (
-        "**Mid-tier.** Assign the middle and higher roles (usually roles 3–5). "
+        "**Mid-tier.** Assign the middle and higher roles (usually roles 3-5). "
         "Only members who have reached at least this progression level will qualify."
     ),
     "tier_4": (
-        "**Near-top tier.** Assign only the top two roles (usually roles 4–5). "
+        "**Near-top tier.** Assign only the top two roles (usually roles 4-5). "
         "Reserved for active, long-standing members."
     ),
     "tier_5": (
@@ -297,15 +297,15 @@ ROLE_TIER_CONFIG = PanelNode(
     kind="menu",
     description=(
         "Tiers control which embed features and colors a member can access based on their roles.\n\n"
-        "**How it works:** Members hold one progression role at a time — when they level up, they "
+        "**How it works:** Members hold one progression role at a time - when they level up, they "
         "lose their current role and gain the next. Assign roles to tiers so that access updates "
         "automatically as members progress.\n\n"
         "**Typical setup** (5 roles: R1 = entry → R5 = top):\n"
-        "- **Tier 1** → R1, R2, R3, R4, R5 — everyone gets basic access\n"
+        "- **Tier 1** → R1, R2, R3, R4, R5 - everyone gets basic access\n"
         "- **Tier 2** → R2, R3, R4, R5\n"
         "- **Tier 3** → R3, R4, R5\n"
         "- **Tier 4** → R4, R5\n"
-        "- **Tier 5** → R5 only — most exclusive\n\n"
+        "- **Tier 5** → R5 only - most exclusive\n\n"
         "**Before you begin:** Create 5 Discord roles in your server, one per progression level."
     ),
     children={
@@ -377,14 +377,14 @@ DESCRIPTION_LIMITS_CONFIG = PanelNode(
                 key=f"{t}_limit",
                 label=f"{TIER_LABELS[t]} Limit",
                 kind="modal_input",
-                description=f"Set the character limit for {TIER_LABELS[t]} embed descriptions (1–4000).",
+                description=f"Set the character limit for {TIER_LABELS[t]} embed descriptions (1-4000).",
                 get_values=lambda guild_id, _t=t: _get_tier_limit(guild_id, _t),
                 set_values=lambda guild_id, vals, _t=t: _set_tier_limit(guild_id, vals, _t),
                 clear_values=lambda guild_id, _t=t: _clear_tier_limit(guild_id, _t),
                 pre_check=lambda inter, gid, _t=t: setup_gatekeeper.get_tier_gate_layout(gid, _t),
                 modal_title=f"Set {TIER_LABELS[t]} Description Limit",
                 modal_label="Character Limit",
-                modal_placeholder="e.g., 1000  (1–4000)",
+                modal_placeholder="e.g., 1000  (1-4000)",
                 modal_min_length=0,
                 modal_max_length=4,
                 modal_required=False,
@@ -696,7 +696,7 @@ NM_SETTINGS_CONFIG = PanelNode(
             key="nm_enabled",
             label="New Members Processing",
             kind="option_select",
-            description="Master toggle — enable or disable all new-member processing (screening, welcome messages, whitelist).",
+            description="Master toggle - enable or disable all new-member processing (screening, welcome messages, whitelist).",
             options=_NM_TOGGLE_OPTIONS,
             get_values=NewMemberActions.get_enabled_as_list,
             set_values=NewMemberActions.set_enabled_from_list,
@@ -928,7 +928,7 @@ GUIDE_ENABLED_CONFIG = PanelNode(
     key="guide_enabled",
     label="Guide Enabled",
     kind="option_select",
-    description="Master toggle — enable or disable the guide system.",
+    description="Master toggle - enable or disable the guide system.",
     options=_GUIDE_TOGGLE_OPTIONS,
     get_values=GuideActions.get_enabled_as_list,
     set_values=GuideActions.set_enabled_from_list,

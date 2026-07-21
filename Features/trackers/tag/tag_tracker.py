@@ -61,8 +61,8 @@ class TagTracker(commands.Cog):
     async def _sync_member(self, member: discord.Member, role: discord.Role, server_tag: str) -> bool:
         """Reconcile one member's tag role against their cached primary_guild tag.
 
-        Reads ``member.primary_guild`` straight from the gateway-populated cache —
-        no per-member ``fetch_user`` call — so a full sweep costs zero API calls
+        Reads ``member.primary_guild`` straight from the gateway-populated cache -
+        no per-member ``fetch_user`` call - so a full sweep costs zero API calls
         in the steady state. Returns True if a role change was actually made.
         """
         if member.bot:

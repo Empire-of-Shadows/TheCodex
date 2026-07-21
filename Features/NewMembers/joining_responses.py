@@ -5,7 +5,7 @@ joining_responses = [
 	"A big welcome to our newest member, {member.mention}! 🌟",
 	"You've arrived, {member.mention}! Welcome to the server! ✨",
 	"Hey {member.mention}, you just made the server cooler! 😎 Welcome aboard.",
-	"Look who just joined – it's {member.mention}! 🎊 Make yourself at home.",
+	"Look who just joined - it's {member.mention}! 🎊 Make yourself at home.",
 	"Welcome to the madness, {member.mention}! 💥 Let the fun begin.",
 	"Yo {member.mention}, glad you found us! 🍕 Pull up a chair and stay awhile.",
 	"The party's not complete without you, {member.mention}! 🥳 Welcome!",

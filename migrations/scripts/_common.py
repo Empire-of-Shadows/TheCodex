@@ -9,7 +9,7 @@ Every migration is a standalone script:
     python -m migrations.scripts.<name>            # dry run (default, no writes)
     python -m migrations.scripts.<name> --apply    # perform the writes
 
-All migrations are idempotent — re-running after --apply is a no-op.
+All migrations are idempotent - re-running after --apply is a no-op.
 """
 
 from __future__ import annotations

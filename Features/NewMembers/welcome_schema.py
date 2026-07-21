@@ -2,7 +2,7 @@
 Welcome Message Schema Validator
 
 Validates the JSON config for the JSON-driven welcome message builder.
-All validation is synchronous and returns (bool, str) — success or first error.
+All validation is synchronous and returns (bool, str) - success or first error.
 
 Delegates structural component validation to the shared component_validators module.
 Button/select action validation is welcome-specific (validates against VALID_ACTIONS).

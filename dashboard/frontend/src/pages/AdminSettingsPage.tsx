@@ -203,7 +203,7 @@ export default function AdminSettingsPage() {
       } as SettingsPatch;
       const result = await api.saveSettings(guildId, patch);
       // resp is the canonical server state (full config returned by PUT).
-      // draft preserves unsaved edits on other tabs — only the just-saved
+      // draft preserves unsaved edits on other tabs - only the just-saved
       // section is replaced with the server's canonical version.
       setResp((prev) => (prev ? { ...prev, config: result.config } : prev));
       setDraft((prev) =>
@@ -1437,7 +1437,7 @@ function GuideTab({
           filterType={0}
           disabled={readOnly}
           onChange={(v) => onChange({ ...value, channel_id: v })}
-          description="Optional — restrict /guide invocation to this channel."
+          description="Optional - restrict /guide invocation to this channel."
         />
         <ToggleField
           label="Enabled"

@@ -1,4 +1,4 @@
-# Welcome Builder — Placeholder Reference
+# Welcome Builder - Placeholder Reference
 
 Placeholders are substituted at render time (when the member joins). They are case-sensitive and must appear exactly as shown, including the curly braces.
 
@@ -20,8 +20,8 @@ Placeholders are substituted at render time (when the member joins). They are ca
 | `text.content` | Yes |
 | `section.content[].content` (text objects inside sections) | Yes |
 | `button.label` | Yes |
-| `thumbnail.description` | No — not substituted |
-| `thumbnail.media` URL | No — only `"member_avatar"` is a special token |
+| `thumbnail.description` | No - not substituted |
+| `thumbnail.media` URL | No - only `"member_avatar"` is a special token |
 
 ## Notes
 

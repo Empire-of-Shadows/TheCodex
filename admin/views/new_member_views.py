@@ -86,11 +86,11 @@ def build_nm_whitelist_role_view(
     """Build the NM Whitelist Role select view with a Create Role button."""
     builder = AdminLayoutBuilder()
 
-    builder.add_header("## New Members — Whitelist Role")
+    builder.add_header("## New Members - Whitelist Role")
 
     builder.add_item(readonly_container(discord.ui.TextDisplay(
         "Role assigned to new members added to the whitelist.\n\n"
-        "-# Don't have a dedicated role? Use **Create Role** to create one — "
+        "-# Don't have a dedicated role? Use **Create Role** to create one - "
         "then go to **Server Settings → Roles** to set its color, icon, and position."
     )))
 
@@ -184,11 +184,11 @@ def build_nm_welcome_channel_view(
     """Build the NM Welcome Channel select view with a Create Channel button."""
     builder = AdminLayoutBuilder()
 
-    builder.add_header("## New Members — Welcome Channel")
+    builder.add_header("## New Members - Welcome Channel")
 
     builder.add_item(readonly_container(discord.ui.TextDisplay(
         "Channel where welcome messages are sent when new members join.\n\n"
-        "-# Don't have a dedicated channel? Use **Create Channel** to create one — "
+        "-# Don't have a dedicated channel? Use **Create Channel** to create one - "
         "then set its permissions and category in **Server Settings → Channels**."
     )))
 

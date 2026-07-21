@@ -6,7 +6,7 @@ Delegates component validation to the shared component_validators module.
 Guide-specific button actions: "navigate", "channel", "role" with "target".
 
 Error messages use human-readable paths:
-  Page "Getting Started" → Action Row #1 → Button "Click Here" — target is required for navigate buttons.
+  Page "Getting Started" → Action Row #1 → Button "Click Here" - target is required for navigate buttons.
 """
 
 import json

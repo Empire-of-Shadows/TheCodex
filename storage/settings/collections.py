@@ -1,4 +1,4 @@
-"""storage_engine — collection registry + manager for TheCodex (bot-owned, NOT vendored).
+"""storage_engine - collection registry + manager for TheCodex (bot-owned, NOT vendored).
 
 This one file declares TheCodex's collections AND constructs the shared ``db_manager`` the
 rest of the bot imports. It replaces the old ``define_collections`` + ``database_properties``
@@ -7,7 +7,7 @@ registry, so every collection is reachable as ``db_manager.<registry_key>`` (and
 ``db_manager.<accessor>`` when a ``CollectionConfig`` sets an alias).
 
 The 12 pre-migration hand-written properties were each named exactly their registry key, so
-the auto-derived accessors reproduce them byte-for-byte — no ``accessor=`` alias is required
+the auto-derived accessors reproduce them byte-for-byte - no ``accessor=`` alias is required
 here. The other 15 collections become attribute-reachable by their registry key too.
 
 ENGINE CONTRACT: the registry is a ``dict[str, CollectionConfig]`` passed as
@@ -61,7 +61,7 @@ COLLECTIONS: dict[str, CollectionConfig] = {
         ]
     ),
 
-    # Per-user WYR votes — one document per (question, guild, user). Keeps the
+    # Per-user WYR votes - one document per (question, guild, user). Keeps the
     # unbounded per-voter data out of the shared question document.
     'daily_wyr_votes': CollectionConfig(
         name='WYR_Votes',
@@ -110,7 +110,7 @@ COLLECTIONS: dict[str, CollectionConfig] = {
             IndexModel([('user_id', 1)]),
             IndexModel([('created_at', -1)]),
             IndexModel([('guild_id', 1), ('suggestion_id', 1)], unique=True),
-            # Full-text search over the suggestion body — powers /suggest-search
+            # Full-text search over the suggestion body - powers /suggest-search
             # and the duplicate-suggestion check. Without a text index, $text
             # queries error and were being silently swallowed (returned nothing).
             IndexModel([('text', 'text')], name='suggestion_text_search'),
@@ -370,7 +370,7 @@ COLLECTIONS: dict[str, CollectionConfig] = {
 
 
 # ── The shared manager (constructed from bindings + the registry above) ──────────
-# Instantiated at module import — the same ordering the pre-migration
+# Instantiated at module import - the same ordering the pre-migration
 # ``db_manager = DatabaseManager()`` relied on. The base builds its accessor map from
 # COLLECTIONS; no concrete subclass is needed.
 db_manager = DatabaseManagerBase(

@@ -1,5 +1,5 @@
 /**
- * Content-safety scan — shared guard against payloads that pass the structural
+ * Content-safety scan - shared guard against payloads that pass the structural
  * schema but are "not what we intend to be uploaded".
  *
  * Mirror of utils/safe_content.py (keep the two in sync). Applied to every guide
@@ -21,7 +21,7 @@ const OK: ValidationResult = { valid: true, error: "" };
 
 const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
-// Invisible / bidi control chars. Deliberately EXCLUDES U+200C/U+200D (ZWNJ/ZWJ) —
+// Invisible / bidi control chars. Deliberately EXCLUDES U+200C/U+200D (ZWNJ/ZWJ) -
 // those are required by emoji sequences and scripts like Persian and Indic.
 // U+00AD soft hyphen, U+200B ZWSP, U+200E/F LRM/RLM, U+202A-E bidi embeds/overrides,
 // U+2060 word joiner, U+2066-9 bidi isolates, U+FEFF ZWNBSP/BOM.

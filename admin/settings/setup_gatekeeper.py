@@ -63,7 +63,7 @@ class SetupGatekeeper:
         """Embed gate loader: wraps the injected embed checker. Fails open (complete)
         when no checker has been linked yet."""
         if self._embed_checker is None:
-            logger.warning("SetupGatekeeper has no embed_checker – failing open")
+            logger.warning("SetupGatekeeper has no embed_checker - failing open")
             return {"complete": True}
         return {"complete": await self._embed_checker(guild_id)}
 
@@ -290,7 +290,7 @@ class SetupGatekeeper:
 
         Args:
             guild_id:  The guild ID as an integer
-            tier_name: Tier key — one of "tier_1" … "tier_5"
+            tier_name: Tier key - one of "tier_1" … "tier_5"
 
         Returns:
             True if at least one role is mapped to this tier
@@ -304,7 +304,7 @@ class SetupGatekeeper:
         """Build the 'tier not configured' Components v2 notice LayoutView.
 
         Returns a Message-3 style notice (orange container) per
-        ADMIN_PANEL_STANDARD.md §0.1 — no embeds on admin panels.
+        ADMIN_PANEL_STANDARD.md §0.1 - no embeds on admin panels.
         """
         from ..views.base import build_notice_layout
 
@@ -312,7 +312,7 @@ class SetupGatekeeper:
         body = (
             f"**{tier_label}** has no roles assigned yet.\n\n"
             "Settings for this tier have no effect until at least one role is "
-            "mapped to it — so saving here would create dead configuration.\n\n"
+            "mapped to it - so saving here would create dead configuration.\n\n"
             "**How to fix:**\n"
             "Go back and select **Role Tier Mapping**, then assign at least one "
             f"role to {tier_label}.\n\n"

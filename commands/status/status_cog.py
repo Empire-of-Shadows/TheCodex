@@ -16,7 +16,7 @@ from storage.log import get_logger
 logger = get_logger("StatusAdmin")
 
 # The guild that owns the /status admin commands. Single source of truth shared
-# with Codex.py's guild command sync — both read STATUS_ADMIN_GUILD_ID, so the
+# with Codex.py's guild command sync - both read STATUS_ADMIN_GUILD_ID, so the
 # commands are always defined for exactly the guild they're synced to. Unset (0)
 # disables the tool (setup() skips registering the cog).
 STATUS_ADMIN_GUILD_ID = int(os.getenv("STATUS_ADMIN_GUILD_ID", "0"))
@@ -105,7 +105,7 @@ class SetStatusModal(discord.ui.Modal, title="Set Bot Status"):
 
         logger.info(f"{interaction.user} set status: {atype}: {name}")
         await interaction.response.send_message(
-            f"✅ Status set — **{atype}**: `{name}`", ephemeral=True
+            f"✅ Status set - **{atype}**: `{name}`", ephemeral=True
         )
 
 
@@ -164,7 +164,7 @@ class SavePresetModal(discord.ui.Modal, title="Save Status Preset"):
             )
             return
 
-        msg = f"✅ Saved preset **{pname}** — {atype}: `{name}`"
+        msg = f"✅ Saved preset **{pname}** - {atype}: `{name}`"
         if self._apply_now:
             try:
                 await _apply_preset(doc)
@@ -212,7 +212,7 @@ class PresetSelect(discord.ui.Select):
             )
             return
         await interaction.response.send_message(
-            f"✅ Applied **{pname}** — {preset['activity_type']}: `{preset['name']}`",
+            f"✅ Applied **{pname}** - {preset['activity_type']}: `{preset['name']}`",
             ephemeral=True,
         )
 
@@ -252,7 +252,7 @@ def build_preset_layout(presets: list[dict]) -> discord.ui.LayoutView:
         return layout
 
     summary = "\n".join(
-        f"• **{p['preset_name']}** — {p['activity_type']}: `{p['name']}`"
+        f"• **{p['preset_name']}** - {p['activity_type']}: `{p['name']}`"
         for p in presets[:MAX_PRESETS_IN_SELECT]
     )
     layout.add_item(discord.ui.TextDisplay(summary))
@@ -315,7 +315,7 @@ class StatusAdmin(commands.Cog):
 
 async def setup(bot: commands.Bot):
     if not STATUS_ADMIN_GUILD_ID:
-        logger.info("STATUS_ADMIN_GUILD_ID unset — /status admin commands disabled")
+        logger.info("STATUS_ADMIN_GUILD_ID unset - /status admin commands disabled")
         return
     await bot.add_cog(StatusAdmin(bot))
     logger.info(f"StatusAdmin cog loaded (guild-scoped to {STATUS_ADMIN_GUILD_ID})")

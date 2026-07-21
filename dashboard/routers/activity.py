@@ -1,4 +1,4 @@
-"""User activity API — aggregates WYR, Suggestions, Tag Tracker, Boost data."""
+"""User activity API - aggregates WYR, Suggestions, Tag Tracker, Boost data."""
 
 import asyncio
 from datetime import datetime, timezone
@@ -99,7 +99,7 @@ async def _get_suggestions_activity(user_id: int, guild_ids: list[int]) -> dict:
     if last_doc and last_doc.get("created_at"):
         last_activity = last_doc["created_at"].isoformat()
 
-    # Votes cast — check UserStats for quick lookup
+    # Votes cast - check UserStats for quick lookup
     votes_cast = 0
     user_stats = await db.suggestions_userstats().find_one({"user_id": user_id})
     if user_stats:
@@ -184,8 +184,8 @@ async def _get_tag_status(
 async def _get_boost_status(user_id: int, guild_ids: list[int], guild_name_map: dict[int, str]) -> dict:
     """Check boost status for the user across guilds.
 
-    The Boosts collection only holds active boosters — the tracker deletes the
-    doc when a member stops boosting — so presence in the collection means active.
+    The Boosts collection only holds active boosters - the tracker deletes the
+    doc when a member stops boosting - so presence in the collection means active.
     """
     cursor = db.serverdata_boosts().find({
         "user_id": user_id,
