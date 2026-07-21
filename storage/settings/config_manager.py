@@ -598,13 +598,62 @@ class GuildConfigManager:
             async with self._cache_lock:
                 self._settings_cache[guild_id] = {}
 
+    # A dotted flat key ("a.b") is written to Mongo as a nested path -- i.e.
+    # {"$set": {"a.b": v}} stores {"a": {"b": v}}. The in-memory cache is rebuilt
+    # straight from that raw doc on reload, so it must mirror the same nested
+    # shape; otherwise a value written under a literal "a.b" cache key is lost on
+    # the next reload and reads fall through to the default. These helpers keep
+    # the cache representation consistent with Mongo for dotted keys.
+    @staticmethod
+    def _dotted_get(doc: Dict[str, Any], dotted_key: str) -> Tuple[bool, Any]:
+        """Return (found, value) by traversing nested dicts along a dotted key."""
+        cur: Any = doc
+        for part in dotted_key.split("."):
+            if isinstance(cur, dict) and part in cur:
+                cur = cur[part]
+            else:
+                return False, None
+        return True, cur
+
+    @staticmethod
+    def _dotted_set(doc: Dict[str, Any], dotted_key: str, value: Any) -> None:
+        """Set a value into nested dicts, creating intermediate dicts as needed."""
+        parts = dotted_key.split(".")
+        cur = doc
+        for part in parts[:-1]:
+            nxt = cur.get(part)
+            if not isinstance(nxt, dict):
+                nxt = {}
+                cur[part] = nxt
+            cur = nxt
+        cur[parts[-1]] = value
+
+    @staticmethod
+    def _dotted_unset(doc: Dict[str, Any], dotted_key: str) -> None:
+        """Remove a nested key along a dotted path; no-op if the path is absent."""
+        parts = dotted_key.split(".")
+        cur = doc
+        for part in parts[:-1]:
+            nxt = cur.get(part)
+            if not isinstance(nxt, dict):
+                return
+            cur = nxt
+        cur.pop(parts[-1], None)
+
     async def get_setting(self, key: str, guild_id: int, default: Any = None) -> Any:
-        """Get a per-guild flat setting."""
+        """Get a per-guild flat setting. Dotted keys traverse the nested shape
+        MongoDB stores them under, so the value survives a cache reload."""
         if not self._initialized:
             await self.initialize()
         if guild_id not in self._settings_cache:
             await self._load_settings_cache(guild_id)
-        return self._settings_cache[guild_id].get(key, DEFAULT_SETTINGS.get(key, default))
+        cache = self._settings_cache[guild_id]
+        if "." in key:
+            found, val = self._dotted_get(cache, key)
+            if found:
+                return val
+            return DEFAULT_SETTINGS.get(key, default)
+        return cache.get(key, DEFAULT_SETTINGS.get(key, default))
 
     async def set_setting(self, key: str, value: Any, guild_id: int) -> bool:
         """Set a per-guild flat setting using MongoDB $set."""
@@ -621,7 +670,11 @@ class GuildConfigManager:
                 upsert=True,
             )
             async with self._cache_lock:
-                self._settings_cache.setdefault(guild_id, {})[key] = value
+                cache = self._settings_cache.setdefault(guild_id, {})
+                if "." in key:
+                    self._dotted_set(cache, key, value)
+                else:
+                    cache[key] = value
             return True
         except Exception as e:
             logger.error(f"Error setting '{key}' for guild {guild_id}: {e}", exc_info=True)
@@ -638,7 +691,11 @@ class GuildConfigManager:
                 {"$unset": {key: ""}},
             )
             async with self._cache_lock:
-                self._settings_cache.get(guild_id, {}).pop(key, None)
+                cache = self._settings_cache.get(guild_id, {})
+                if "." in key:
+                    self._dotted_unset(cache, key)
+                else:
+                    cache.pop(key, None)
             return True
         except Exception as e:
             logger.error(f"Error unsetting '{key}' for guild {guild_id}: {e}", exc_info=True)
@@ -659,7 +716,12 @@ class GuildConfigManager:
                 upsert=True,
             )
             async with self._cache_lock:
-                self._settings_cache.setdefault(guild_id, {}).update(settings)
+                cache = self._settings_cache.setdefault(guild_id, {})
+                for k, v in settings.items():
+                    if "." in k:
+                        self._dotted_set(cache, k, v)
+                    else:
+                        cache[k] = v
             return True
         except Exception as e:
             logger.error(f"Error setting multiple settings for guild {guild_id}: {e}", exc_info=True)

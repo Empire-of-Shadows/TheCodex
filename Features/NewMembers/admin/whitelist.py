@@ -17,7 +17,11 @@ ACCOUNT_AGE_REQUIREMENT_DAYS = 90  # Must match the age check in joining.py
 
 
 def has_whitelist_permissions_app():
-    """App command check for whitelist management permissions."""
+    """App command check for whitelist *read* access (list/check).
+
+    Admins and mods both qualify; mutations use the stricter admin-only check
+    below.
+    """
     async def predicate(interaction: discord.Interaction) -> bool:
         if not interaction.guild:
             return False
@@ -38,6 +42,32 @@ def has_whitelist_permissions_app():
         mod_set = set(guild_config.roles["mod_role_ids"])
 
         return bool(user_role_ids & (admin_set | mod_set))
+
+    return app_commands.check(predicate)
+
+
+def has_whitelist_admin_app():
+    """App command check for whitelist *mutation* (add/remove).
+
+    Stricter than has_whitelist_permissions_app: per the ecosystem convention
+    mod-tier is read-only, so only administrators (or configured admin roles)
+    may change the screening whitelist.
+    """
+    async def predicate(interaction: discord.Interaction) -> bool:
+        if not interaction.guild:
+            return False
+
+        user = interaction.user
+
+        perms = getattr(user, "guild_permissions", None)
+        if perms and perms.administrator:
+            return True
+
+        guild_config = await get_config(interaction.guild.id)
+        user_role_ids = {role.id for role in getattr(user, "roles", [])}
+        admin_set = set(guild_config.roles["admin_role_ids"])
+
+        return bool(user_role_ids & admin_set)
 
     return app_commands.check(predicate)
 
@@ -324,7 +354,7 @@ class WhitelistGroup(commands.GroupCog, name="whitelist", description="Manage me
 
     @app_commands.command(name="add", description="Add a member to the whitelist (use User ID or exact username)")
     @app_commands.describe(user="The member to whitelist (User ID or exact username - case sensitive)")
-    @has_whitelist_permissions_app()
+    @has_whitelist_admin_app()
     @app_commands.guild_only()
     async def add(self, interaction: discord.Interaction, user: str):
         """Add a member to the whitelist with reason modal."""
@@ -353,7 +383,7 @@ class WhitelistGroup(commands.GroupCog, name="whitelist", description="Manage me
 
     @app_commands.command(name="remove", description="Remove a member from the whitelist")
     @app_commands.describe(user="The member to remove (User ID or exact username - case sensitive)")
-    @has_whitelist_permissions_app()
+    @has_whitelist_admin_app()
     @app_commands.guild_only()
     async def remove(self, interaction: discord.Interaction, user: str):
         """Remove a member from the whitelist."""

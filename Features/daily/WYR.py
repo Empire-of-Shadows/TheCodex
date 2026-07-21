@@ -58,7 +58,10 @@ class WYRCommandGroup(app_commands.Group):
     """Command group for Would You Rather commands"""
 
     def __init__(self, cog):
-        super().__init__(name="wyr", description="Would You Rather commands")
+        # guild_only: every WYR command scopes its queries by guild_id, so a DM
+        # invocation would run a None-keyed lookup. Marking the group guild-only
+        # registers all its commands DM-unavailable.
+        super().__init__(name="wyr", description="Would You Rather commands", guild_only=True)
         self.cog = cog
 
     @app_commands.command(name="post", description="Manually post a WYR question (Admin only)")

@@ -7,6 +7,10 @@
 - Changing a suggestion's status from the admin panel no longer throws an error when you type a status it doesn't recognise. It now replies with the list of valid statuses so you can try again.
 - When you enter a value the admin panel rejects (for example a number outside the allowed range), it now shows a short "Invalid Input" note explaining the problem, instead of failing with a generic error and losing what you typed.
 
+### Changed
+- Adding or removing members from the screening whitelist is now limited to admins. Moderators can still view the whitelist (`/whitelist list` and `/whitelist check`) but can no longer change who's on it, matching the rule that moderator tools are view-only.
+- The Would You Rather commands (`/wyr stats`, `/wyr leaderboard`, and the rest) no longer appear in direct messages, where they had no server to look things up in. They are server-only now, like the rest of the bot's commands.
+
 ## [Unreleased] - 2026-07-19
 
 ### Fixed
