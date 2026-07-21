@@ -23,8 +23,12 @@ REDIRECT_URI = os.getenv("GATEKEEPER_REDIRECT_URI") or os.getenv(
 )
 DISCORD_API_BASE = "https://discord.com/api/v10"
 
-# MongoDB - single canonical URI for everything (codex data + shared sessions)
+# MongoDB - codex's own data.
 MONGO_URI = os.getenv("MONGO_URI", "")
+# Shared cross-bot session store (WebSessions DB). A dedicated URI/client keeps the
+# shared SSO store separate from codex's own data (matching relay); defaults to
+# MONGO_URI so a deployment that hasn't split them yet keeps working.
+SHARED_SESSIONS_URI = os.getenv("SHARED_SESSIONS_URI", "") or MONGO_URI
 
 # Session signing (itsdangerous URLSafeTimedSerializer key)
 SECRET_KEY = os.getenv("DASHBOARD_SECRET_KEY", "")
@@ -60,8 +64,23 @@ CORS_ORIGINS = [
     if o
 ]
 
-# Discord permission flag for MANAGE_GUILD
+# Discord permission flags
 MANAGE_GUILD_PERMISSION = 0x20
+ADMINISTRATOR_PERMISSION = 0x8
+
+# ── Shared dashboard-engine seam values (read by dashboard/_engine/) ──────────
+# OAuth redirect allowlist (regex, anchored ^...$) + fallback, used by _engine/auth/oauth.py.
+OAUTH_REDIRECT_ALLOWLIST = r"^https?://(localhost(:\d+)?|([a-z0-9-]+\.)?eosofficial\.club)(/.*)?$"
+OAUTH_DEFAULT_REDIRECT = "/dashboard"
+
+# Rate-limit route table for _engine/rate_limit.py: (path-prefix, bucket, max, window_s).
+# First match wins, so specific prefixes precede their parents.
+RATE_LIMITS: list[tuple[str, str, int, int]] = [
+    ("/auth/discord/callback", "oauth_callback", 10, 60),
+    ("/auth/discord", "oauth_start", 20, 60),
+    ("/api/me", "me", 100, 60),
+    ("/api/stats/public", "public_stats", 30, 60),
+]
 
 
 def _validate_config() -> None:
