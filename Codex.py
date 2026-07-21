@@ -230,7 +230,10 @@ async def _async_main(shutdown_event: asyncio.Event):
         raise
 
     try:
-        initialize_health_server(port=HEALTH_PORT, bot=bot, db_manager=db_manager)
+        initialize_health_server(
+            port=HEALTH_PORT, bot=bot, db_manager=db_manager,
+            bot_name="TheCodex", service="Discord Guide & FAQ Bot",
+        )
         logger.info("✅ Health check endpoint initialized")
     except Exception as e:
         logger.error(f"❌ Failed to start health endpoint: {e}")
