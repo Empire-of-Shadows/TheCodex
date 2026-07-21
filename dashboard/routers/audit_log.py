@@ -1,6 +1,6 @@
 """Audit Log read endpoint - admin-only.
 
-The bot writes audit entries to Settings.AuditLog via storage/audit_log.py
+The bot writes audit entries to Settings.AuditLog via the engine AuditLog service
 on every successful admin-driven config mutation. This router exposes those
 entries to admins (admin tier only; mods are excluded).
 """

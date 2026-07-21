@@ -3,9 +3,10 @@
 The single integration point between the vendored storage engine and this bot's
 environment. The engine (and this bot's own ``collections.py``) import these names. The
 bot-owned (hand-written) storage seam lives in ``storage/settings/`` — ``bindings.py`` /
-``collections.py`` (the registry + the shared ``db_manager``) / ``config_manager.py`` — plus
-``storage/audit_log.py`` and ``storage/setup_gatekeeper.py``; everything else under
-``storage/`` is vendored engine code — do not edit it here.
+``collections.py`` (the registry + the shared ``db_manager``) / ``config_manager.py``;
+everything else under ``storage/`` is vendored engine code — do not edit it here. (Audit
+logging uses the engine ``AuditLog`` service; the admin-panel setup gate now lives in the
+admin seam at ``admin/settings/setup_gatekeeper.py``.)
 
 Template: ``EmpireSystems/storage_engine/bindings_reference.py``.
 Layout reference: ``Informatinal/Stygian-Relay/storage/settings/``.
@@ -62,5 +63,6 @@ async def audit_storage_event(
     query: dict,
     actor_id: Optional[int] = None,
 ) -> None:
-    """No-op: TheCodex audits admin mutations through its own ``storage/audit_log.py``."""
+    """No-op: TheCodex audits admin mutations through the engine ``AuditLog`` service
+    (wired in ``admin/settings/bindings.py``), not this generic collection doer."""
     return None

@@ -33,7 +33,7 @@ from ..bot_specific.codex.suggestions import (
 from ..actions.guide_actions import GuideActions
 from ..actions.drops_actions import DropsActions
 from ..actions.color_set_actions import ColorSetActions
-from storage.setup_gatekeeper import setup_gatekeeper
+from .setup_gatekeeper import setup_gatekeeper
 from Features.NewMembers.welcome_schema import validate_welcome_schema
 from Features.Guide.guide_schema import validate_guide_schema
 

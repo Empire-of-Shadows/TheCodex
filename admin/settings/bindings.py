@@ -6,7 +6,7 @@ for the full contract.
 
 Persistence flows through TheCodex's own managers (which write via the shared db_manager's
 collection managers): structured per-guild config + flat settings through ``GuildConfigManager``
-and audit entries through ``storage/audit_log.py``. The panel binds its leaves to bot-specific
+and audit entries through the engine ``AuditLog`` service. The panel binds its leaves to bot-specific
 action classes (``EmbedConfigActions``, ``GuideActions``, …) that use the config manager
 directly, so the generic ``config_*`` doers here back the flat settings store and the ``db_*``
 doers are inert (the panel has no engine collection actions — same pattern as TheHost).
@@ -26,8 +26,8 @@ from storage.settings.config_manager import (
     get_config,
     get_config_manager,
 )
-from storage.audit_log import get_audit_logger
-from storage.setup_gatekeeper import setup_gatekeeper
+from storage.services import AuditLog
+from .setup_gatekeeper import setup_gatekeeper
 
 import logging
 
@@ -94,6 +94,21 @@ def invalidate_caches(guild_id: int) -> None:
 
 # ── Audit log ────────────────────────────────────────────────────────────────────
 
+_audit_log: "AuditLog | None" = None
+
+
+def _get_audit_log() -> AuditLog:
+    """The engine ``AuditLog`` over the ``settings_audit_log`` collection, replacing the
+    hand-rolled ``AuditLogger``. Uses the generic ``.log()`` (not ``log_config_change``,
+    which stringifies ``guild_id``) so the persisted int ``guild_id`` / ``actor_id`` shape
+    is unchanged; ID normalization is the scheduled int->str migration's job."""
+    global _audit_log
+    if _audit_log is None:
+        from storage.settings.collections import db_manager
+        _audit_log = AuditLog(db_manager.get_collection_manager("settings_audit_log"))
+    return _audit_log
+
+
 async def audit_log_entry(
     *,
     guild_id: int,
@@ -105,11 +120,10 @@ async def audit_log_entry(
     new_value: object,
     action: str,
 ) -> None:
-    al = await get_audit_logger()
-    await al.log(
+    await _get_audit_log().log(
         guild_id=int(guild_id),
         actor_id=int(actor_id),
-        actor_name=actor_name,
+        actor_name=str(actor_name)[:128],
         source="discord",
         section=section,
         key=key,

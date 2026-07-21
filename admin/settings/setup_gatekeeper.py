@@ -5,123 +5,21 @@ Fast, cached per-feature "is this configured yet?" gates used by the admin panel
 so admins can't open a feature's settings before its prerequisite (WYR channel,
 welcome channel, embed role-tier mapping, ...) has been set.
 
-Uses an in-memory TimedLRUCache for fast checks.
+Each feature predicate delegates to an engine ``SetupGate`` (cached, fail-open); this
+class keeps only the codex-specific requirement definitions and the discord-facing
+``check_*_or_notify`` guards / tier-gate layouts.
 """
-
-import time
-from collections import OrderedDict
-from datetime import datetime, timezone
-from typing import Any, Optional
 
 import discord
 
 from storage.log import get_logger
+# Each feature predicate delegates to the engine SetupGate (cached + fail-open); the bot
+# no longer hand-rolls the caching/predicate machinery.
+from storage.services import SetupGate
 
 logger = get_logger("setup_gatekeeper")
 
-
-# =============================================================================
-# Local TimedLRUCache (no external dependency)
-# =============================================================================
-
-class TimedLRUCache:
-    """
-    LRU Cache with time-based expiration.
-    Items expire after a specified timeout period, in addition to LRU eviction.
-    """
-
-    def __init__(self, max_size: int = 1000, timeout: int = 300):
-        """
-        Initialize the timed LRU cache.
-
-        Args:
-            max_size: Maximum number of items to cache
-            timeout: Expiration time in seconds (default: 300 = 5 minutes)
-        """
-        if max_size <= 0:
-            raise ValueError("max_size must be positive")
-        self.max_size = max_size
-        self.timeout = timeout
-        self._cache: OrderedDict[str, Any] = OrderedDict()
-        self._timestamps: OrderedDict[str, float] = OrderedDict()
-        self._hits = 0
-        self._misses = 0
-
-    def get(self, key: str, default: Any = None) -> Any:
-        """
-        Get an item from cache, checking expiration.
-
-        Args:
-            key: The cache key
-            default: Default value to return if key not found or expired
-
-        Returns:
-            The cached value or default if not found/expired
-        """
-        if key in self._cache:
-            age = time.time() - self._timestamps[key]
-            if age > self.timeout:
-                # Expired - remove and return default
-                logger.debug(f"Cache entry expired: key={key}, age={age:.1f}s, timeout={self.timeout}s")
-                self.delete(key)
-                self._misses += 1
-                return default
-
-            self._hits += 1
-            # Move to end (mark as recently used)
-            self._cache.move_to_end(key)
-            self._timestamps.move_to_end(key)
-            return self._cache[key]
-
-        self._misses += 1
-        return default
-
-    def set(self, key: str, value: Any) -> None:
-        """
-        Set an item in cache with current timestamp.
-
-        Args:
-            key: The cache key
-            value: The value to cache
-        """
-        if key in self._cache:
-            self._cache.move_to_end(key)
-            self._timestamps.move_to_end(key)
-            self._timestamps[key] = time.time()
-        elif len(self._cache) >= self.max_size:
-            evicted_key = next(iter(self._cache))
-            self._cache.popitem(last=False)
-            self._timestamps.pop(evicted_key, None)
-
-        self._cache[key] = value
-        self._timestamps[key] = time.time()
-
-    def delete(self, key: str) -> bool:
-        """Delete an item from cache."""
-        if key in self._cache:
-            del self._cache[key]
-            self._timestamps.pop(key, None)
-            return True
-        return False
-
-    def clear(self) -> None:
-        """Clear all items from cache."""
-        self._cache.clear()
-        self._timestamps.clear()
-        self._hits = 0
-        self._misses = 0
-
-    def get_stats(self) -> dict:
-        """Get cache statistics."""
-        total_requests = self._hits + self._misses
-        hit_rate = (self._hits / total_requests * 100) if total_requests > 0 else 0.0
-        return {
-            "hits": self._hits,
-            "misses": self._misses,
-            "size": len(self._cache),
-            "max_size": self.max_size,
-            "hit_rate": round(hit_rate, 2)
-        }
+_TIERS = ("tier_1", "tier_2", "tier_3", "tier_4", "tier_5")
 
 
 # =============================================================================
@@ -138,8 +36,55 @@ class SetupGatekeeper:
     """
 
     def __init__(self):
-        self._cache: TimedLRUCache = TimedLRUCache(max_size=200, timeout=120)
         self._embed_checker = None
+        # One engine SetupGate per feature predicate (each keeps its own bounded,
+        # time-expiring cache and fails open on loader errors). The discord-facing
+        # check_*_or_notify guards below stay in the bot.
+        self._embed_gate = SetupGate(self._load_embed_state, self._embed_requirement)
+        self._wyr_gate = SetupGate(self._load_config, self._wyr_requirement)
+        self._new_members_gate = SetupGate(self._load_config, self._new_members_requirement)
+        self._tier_gates = {
+            tier: SetupGate(self._load_config, self._tier_requirement(tier))
+            for tier in _TIERS
+        }
+
+    # ------------------------------------------------------------------
+    # Loaders + requirement predicates (feed the SetupGate instances)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    async def _load_config(guild_id: int):
+        """Async config loader shared by the wyr / new_members / tier gates."""
+        from storage.settings.config_manager import get_guild_config_manager
+        gcm = await get_guild_config_manager()
+        return await gcm.get_config(guild_id)
+
+    async def _load_embed_state(self, guild_id: int) -> dict:
+        """Embed gate loader: wraps the injected embed checker. Fails open (complete)
+        when no checker has been linked yet."""
+        if self._embed_checker is None:
+            logger.warning("SetupGatekeeper has no embed_checker – failing open")
+            return {"complete": True}
+        return {"complete": await self._embed_checker(guild_id)}
+
+    @staticmethod
+    def _embed_requirement(state) -> bool:
+        return bool(state.get("complete"))
+
+    @staticmethod
+    def _wyr_requirement(config) -> bool:
+        return bool(config.wyr.get("channel_id"))
+
+    @staticmethod
+    def _new_members_requirement(config) -> bool:
+        return bool(config.new_members.get("welcome_channel_id"))
+
+    @staticmethod
+    def _tier_requirement(tier_name: str):
+        def requirement(config) -> bool:
+            role_tier_map = config.embed.get("role_tier", {})
+            return any(tier_name in tiers for tiers in role_tier_map.values())
+        return requirement
 
     def set_embed_checker(self, checker) -> None:
         """
@@ -170,27 +115,7 @@ class SetupGatekeeper:
         Returns:
             True if at least one tier has roles assigned
         """
-        cache_key = f"embed_{guild_id}"
-        cached = self._cache.get(cache_key)
-        if cached is not None:
-            return cached
-
-        try:
-            if not self._embed_checker:
-                logger.warning("SetupGatekeeper has no embed_checker – failing open")
-                return True
-
-            is_complete = await self._embed_checker(guild_id)
-            self._cache.set(cache_key, is_complete)
-            logger.debug(
-                f"Guild {guild_id} embed setup check: cached result "
-                f"(complete={is_complete}, ttl=120s)"
-            )
-            return is_complete
-
-        except Exception as e:
-            logger.error(f"Error checking embed setup for guild {guild_id}, failing open: {e}")
-            return True
+        return await self._embed_gate.is_complete(guild_id)
 
     async def check_embed_or_notify(self, interaction: discord.Interaction) -> bool:
         """
@@ -239,7 +164,7 @@ class SetupGatekeeper:
 
     def invalidate_embed(self, guild_id: int) -> None:
         """Remove a guild's embed setup cache entry so the next check re-queries."""
-        self._cache.delete(f"embed_{guild_id}")
+        self._embed_gate.invalidate(guild_id)
         logger.debug(f"Guild {guild_id} embed setup cache invalidated")
 
     # ------------------------------------------------------------------
@@ -253,26 +178,7 @@ class SetupGatekeeper:
         Fails open on errors so existing configurations are never blocked
         by transient DB issues.
         """
-        cache_key = f"wyr_{guild_id}"
-        cached = self._cache.get(cache_key)
-        if cached is not None:
-            return cached
-
-        try:
-            from storage.settings.config_manager import get_guild_config_manager
-            gcm = await get_guild_config_manager()
-            config = await gcm.get_config(guild_id)
-            is_complete = bool(config.wyr.get("channel_id"))
-            self._cache.set(cache_key, is_complete)
-            logger.debug(
-                f"Guild {guild_id} WYR setup check: cached result "
-                f"(complete={is_complete}, ttl=120s)"
-            )
-            return is_complete
-
-        except Exception as e:
-            logger.error(f"Error checking WYR setup for guild {guild_id}, failing open: {e}")
-            return True
+        return await self._wyr_gate.is_complete(guild_id)
 
     async def check_wyr_or_notify(self, interaction: discord.Interaction) -> bool:
         """Guard for WYR settings other than the channel selector.
@@ -313,7 +219,7 @@ class SetupGatekeeper:
 
     def invalidate_wyr(self, guild_id: int) -> None:
         """Remove a guild's WYR setup cache entry so the next check re-queries."""
-        self._cache.delete(f"wyr_{guild_id}")
+        self._wyr_gate.invalidate(guild_id)
         logger.debug(f"Guild {guild_id} WYR setup cache invalidated")
 
     # ------------------------------------------------------------------
@@ -327,26 +233,7 @@ class SetupGatekeeper:
         Fails open on errors so existing configurations are never blocked
         by transient DB issues.
         """
-        cache_key = f"new_members_{guild_id}"
-        cached = self._cache.get(cache_key)
-        if cached is not None:
-            return cached
-
-        try:
-            from storage.settings.config_manager import get_guild_config_manager
-            gcm = await get_guild_config_manager()
-            config = await gcm.get_config(guild_id)
-            is_complete = bool(config.new_members.get("welcome_channel_id"))
-            self._cache.set(cache_key, is_complete)
-            logger.debug(
-                f"Guild {guild_id} New Members setup check: cached result "
-                f"(complete={is_complete}, ttl=120s)"
-            )
-            return is_complete
-
-        except Exception as e:
-            logger.error(f"Error checking New Members setup for guild {guild_id}, failing open: {e}")
-            return True
+        return await self._new_members_gate.is_complete(guild_id)
 
     async def check_new_members_or_notify(self, interaction: discord.Interaction) -> bool:
         """Guard for New Members settings that require welcome_channel_id.
@@ -387,7 +274,7 @@ class SetupGatekeeper:
 
     def invalidate_new_members(self, guild_id: int) -> None:
         """Remove a guild's New Members setup cache entry so the next check re-queries."""
-        self._cache.delete(f"new_members_{guild_id}")
+        self._new_members_gate.invalidate(guild_id)
         logger.debug(f"Guild {guild_id} New Members setup cache invalidated")
 
     # ------------------------------------------------------------------
@@ -408,29 +295,10 @@ class SetupGatekeeper:
         Returns:
             True if at least one role is mapped to this tier
         """
-        cache_key = f"tier_{guild_id}_{tier_name}"
-        cached = self._cache.get(cache_key)
-        if cached is not None:
-            return cached
-
-        try:
-            from storage.settings.config_manager import get_guild_config_manager
-            gcm = await get_guild_config_manager()
-            config = await gcm.get_config(guild_id)
-            role_tier_map = config.embed.get("role_tier", {})
-            is_ready = any(tier_name in tiers for tiers in role_tier_map.values())
-            self._cache.set(cache_key, is_ready)
-            logger.debug(
-                f"Guild {guild_id} tier '{tier_name}' ready check: "
-                f"cached result (ready={is_ready}, ttl=120s)"
-            )
-            return is_ready
-
-        except Exception as e:
-            logger.error(
-                f"Error checking tier '{tier_name}' for guild {guild_id}, failing open: {e}"
-            )
-            return True  # Fail open
+        gate = self._tier_gates.get(tier_name)
+        if gate is None:
+            return True  # Unknown tier -> fail open
+        return await gate.is_complete(guild_id)
 
     def build_tier_not_configured_layout(self, tier_name: str) -> discord.ui.LayoutView:
         """Build the 'tier not configured' Components v2 notice LayoutView.
@@ -438,7 +306,7 @@ class SetupGatekeeper:
         Returns a Message-3 style notice (orange container) per
         ADMIN_PANEL_STANDARD.md §0.1 — no embeds on admin panels.
         """
-        from admin.views.base import build_notice_layout
+        from ..views.base import build_notice_layout
 
         tier_label = tier_name.replace("_", " ").title()  # "tier_3" → "Tier 3"
         body = (
@@ -493,7 +361,9 @@ class SetupGatekeeper:
 
     def invalidate_tier(self, guild_id: int, tier_name: str) -> None:
         """Remove a tier-ready cache entry so the next check re-queries."""
-        self._cache.delete(f"tier_{guild_id}_{tier_name}")
+        gate = self._tier_gates.get(tier_name)
+        if gate is not None:
+            gate.invalidate(guild_id)
         logger.debug(f"Guild {guild_id} tier '{tier_name}' cache invalidated")
 
     def invalidate_all_tiers(self, guild_id: int) -> None:
@@ -506,17 +376,32 @@ class SetupGatekeeper:
     # ------------------------------------------------------------------
 
     def invalidate(self, guild_id: int):
-        """Remove a single guild from the cache."""
-        self._cache.delete(str(guild_id))
+        """Remove a guild from EVERY feature gate's cache. (Previously this deleted a
+        bare ``str(guild_id)`` key that no gate ever wrote, so it invalidated nothing.)"""
+        self._embed_gate.invalidate(guild_id)
+        self._wyr_gate.invalidate(guild_id)
+        self._new_members_gate.invalidate(guild_id)
+        self.invalidate_all_tiers(guild_id)
         logger.debug(f"Guild {guild_id} cache invalidated")
 
     def invalidate_all(self):
-        """Clear the entire cache."""
-        self._cache.clear()
+        """Clear every feature gate's cache."""
+        self._embed_gate.invalidate_all()
+        self._wyr_gate.invalidate_all()
+        self._new_members_gate.invalidate_all()
+        for gate in self._tier_gates.values():
+            gate.invalidate_all()
 
     def get_stats(self) -> dict:
-        """Return cache statistics for diagnostics."""
-        return self._cache.get_stats()
+        """Return per-gate cache statistics for diagnostics."""
+        stats = {
+            "embed": self._embed_gate.get_stats(),
+            "wyr": self._wyr_gate.get_stats(),
+            "new_members": self._new_members_gate.get_stats(),
+        }
+        for tier, gate in self._tier_gates.items():
+            stats[tier] = gate.get_stats()
+        return stats
 
 
 # Global singleton
