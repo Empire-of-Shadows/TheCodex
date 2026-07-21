@@ -27,3 +27,4 @@ tsconfig.tsbuildinfo
 .env.*.local
 /docker/
 /codex-guide-1265120128295632926-20260706.json
+/migrations/scripts/m4_guildconfig_guild_id_to_str.py
