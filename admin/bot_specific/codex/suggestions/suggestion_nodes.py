@@ -79,7 +79,7 @@ def build_suggestion_update_status_node() -> PanelNode:
 
         async def _open(bi: discord.Interaction):
             async def _submit(mi: discord.Interaction, sid: str, status: str, reason: str):
-                if not cog._check_cooldown(mi.user.id, "sug_update_status"):
+                if not cog._check_cooldown(mi.user.id, "sug_update_status", guild.id):
                     await mi.response.send_message(
                         view=build_notice_layout("Slow Down", "Please wait a moment before trying again."),
                         ephemeral=True,
