@@ -134,7 +134,9 @@ def _coerce_section_ids(section: str, value: dict) -> None:
             value[k] = _coerce_id(value[k])
     for k in _ROLE_ID_LIST_FIELDS.get(section, ()):
         if k in value and isinstance(value[k], list):
-            value[k] = [_coerce_id(v) for v in value[k]]
+            # Permission role lists persist as STRINGS (migration m9), unlike the
+            # scalar channel/role fields above which the config still stores as ints.
+            value[k] = [str(v) for v in value[k] if v is not None]
     if section == "drops" and isinstance(value.get("tracker_channels"), dict):
         value["tracker_channels"] = {
             k: _coerce_id(v) for k, v in value["tracker_channels"].items()
@@ -209,10 +211,8 @@ async def update_settings(
     session: dict = Depends(get_current_user),
 ):
     role = await require_panel_access(session, guild_id)
-    # Config queries are string-keyed (migration m4); the audit log still
-    # stores int guild_id until its own normalization pass.
+    # Both the config and the audit log are string-keyed (migrations m4 / m8).
     gid = str(int(guild_id))
-    audit_gid = int(guild_id)
     doc = await db.guild_config().find_one({"guild_id": gid})
 
     payload = patch.model_dump(exclude_none=True)
@@ -291,8 +291,8 @@ async def update_settings(
         try:
             audit_docs = [
                 {
-                    "guild_id": audit_gid,
-                    "actor_id": int(actor_id),
+                    "guild_id": gid,
+                    "actor_id": str(actor_id),
                     "actor_name": str(actor_name)[:128],
                     "source": "dashboard",
                     "section": e["section"],

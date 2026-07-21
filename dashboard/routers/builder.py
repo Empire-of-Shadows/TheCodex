@@ -41,7 +41,7 @@ class WelcomePutBody(BaseModel):
 @router.get("/guilds/{guild_id}/guide")
 async def get_guide(guild_id: str, _session: dict = Depends(require_guild_admin)):
     """Fetch guide data for a guild."""
-    doc = await db.guide_content().find_one({"guild_id": int(guild_id)})
+    doc = await db.guide_content().find_one({"guild_id": str(int(guild_id))})
     if doc is None:
         return {"guide_data": None}
     return {"guide_data": doc.get("guide_data")}
@@ -62,12 +62,12 @@ async def put_guide(
     user_id = int(session["user_data"]["id"])
     logger.info("Saving guide for guild %s by user %s", guild_id, user_id)
     await db.guide_content().update_one(
-        {"guild_id": int(guild_id)},
+        {"guild_id": str(int(guild_id))},
         {"$set": {
-            "guild_id": int(guild_id),
+            "guild_id": str(int(guild_id)),
             "guide_data": guide_data,
             "updated_at": datetime.now(timezone.utc),
-            "updated_by": user_id,
+            "updated_by": str(user_id),
         }},
         upsert=True,
     )

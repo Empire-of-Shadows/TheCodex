@@ -274,9 +274,10 @@ class DropsStatsCog(commands.Cog):
 			totals_id = {"coll": coll_name}
 
 			if guild_id is not None:
-				monthly_id["guild_id"] = guild_id
-				weekly_id["guild_id"] = guild_id
-				totals_id["guild_id"] = guild_id
+				# Stored as the canonical string form inside the compound _id.
+				monthly_id["guild_id"] = str(guild_id)
+				weekly_id["guild_id"] = str(guild_id)
+				totals_id["guild_id"] = str(guild_id)
 
 			logger.debug("Monthly doc _id=%s", monthly_id)
 

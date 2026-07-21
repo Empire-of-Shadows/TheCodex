@@ -396,8 +396,8 @@ class GuildEventHandler:
                 try:
                     whitelist_collection = db_manager.get_collection_manager('serverdata_whitelist')
                     whitelist_entry = await whitelist_collection.find_one({
-                        'guild_id': guild.id,
-                        'user_id': member.id,
+                        'guild_id': str(guild.id),
+                        'user_id': str(member.id),
                         'is_active': True
                     })
 
@@ -428,7 +428,7 @@ class GuildEventHandler:
 
                                 # Update database
                                 await whitelist_collection.update_one(
-                                    {'guild_id': guild.id, 'user_id': member.id},
+                                    {'guild_id': str(guild.id), 'user_id': str(member.id)},
                                     {'$set': {
                                         'role_assigned': True,
                                         'role_assigned_at': datetime.now(timezone.utc),
@@ -702,11 +702,11 @@ class GuildEventHandler:
             )
             totals["daily_wyr_leaderboard"] = await col("daily_wyr_leaderboard").delete_many({"guild_id": gid_str})
             totals["daily_wyr_votes"] = await col("daily_wyr_votes").delete_many({"guild_id": gid_str})
-            totals["daily_wyr_mappings"] = await col("daily_wyr_mappings").delete_many({"guild_id": guild_id})
+            totals["daily_wyr_mappings"] = await col("daily_wyr_mappings").delete_many({"guild_id": gid_str})
 
             # --- Suggestions (votes/notifications reference suggestion_id, not guild_id directly) ---
             suggestion_ids = await col("suggestions_suggestions").collection.distinct(
-                "suggestion_id", {"guild_id": guild_id}
+                "suggestion_id", {"guild_id": gid_str}
             )
             if suggestion_ids:
                 totals["suggestions_votes"] = await col("suggestions_votes").delete_many(
@@ -715,30 +715,30 @@ class GuildEventHandler:
                 totals["suggestions_notification_queue"] = await col("suggestions_notification_queue").delete_many(
                     {"suggestion_id": {"$in": suggestion_ids}}
                 )
-            totals["suggestions_suggestions"] = await col("suggestions_suggestions").delete_many({"guild_id": guild_id})
+            totals["suggestions_suggestions"] = await col("suggestions_suggestions").delete_many({"guild_id": gid_str})
 
             # --- Updates / Drops stats (compound _id embeds guild_id) ---
-            totals["updates_monthly"] = await col("updates_monthly").delete_many({"_id.guild_id": guild_id})
-            totals["updates_weekly"] = await col("updates_weekly").delete_many({"_id.guild_id": guild_id})
-            totals["updates_totals"] = await col("updates_totals").delete_many({"_id.guild_id": guild_id})
+            totals["updates_monthly"] = await col("updates_monthly").delete_many({"_id.guild_id": gid_str})
+            totals["updates_weekly"] = await col("updates_weekly").delete_many({"_id.guild_id": gid_str})
+            totals["updates_totals"] = await col("updates_totals").delete_many({"_id.guild_id": gid_str})
 
             # --- ServerData ---
-            totals["serverdata_boosts"] = await col("serverdata_boosts").delete_many({"guild_id": guild_id})
-            totals["serverdata_boost_events"] = await col("serverdata_boost_events").delete_many({"guild_id": guild_id})
-            totals["serverdata_whitelist"] = await col("serverdata_whitelist").delete_many({"guild_id": guild_id})
-            totals["color_color_sets"] = await col("color_color_sets").delete_many({"guild_id": guild_id})
-            totals["color_color_set_assignments"] = await col("color_color_set_assignments").delete_many({"guild_id": guild_id})
+            totals["serverdata_boosts"] = await col("serverdata_boosts").delete_many({"guild_id": gid_str})
+            totals["serverdata_boost_events"] = await col("serverdata_boost_events").delete_many({"guild_id": gid_str})
+            totals["serverdata_whitelist"] = await col("serverdata_whitelist").delete_many({"guild_id": gid_str})
+            totals["color_color_sets"] = await col("color_color_sets").delete_many({"guild_id": gid_str})
+            totals["color_color_set_assignments"] = await col("color_color_set_assignments").delete_many({"guild_id": gid_str})
 
             # --- ServerData cache collections ---
-            totals["serverdata_guilds"] = await col("serverdata_guilds").delete_many({"id": guild_id})
-            totals["serverdata_channels"] = await col("serverdata_channels").delete_many({"guild_id": guild_id})
-            totals["serverdata_members"] = await col("serverdata_members").delete_many({"guild_id": guild_id})
-            totals["serverdata_roles"] = await col("serverdata_roles").delete_many({"guild_id": guild_id})
-            totals["serverdata_analytics"] = await col("serverdata_analytics").delete_many({"guild_id": guild_id})
-            totals["serverdata_events"] = await col("serverdata_events").delete_many({"guild_id": guild_id})
+            totals["serverdata_guilds"] = await col("serverdata_guilds").delete_many({"id": gid_str})
+            totals["serverdata_channels"] = await col("serverdata_channels").delete_many({"guild_id": gid_str})
+            totals["serverdata_members"] = await col("serverdata_members").delete_many({"guild_id": gid_str})
+            totals["serverdata_roles"] = await col("serverdata_roles").delete_many({"guild_id": gid_str})
+            totals["serverdata_analytics"] = await col("serverdata_analytics").delete_many({"guild_id": gid_str})
+            totals["serverdata_events"] = await col("serverdata_events").delete_many({"guild_id": gid_str})
 
             # --- Guide content ---
-            totals["guide_content"] = await col("guide_content").delete_many({"guild_id": guild_id})
+            totals["guide_content"] = await col("guide_content").delete_many({"guild_id": gid_str})
 
             deleted_total = sum(totals.values())
             self.logger.info(

@@ -185,7 +185,7 @@ class NewMemberActions:
             from storage.settings.collections import db_manager
             whitelist_collection = db_manager.get_collection_manager('serverdata_whitelist')
 
-            all_entries = await whitelist_collection.find_many({'guild_id': guild_id})
+            all_entries = await whitelist_collection.find_many({'guild_id': str(guild_id)})
             active_entries = [e for e in all_entries if e.get('is_active', True)]
             role_assigned = [e for e in active_entries if e.get('role_assigned', False)]
 

@@ -47,7 +47,8 @@ async def list_audit_log(
         raise HTTPException(status_code=403, detail="Audit log is admin-only")
 
     try:
-        gid = int(guild_id)
+        # Validate as a snowflake; the collection is string-keyed (migration m8).
+        gid = str(int(guild_id))
     except (TypeError, ValueError):
         raise HTTPException(status_code=400, detail="Invalid guild_id")
 

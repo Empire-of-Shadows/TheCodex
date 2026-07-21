@@ -216,7 +216,7 @@ class GuideManager:
 		if cache_ts and self._guide_cache.get(guild_id) is not None:
 			# Lightweight check: has the DB document been updated since we cached?
 			doc = await guide_store._col.find_one(
-				{"guild_id": guild_id}, projection={"updated_at": 1}
+				{"guild_id": str(guild_id)}, projection={"updated_at": 1}
 			)
 			db_updated = doc.get("updated_at") if doc else None
 			if db_updated:

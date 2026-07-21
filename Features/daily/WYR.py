@@ -460,12 +460,14 @@ class WYR(commands.Cog):
         """
         try:
             with PerformanceLogger(logger, f"store_mapping_{message_id}"):
+                # Snowflake IDs are stored as strings; question_id is an internal
+                # question number, not a snowflake, and stays an int.
                 mapping_data = {
                     "message_id": str(message_id),
                     "question_id": question_id,
                     "created_at": datetime.now(timezone.utc),
-                    "channel_id": channel_id,
-                    "guild_id": guild_id
+                    "channel_id": str(channel_id) if channel_id is not None else None,
+                    "guild_id": str(guild_id) if guild_id is not None else None
                 }
 
                 # Use the new database manager to create the mapping
@@ -535,7 +537,7 @@ class WYR(commands.Cog):
                         cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_old)
 
                         result = await db_manager.daily_wyr_mappings.delete_many({
-                            "guild_id": guild_id,
+                            "guild_id": str(guild_id),
                             "created_at": {"$lt": cutoff_date},
                         })
                         total_deleted += result or 0
@@ -552,7 +554,7 @@ class WYR(commands.Cog):
         """Get the timestamp of the most recent scheduled post for a guild from the database."""
         try:
             mappings = await db_manager.daily_wyr_mappings.find_many(
-                filter_dict={"guild_id": guild_id},
+                filter_dict={"guild_id": str(guild_id)},
                 sort=[("created_at", -1)],
                 limit=1
             )

@@ -452,17 +452,18 @@ class SuggestionDatabaseManager:
             logger.info(
                 f"Creating suggestion for user {user_id if not anonymous else 'anonymous'} - Category: {category}, Guild: {guild_id}, Length: {len(text)} chars")
 
+            # Snowflake IDs are stored in the canonical string form.
             suggestion_doc = {
                 "suggestion_id": suggestion_id,
-                "guild_id": guild_id,
-                "user_id": user_id if not anonymous else None,
+                "guild_id": str(guild_id) if guild_id is not None else None,
+                "user_id": str(user_id) if not anonymous and user_id is not None else None,
                 "text": text,
                 "anonymous": anonymous,
                 "category": category,
                 "status": "Pending",
                 "priority": "Medium",
-                "message_id": message_id,
-                "thread_id": thread_id,
+                "message_id": str(message_id) if message_id is not None else None,
+                "thread_id": str(thread_id) if thread_id is not None else None,
                 "admin_notes": "",
                 "implementation_date": None,
                 "tags": []
@@ -490,15 +491,16 @@ class SuggestionDatabaseManager:
             logger.debug(f"Processing {vote_type} vote from user {user_id} for suggestion {suggestion_id}")
 
             try:
+                uid = str(user_id)
                 # Check if user already voted
                 existing_vote = await self.db_manager.suggestions_votes.find_one({
                     "suggestion_id": suggestion_id,
-                    "user_id": user_id
+                    "user_id": uid
                 })
 
                 vote_doc = {
                     "suggestion_id": suggestion_id,
-                    "user_id": user_id,
+                    "user_id": uid,
                     "vote_type": vote_type
                 }
 
@@ -507,14 +509,14 @@ class SuggestionDatabaseManager:
                         # Remove vote if same type
                         await self.db_manager.suggestions_votes.delete_one({
                             "suggestion_id": suggestion_id,
-                            "user_id": user_id
+                            "user_id": uid
                         })
                         logger.info(f"Removed {vote_type} vote from user {user_id} for suggestion {suggestion_id}")
                         return {"success": True, "message": f"Removed your {vote_type} vote"}
                     else:
                         # Update vote type
                         await self.db_manager.suggestions_votes.update_one(
-                            {"suggestion_id": suggestion_id, "user_id": user_id},
+                            {"suggestion_id": suggestion_id, "user_id": uid},
                             {"$set": {"vote_type": vote_type}}
                         )
                         logger.info(
@@ -562,7 +564,7 @@ class SuggestionDatabaseManager:
         await self._ensure_initialized()
         try:
             doc = await self.db_manager.suggestions_suggestions.find_one(
-                {"message_id": message_id}
+                {"message_id": str(message_id)}
             )
             return doc.get("suggestion_id") if doc else None
         except Exception as e:
@@ -593,7 +595,7 @@ class SuggestionDatabaseManager:
                 filter_doc = {}
 
                 if guild_id:
-                    filter_doc["guild_id"] = guild_id
+                    filter_doc["guild_id"] = str(guild_id)
                 if query:
                     filter_doc["$text"] = {"$search": query}
                 if category and category != "All":
@@ -601,7 +603,7 @@ class SuggestionDatabaseManager:
                 if status and status != "All":
                     filter_doc["status"] = status
                 if author_id:
-                    filter_doc["user_id"] = author_id
+                    filter_doc["user_id"] = str(author_id)
 
                 results = await self.db_manager.suggestions_suggestions.find_many(
                     filter_dict=filter_doc,
@@ -624,9 +626,9 @@ class SuggestionDatabaseManager:
             logger.info(f"Retrieving suggestions for user {user_id} in guild {guild_id} (limit: {limit})")
 
             try:
-                filter_dict = {"user_id": user_id}
+                filter_dict = {"user_id": str(user_id)}
                 if guild_id:
-                    filter_dict["guild_id"] = guild_id
+                    filter_dict["guild_id"] = str(guild_id)
                 results = await self.db_manager.suggestions_suggestions.find_many(
                     filter_dict=filter_dict,
                     limit=limit,
@@ -648,7 +650,7 @@ class SuggestionDatabaseManager:
             try:
                 match_filter = {}
                 if guild_id:
-                    match_filter["guild_id"] = guild_id
+                    match_filter["guild_id"] = str(guild_id)
 
                 total_suggestions = await self.db_manager.suggestions_suggestions.count_documents(match_filter)
 
@@ -671,7 +673,7 @@ class SuggestionDatabaseManager:
                 # Top contributors
                 contributor_match = {"anonymous": False}
                 if guild_id:
-                    contributor_match["guild_id"] = guild_id
+                    contributor_match["guild_id"] = str(guild_id)
                 contributor_pipeline = [
                     {"$match": contributor_match},
                     {"$group": {"_id": "$user_id", "count": {"$sum": 1}}},
@@ -699,7 +701,7 @@ class SuggestionDatabaseManager:
         """Update user statistics"""
         try:
             await self.db_manager.get_collection_manager('suggestions_userstats').update_one(
-                {"user_id": user_id},
+                {"user_id": str(user_id)},
                 {
                     "$inc": {stat_type: 1},
                     "$set": {"last_activity": datetime.utcnow()}
@@ -1089,8 +1091,8 @@ class SuggestionCog(commands.Cog):
                     {"suggestion_id": suggestion_id},
                     {
                         "$set": {
-                            "message_id": message.id,
-                            "thread_id": thread.id
+                            "message_id": str(message.id),
+                            "thread_id": str(thread.id)
                         }
                     }
                 )
@@ -1146,11 +1148,13 @@ class SuggestionCog(commands.Cog):
                 for notification in notifications:
                     try:
                         # get_user is cache-only; fall back to the API so an uncached
-                        # recipient isn't retried every 5 minutes forever.
-                        user = self.bot.get_user(notification["user_id"])
+                        # recipient isn't retried every 5 minutes forever. Stored user
+                        # ids are strings; discord.py wants ints.
+                        recipient_id = int(notification["user_id"])
+                        user = self.bot.get_user(recipient_id)
                         if user is None:
                             try:
-                                user = await self.bot.fetch_user(notification["user_id"])
+                                user = await self.bot.fetch_user(recipient_id)
                             except discord.NotFound:
                                 # Account no longer exists -> stop retrying.
                                 await self.db_manager.mark_notification_sent(notification["_id"])

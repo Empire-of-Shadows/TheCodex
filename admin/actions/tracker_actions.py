@@ -82,8 +82,8 @@ class TrackerActions:
             boosts_col = db_manager.get_collection_manager('serverdata_boosts')
             events_col = db_manager.get_collection_manager('serverdata_boost_events')
 
-            active_boosters = await boosts_col.count_documents({'guild_id': guild_id})
-            total_events = await events_col.count_documents({'guild_id': guild_id})
+            active_boosters = await boosts_col.count_documents({'guild_id': str(guild_id)})
+            total_events = await events_col.count_documents({'guild_id': str(guild_id)})
 
             return {
                 "active_boosters": active_boosters,

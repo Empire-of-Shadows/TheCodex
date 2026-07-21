@@ -135,7 +135,7 @@ class ColorSetActions:
             from storage.settings.collections import db_manager
             col = db_manager.get_collection_manager("color_color_sets")
             docs = await col.find_many(
-                {"guild_id": guild_id},
+                {"guild_id": str(guild_id)},
                 sort=[("name", 1)],
             )
             return [
@@ -159,7 +159,7 @@ class ColorSetActions:
             from bson import ObjectId
             from storage.settings.collections import db_manager
             col = db_manager.get_collection_manager("color_color_sets")
-            doc = await col.find_one({"_id": ObjectId(set_id), "guild_id": guild_id})
+            doc = await col.find_one({"_id": ObjectId(set_id), "guild_id": str(guild_id)})
             if not doc:
                 return None
             return {
@@ -189,7 +189,7 @@ class ColorSetActions:
             col = db_manager.get_collection_manager("color_color_sets")
             # create_one auto-adds created_at and updated_at
             inserted_id = await col.create_one({
-                "guild_id": guild_id,
+                "guild_id": str(guild_id),
                 "name": name.strip(),
                 "description": description.strip(),
                 "colors": colors,
@@ -215,7 +215,7 @@ class ColorSetActions:
             col = db_manager.get_collection_manager("color_color_sets")
             # update_one auto-adds updated_at to $set
             return await col.update_one(
-                {"_id": ObjectId(set_id), "guild_id": guild_id},
+                {"_id": ObjectId(set_id), "guild_id": str(guild_id)},
                 {"$set": {"colors": colors}},
             )
         except Exception as e:
@@ -232,9 +232,9 @@ class ColorSetActions:
             assign_col = db_manager.get_collection_manager("color_color_set_assignments")
 
             # Remove all assignments for this set first
-            await assign_col.delete_many({"guild_id": guild_id, "color_set_id": set_id})
+            await assign_col.delete_many({"guild_id": str(guild_id), "color_set_id": set_id})
 
-            return await sets_col.delete_one({"_id": ObjectId(set_id), "guild_id": guild_id})
+            return await sets_col.delete_one({"_id": ObjectId(set_id), "guild_id": str(guild_id)})
         except Exception as e:
             logger.error(f"delete_color_set failed for {set_id}: {e}", exc_info=True)
             return False
@@ -250,7 +250,7 @@ class ColorSetActions:
         try:
             from storage.settings.collections import db_manager
             col = db_manager.get_collection_manager("color_color_set_assignments")
-            query: dict = {"guild_id": guild_id}
+            query: dict = {"guild_id": str(guild_id)}
             if set_id is not None:
                 query["color_set_id"] = set_id
             docs = await col.find_many(query)
@@ -287,7 +287,7 @@ class ColorSetActions:
             # update_one with upsert=True; auto-adds updated_at to $set
             return await col.update_one(
                 {
-                    "guild_id": guild_id,
+                    "guild_id": str(guild_id),
                     "color_set_id": set_id,
                     "target_type": target_type,
                     "target_id": target_id,
@@ -295,7 +295,7 @@ class ColorSetActions:
                 {
                     "$set": {"override_mode": "additive"},
                     "$setOnInsert": {
-                        "guild_id": guild_id,
+                        "guild_id": str(guild_id),
                         "color_set_id": set_id,
                         "target_type": target_type,
                         "target_id": target_id,
@@ -319,7 +319,7 @@ class ColorSetActions:
             from storage.settings.collections import db_manager
             col = db_manager.get_collection_manager("color_color_set_assignments")
             return await col.delete_one({
-                "guild_id": guild_id,
+                "guild_id": str(guild_id),
                 "color_set_id": set_id,
                 "target_type": target_type,
                 "target_id": target_id,

@@ -59,20 +59,22 @@ class BoostTracker(commands.Cog):
                 boosts_collection = self.db_manager.get_collection_manager('serverdata_boosts')
                 events_collection = self.db_manager.get_collection_manager('serverdata_boost_events')
 
-                stored = await boosts_collection.find_many({'guild_id': guild.id})
-                stored_by_id = {doc['user_id']: doc for doc in stored}
-                live_ids = {m.id for m in guild.premium_subscribers}
+                # Snowflake IDs are stored as strings; compare in string space.
+                gid = str(guild.id)
+                stored = await boosts_collection.find_many({'guild_id': gid})
+                stored_by_id = {str(doc['user_id']): doc for doc in stored}
+                live_ids = {str(m.id) for m in guild.premium_subscribers}
 
                 # Started boosting while offline → in Discord, missing from DB.
                 for member in guild.premium_subscribers:
-                    if member.id in stored_by_id:
+                    if str(member.id) in stored_by_id:
                         continue
                     boost_start = member.premium_since or now
                     await boosts_collection.update_one(
-                        {'guild_id': guild.id, 'user_id': member.id},
+                        {'guild_id': gid, 'user_id': str(member.id)},
                         {'$set': {
-                            'guild_id': guild.id,
-                            'user_id': member.id,
+                            'guild_id': gid,
+                            'user_id': str(member.id),
                             'username': str(member),
                             'boost_start': boost_start,
                             'guild_name': str(guild.name),
@@ -81,8 +83,8 @@ class BoostTracker(commands.Cog):
                         upsert=True,
                     )
                     await events_collection.create_one({
-                        'guild_id': guild.id,
-                        'user_id': member.id,
+                        'guild_id': gid,
+                        'user_id': str(member.id),
                         'username': str(member),
                         'event_type': 'boost_start',
                         'timestamp': member.premium_since or now,
@@ -99,9 +101,9 @@ class BoostTracker(commands.Cog):
                     if isinstance(start, str):
                         start = datetime.datetime.fromisoformat(start)
                     duration = self._format_duration(now - start) if start else "Unknown"
-                    await boosts_collection.delete_one({'guild_id': guild.id, 'user_id': user_id})
+                    await boosts_collection.delete_one({'guild_id': gid, 'user_id': user_id})
                     await events_collection.create_one({
-                        'guild_id': guild.id,
+                        'guild_id': gid,
                         'user_id': user_id,
                         'username': doc.get('username', str(user_id)),
                         'event_type': 'boost_end',
@@ -136,8 +138,8 @@ class BoostTracker(commands.Cog):
     async def log_boost_start(self, member: discord.Member):
         """Log when a member starts boosting."""
         now = datetime.datetime.now(datetime.timezone.utc)
-        guild_id = member.guild.id
-        user_id = member.id
+        guild_id = str(member.guild.id)
+        user_id = str(member.id)
         # Discord's authoritative boost-start timestamp (survives bot restarts).
         boost_start = member.premium_since or now
 
@@ -189,8 +191,8 @@ class BoostTracker(commands.Cog):
     async def log_boost_end(self, member: discord.Member):
         """Log when a member stops boosting."""
         now = datetime.datetime.now(datetime.timezone.utc)
-        guild_id = member.guild.id
-        user_id = member.id
+        guild_id = str(member.guild.id)
+        user_id = str(member.id)
 
         # Duration from Discord's own boost-start timestamp (no DB read needed).
         if member.premium_since:
@@ -344,7 +346,7 @@ class BoostTracker(commands.Cog):
         try:
             events_collection = self.db_manager.get_collection_manager('serverdata_boost_events')
             events = await events_collection.find_many(
-                {'guild_id': interaction.guild.id, 'user_id': target_user.id},
+                {'guild_id': str(interaction.guild.id), 'user_id': str(target_user.id)},
                 sort=[('timestamp', -1)],
                 limit=5,
             )

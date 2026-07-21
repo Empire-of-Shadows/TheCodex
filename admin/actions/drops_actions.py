@@ -80,7 +80,7 @@ class DropsActions:
             stats = {}
             for category in TRACKER_CATEGORIES:
                 doc = await totals_col.find_one(
-                    {"_id": {"coll": category, "guild_id": guild_id}},
+                    {"_id": {"coll": category, "guild_id": str(guild_id)}},
                     projection={"total_count": 1, "average_per_month": 1, "months_with_data": 1}
                 )
                 if doc:

@@ -99,9 +99,8 @@ _audit_log: "AuditLog | None" = None
 
 def _get_audit_log() -> AuditLog:
     """The engine ``AuditLog`` over the ``settings_audit_log`` collection, replacing the
-    hand-rolled ``AuditLogger``. Uses the generic ``.log()`` (not ``log_config_change``,
-    which stringifies ``guild_id``) so the persisted int ``guild_id`` / ``actor_id`` shape
-    is unchanged; ID normalization is the scheduled int->str migration's job."""
+    hand-rolled ``AuditLogger``. Entries persist string ``guild_id`` / ``actor_id`` (the
+    canonical form; existing data normalized by migration m8)."""
     global _audit_log
     if _audit_log is None:
         from storage.settings.collections import db_manager
@@ -121,8 +120,8 @@ async def audit_log_entry(
     action: str,
 ) -> None:
     await _get_audit_log().log(
-        guild_id=int(guild_id),
-        actor_id=int(actor_id),
+        guild_id=str(guild_id),
+        actor_id=str(actor_id),
         actor_name=str(actor_name)[:128],
         source="discord",
         section=section,

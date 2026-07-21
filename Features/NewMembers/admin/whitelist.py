@@ -257,10 +257,10 @@ class WhitelistGroup(commands.GroupCog, name="whitelist", description="Manage me
             # Get whitelist collection
             whitelist_collection = db_manager.get_collection_manager('serverdata_whitelist')
 
-            # Check if already whitelisted
+            # Check if already whitelisted (snowflake IDs are stored as strings)
             existing = await whitelist_collection.find_one({
-                'guild_id': guild.id,
-                'user_id': user_id
+                'guild_id': str(guild.id),
+                'user_id': str(user_id)
             })
 
             if existing:
@@ -275,11 +275,11 @@ class WhitelistGroup(commands.GroupCog, name="whitelist", description="Manage me
                 else:
                     # Reactivate
                     await whitelist_collection.update_one(
-                        {'guild_id': guild.id, 'user_id': user_id},
+                        {'guild_id': str(guild.id), 'user_id': str(user_id)},
                         {'$set': {
                             'is_active': True,
                             'reactivated_at': datetime.now(timezone.utc),
-                            'reactivated_by': interaction.user.id,
+                            'reactivated_by': str(interaction.user.id),
                             'reactivated_reason': reason
                         }}
                     )
@@ -291,10 +291,10 @@ class WhitelistGroup(commands.GroupCog, name="whitelist", description="Manage me
 
             # Add to whitelist
             whitelist_entry = {
-                'guild_id': guild.id,
-                'user_id': user_id,
+                'guild_id': str(guild.id),
+                'user_id': str(user_id),
                 'username': username,
-                'added_by': interaction.user.id,
+                'added_by': str(interaction.user.id),
                 'added_by_username': interaction.user.name,
                 'added_at': datetime.now(timezone.utc),
                 'reason': reason,
@@ -318,7 +318,7 @@ class WhitelistGroup(commands.GroupCog, name="whitelist", description="Manage me
 
                         # Update database with role info
                         await whitelist_collection.update_one(
-                            {'guild_id': guild.id, 'user_id': user_id},
+                            {'guild_id': str(guild.id), 'user_id': str(user_id)},
                             {'$set': {
                                 'role_assigned': True,
                                 'role_assigned_at': datetime.now(timezone.utc),
@@ -411,8 +411,8 @@ class WhitelistGroup(commands.GroupCog, name="whitelist", description="Manage me
 
             # Check if whitelisted
             existing = await whitelist_collection.find_one({
-                'guild_id': guild.id,
-                'user_id': user_id
+                'guild_id': str(guild.id),
+                'user_id': str(user_id)
             })
 
             if not existing or not existing.get('is_active', True):
@@ -426,11 +426,11 @@ class WhitelistGroup(commands.GroupCog, name="whitelist", description="Manage me
 
             # Remove from whitelist (soft delete)
             await whitelist_collection.update_one(
-                {'guild_id': guild.id, 'user_id': user_id},
+                {'guild_id': str(guild.id), 'user_id': str(user_id)},
                 {'$set': {
                     'is_active': False,
                     'removed_at': datetime.now(timezone.utc),
-                    'removed_by': interaction.user.id
+                    'removed_by': str(interaction.user.id)
                 }}
             )
 
@@ -490,7 +490,7 @@ class WhitelistGroup(commands.GroupCog, name="whitelist", description="Manage me
 
             # Get all active whitelist entries for this guild
             entries = await whitelist_collection.find_many(
-                {'guild_id': guild.id, 'is_active': True},
+                {'guild_id': str(guild.id), 'is_active': True},
                 sort=[('added_at', -1)]
             )
 
@@ -574,8 +574,8 @@ class WhitelistGroup(commands.GroupCog, name="whitelist", description="Manage me
 
             # Check whitelist
             entry = await whitelist_collection.find_one({
-                'guild_id': guild.id,
-                'user_id': user_id
+                'guild_id': str(guild.id),
+                'user_id': str(user_id)
             })
 
             if not entry or not entry.get('is_active', True):

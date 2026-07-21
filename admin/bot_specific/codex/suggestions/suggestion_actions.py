@@ -81,19 +81,20 @@ class SuggestionActions:
 
         try:
             suggestions_cm = db_manager.get_collection_manager("suggestions_suggestions")
+            gid = str(guild_id)
 
-            total_suggestions = await suggestions_cm.count_documents({"guild_id": guild_id})
+            total_suggestions = await suggestions_cm.count_documents({"guild_id": gid})
 
             # Status distribution
             for doc in await suggestions_cm.aggregate([
-                {"$match": {"guild_id": guild_id}},
+                {"$match": {"guild_id": gid}},
                 {"$group": {"_id": "$status", "count": {"$sum": 1}}},
             ]):
                 status_breakdown[doc["_id"]] = doc["count"]
 
             # Category distribution
             for doc in await suggestions_cm.aggregate([
-                {"$match": {"guild_id": guild_id}},
+                {"$match": {"guild_id": gid}},
                 {"$group": {"_id": "$category", "count": {"$sum": 1}}},
             ]):
                 category_breakdown[doc["_id"]] = doc["count"]
@@ -101,7 +102,7 @@ class SuggestionActions:
             # Top contributors (up to 5, non-anonymous)
             contributor_docs: list = []
             for doc in await suggestions_cm.aggregate([
-                {"$match": {"guild_id": guild_id, "anonymous": False}},
+                {"$match": {"guild_id": gid, "anonymous": False}},
                 {"$group": {"_id": "$user_id", "count": {"$sum": 1}}},
                 {"$sort": {"count": -1}},
                 {"$limit": 5},
@@ -111,8 +112,9 @@ class SuggestionActions:
             for doc in contributor_docs:
                 user_id = doc["_id"]
                 display = f"User {user_id}"
-                if bot:
-                    user = bot.get_user(user_id)
+                if bot and user_id is not None:
+                    # Stored user ids are strings; discord.py wants ints.
+                    user = bot.get_user(int(user_id))
                     if user:
                         display = user.display_name
                 top_contributors.append({"display_name": display, "count": doc["count"]})
@@ -126,7 +128,7 @@ class SuggestionActions:
             # Vote docs key off suggestion_id, not guild_id, so join through this
             # guild's suggestions to count its votes (mirrors the guild-cleanup join).
             suggestion_ids = await suggestions_cm.collection.distinct(
-                "suggestion_id", {"guild_id": guild_id}
+                "suggestion_id", {"guild_id": str(guild_id)}
             )
             if suggestion_ids:
                 total_votes = await votes_cm.count_documents(
@@ -164,7 +166,7 @@ class SuggestionActions:
 
             # Find the suggestion by prefix within this guild
             full_id: Optional[str] = None
-            for doc in await suggestions_cm.find_many({"guild_id": guild_id}):
+            for doc in await suggestions_cm.find_many({"guild_id": str(guild_id)}):
                 if doc["suggestion_id"].startswith(suggestion_id_prefix):
                     full_id = doc["suggestion_id"]
                     break
@@ -173,7 +175,7 @@ class SuggestionActions:
                 return {"success": False, "message": f"No suggestion found starting with `{suggestion_id_prefix}`."}
 
             # Update in DB
-            update_doc: Dict[str, Any] = {"status": status, "last_updated_by": admin_id}
+            update_doc: Dict[str, Any] = {"status": status, "last_updated_by": str(admin_id)}
             if reason:
                 update_doc["status_reason"] = reason
             await suggestions_cm.update_one({"suggestion_id": full_id}, {"$set": update_doc})
@@ -201,7 +203,7 @@ class SuggestionActions:
                     sug_config = await get_config(sug_guild_id)
                     channel = bot.get_channel(sug_config.suggestions["channel_id"])
                     if channel:
-                        message = await channel.fetch_message(suggestion["message_id"])
+                        message = await channel.fetch_message(int(suggestion["message_id"]))
                         if message and message.embeds:
                             embed = message.embeds[0]
                             # Update Status field
@@ -219,7 +221,7 @@ class SuggestionActions:
                 # Rename thread
                 if suggestion.get("thread_id"):
                     try:
-                        thread = bot.get_channel(suggestion["thread_id"])
+                        thread = bot.get_channel(int(suggestion["thread_id"]))
                         if thread and hasattr(thread, "edit"):
                             # Strip any existing "[Status]" prefix first so repeated
                             # status changes don't accumulate (and blow the 100-char cap).
@@ -248,7 +250,7 @@ class SuggestionActions:
         """
         try:
             suggestions_cm = db_manager.get_collection_manager("suggestions_suggestions")
-            suggestions = await suggestions_cm.find_many({"guild_id": guild_id}, limit=1000)
+            suggestions = await suggestions_cm.find_many({"guild_id": str(guild_id)}, limit=1000)
 
             if not suggestions:
                 return None

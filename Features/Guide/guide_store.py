@@ -32,8 +32,11 @@ class GuideStore:
 		return db_manager.get_collection_manager(self._collection_key)
 
 	async def get_guide(self, guild_id: int) -> Optional[Dict[str, Any]]:
-		"""Get the guide data for a guild. Returns None if not found."""
-		doc = await self._col.find_one({"guild_id": guild_id})
+		"""Get the guide data for a guild. Returns None if not found.
+
+		guild_id is stored in the canonical string form; int callers are coerced.
+		"""
+		doc = await self._col.find_one({"guild_id": str(guild_id)})
 		if doc:
 			return doc.get("guide_data")
 		return None
@@ -53,12 +56,12 @@ class GuideStore:
 		"""Save (upsert) guide data for a guild."""
 		try:
 			await self._col.update_one(
-				{"guild_id": guild_id},
+				{"guild_id": str(guild_id)},
 				{"$set": {
-					"guild_id": guild_id,
+					"guild_id": str(guild_id),
 					"guide_data": guide_data,
 					"updated_at": datetime.now(timezone.utc),
-					"updated_by": updated_by,
+					"updated_by": str(updated_by),
 				}},
 				upsert=True,
 			)
@@ -71,7 +74,7 @@ class GuideStore:
 	async def delete_guide(self, guild_id: int) -> bool:
 		"""Delete guide data for a guild."""
 		try:
-			result = await self._col.delete_one({"guild_id": guild_id})
+			result = await self._col.delete_one({"guild_id": str(guild_id)})
 			deleted = result.deleted_count > 0 if hasattr(result, "deleted_count") else True
 			logger.info(f"Guide deleted for guild {guild_id}: {deleted}")
 			return deleted
@@ -81,7 +84,7 @@ class GuideStore:
 
 	async def get_raw_document(self, guild_id: int) -> Optional[Dict[str, Any]]:
 		"""Get the full document including metadata."""
-		return await self._col.find_one({"guild_id": guild_id})
+		return await self._col.find_one({"guild_id": str(guild_id)})
 
 	def _load_default_template(self) -> Dict[str, Any]:
 		"""Load the default guide template JSON."""

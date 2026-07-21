@@ -74,8 +74,8 @@ async def _get_wyr_activity(user_id: int, guild_ids: list[int]) -> dict:
 
 
 async def _get_suggestions_activity(user_id: int, guild_ids: list[int]) -> dict:
-    """Aggregate suggestion stats for the user across guilds."""
-    match = {"user_id": user_id, "guild_id": {"$in": guild_ids}}
+    """Aggregate suggestion stats for the user across guilds (string-keyed IDs)."""
+    match = {"user_id": str(user_id), "guild_id": {"$in": [str(g) for g in guild_ids]}}
 
     # Count total + by status
     status_pipeline = [
@@ -101,7 +101,7 @@ async def _get_suggestions_activity(user_id: int, guild_ids: list[int]) -> dict:
 
     # Votes cast - check UserStats for quick lookup
     votes_cast = 0
-    user_stats = await db.suggestions_userstats().find_one({"user_id": user_id})
+    user_stats = await db.suggestions_userstats().find_one({"user_id": str(user_id)})
     if user_stats:
         votes_cast = user_stats.get("votes_cast", 0)
 
@@ -188,12 +188,12 @@ async def _get_boost_status(user_id: int, guild_ids: list[int], guild_name_map: 
     doc when a member stops boosting - so presence in the collection means active.
     """
     cursor = db.serverdata_boosts().find({
-        "user_id": user_id,
-        "guild_id": {"$in": guild_ids},
+        "user_id": str(user_id),
+        "guild_id": {"$in": [str(g) for g in guild_ids]},
     })
     boosts = []
     async for doc in cursor:
-        gid = doc["guild_id"]
+        gid = int(doc["guild_id"])
         boost_start = doc.get("boost_start")
         boosts.append({
             "guild_id": str(gid),

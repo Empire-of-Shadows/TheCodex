@@ -78,12 +78,15 @@ class WhitelistRoleCleanupTask(commands.Cog):
 
             for entry in entries:
                 try:
+                    # Stored snowflake ids are strings; discord.py wants ints. Keep
+                    # the string forms for the update filters below so they match
+                    # the stored documents.
                     guild_id = entry.get('guild_id')
                     user_id = entry.get('user_id')
                     username = entry.get('username', 'Unknown')
 
                     # Get guild
-                    guild = self.bot.get_guild(guild_id)
+                    guild = self.bot.get_guild(int(guild_id))
                     if not guild:
                         logger.debug(f"Guild {guild_id} not found, skipping")
                         continue
@@ -92,7 +95,7 @@ class WhitelistRoleCleanupTask(commands.Cog):
                     guild_config = await get_config(guild_id)
 
                     # Get member
-                    member = guild.get_member(user_id)
+                    member = guild.get_member(int(user_id))
                     if not member:
                         # Member left the guild, mark role as not assigned
                         await self.whitelist_collection.update_one(

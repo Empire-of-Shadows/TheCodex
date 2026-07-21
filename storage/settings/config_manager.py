@@ -254,10 +254,17 @@ class GuildConfig:
             self.guild_id = str(self.guild_id)
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for database storage."""
+        """Convert to dictionary for database storage.
+
+        The permission role lists are serialized as STRINGS (the storage-canonical
+        form, matching migration m9); ``from_dict`` coerces them back to ints for
+        in-memory comparisons against discord.py's int role ids."""
+        roles = dict(self.roles)
+        roles["admin_role_ids"] = [str(r) for r in roles.get("admin_role_ids") or []]
+        roles["mod_role_ids"] = [str(r) for r in roles.get("mod_role_ids") or []]
         return {
             "guild_id": self.guild_id,
-            "roles": self.roles,
+            "roles": roles,
             "server": self.server,
             "wyr": self.wyr,
             "new_members": self.new_members,

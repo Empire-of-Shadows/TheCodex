@@ -1,43 +1,46 @@
 # Pending migrations
 
 Migrations required as a consequence of the 2026-07-20 Fable 5 audit rulings and fixes.
-These are **not yet written**. Each must follow the standard framework in
-[`scripts/_common.py`](scripts/_common.py) - dry-run by default, `--apply` to write,
-idempotent - and be dry-run-verified against production before `--apply`.
+Each follows the standard framework in [`scripts/_common.py`](scripts/_common.py) -
+dry-run by default, `--apply` to write, idempotent - and is dry-run-verified against
+production before `--apply`.
 
-## 1. Int-ID -> string normalization  (IS-4 ruling: string IDs are canonical)
+## 1. Int-ID -> string normalization  (IS-4 ruling)  -  ALL SCRIPTS WRITTEN 2026-07-21
 
-TheCodex stores guild/user/role/channel IDs as raw ints in most collections. The WYR
-collections are the exception - they already use strings. The ecosystem ruling
-(`EmpireSystems/README.md` "Settled standard") makes string IDs canonical everywhere.
+The full set is now written; the field-by-field audit behind it found two corrections to
+the assumptions above: `daily_wyr_mappings` was NOT all-string (its `guild_id`/`channel_id`
+were int; `message_id` was already str), and `prime_drops.sent_by_guild` needs NO migration
+(BSON map keys are inherently strings; no other int IDs in those docs).
 
-> **Partially done (2026-07-21):** `Settings.GuildConfig.guild_id` is covered by the
-> WRITTEN migration `scripts/m4_guildconfig_guild_id_to_str.py` (DU-2 Phase C). The
-> config layer, dashboard routers, and cleanup paths are already flipped to string
-> keys in code; that code and the m4 `--apply` MUST deploy together with the bot and
-> dashboard down. Everything else below (other collections, role-id lists, actor_id,
-> audit-log guild_id) remains pending.
+| Script | Converts |
+|---|---|
+| `m4_guildconfig_guild_id_to_str` | Settings.GuildConfig `guild_id`  (**APPLIED 2026-07-21**) |
+| `m5_suggestions_ids_to_str` | Suggestions.{Suggestions,Votes,UserStats,NotificationQueue} snowflakes |
+| `m6_wyr_mappings_ids_to_str` | Daily.WYR_Mappings `guild_id`/`channel_id` (`question_id` stays int - not a snowflake) |
+| `m7_updates_stats_guild_id_to_str` | Updates-Drops Stats{Monthly,Weekly,Totals} compound `_id.guild_id` (copy-and-replace, insert-before-delete) |
+| `m8_audit_log_ids_to_str` | Settings.AuditLog `guild_id`/`actor_id` |
+| `m9_guildconfig_role_ids_to_str` | Settings.GuildConfig `roles.admin_role_ids`/`roles.mod_role_ids` elements |
+| `m10_serverdata_color_guide_ids_to_str` | ServerData snapshots + Boosts/Boost_Events/Whitelist, Settings.ColorSets/Assignments, Guide.Content |
 
-- **Before writing:** audit EVERY collection in `storage/settings/collections.py`
-  field-by-field for int-typed ID fields. Known int-ID areas:
-  - `serverdata_*` snapshot collections: `id`, `guild_id`, `owner_id`, `top_role_id`,
-    `system_channel_id`, role/member id lists, `user_list`, etc. (written by
-    `storage_engine/discord/extractors.py`, still int by design pending this migration).
-  - `suggestions_*`: `user_id`, `message_id`, and any actor ids.
-  - `prime_drops`: the `sent_by_guild.<guild_id>` map keys.
-  - structured config `roles.admin_role_ids` / `roles.mod_role_ids` (from_dict currently
-    coerces these to int via `_as_int_id_list`; that coercion must flip to str too).
-  - `storage/audit_log.py` writes an int `actor_id` beside a str `guild_id` in one doc
-    (the engine `services/audit_log.py` has the same shape) - normalize `actor_id` to str.
-  - **Leave WYR collections alone** - already string, cleanup traced correct.
-- **Approach:** per collection, convert ID fields to string form with an aggregation-pipeline
-  `$set` (`{"$toString": "$field"}`) so each doc converts atomically. Idempotent: converting
-  an already-string value is a no-op. Unique/compound indexes are type-agnostic, so a
-  half-run is safe, but prefer pipeline `$set` over read-modify-write.
-- **Rollback:** the inverse (`$toLong`) is safe for Discord snowflakes (they fit int64), but
-  prefer forward-only.
-- **Also flip the writers** in the same change window so new docs are written as strings:
-  `discord/extractors.py` ID fields, `config_manager.from_dict` role-id coercion.
+Shared conversion helpers: `scripts/_int_ids.py` (guarded aggregation-pipeline `$set`,
+idempotent; scalar / id-array / subdoc-array shapes).
+
+**Writers are already flipped in the tree** (deploy atomically with the `--apply` run,
+bot + dashboard down): engine `discord/extractors.py` + `discord/service.py` (str IDs +
+string query boundary), engine `AuditLog.log_config_change` (`actor_id` now str), engine
+`GuildConfigStore.add_role`/`remove_role` (store str, `$pull` matches both forms);
+codex `suggest.py`, WYR mappings, `drops-tracker.py`, `joining.py` (cleanup + whitelist),
+`whitelist.py`, `whitelist_role_cleanup.py`, `boost_tracker.py`, `guide_store.py`/`guide.py`,
+`color_set_actions.py`, admin suggestion actions (master), audit bindings; dashboard
+`settings.py`, `audit_log.py`, `activity.py`, `user_data.py`, `builder.py`.
+
+In-memory convention: `GuildConfig.from_dict` still coerces the role lists to int
+(comparisons against discord.py's int role ids); `to_dict` serializes them back to str.
+Storage is string; memory is whatever the consumer needs.
+
+**Runbook (downtime window):** stop bot + dashboard -> run m5 through m10 each with
+`--apply` (order does not matter; each is independent and idempotent) -> deploy this
+code -> start both. Verify each script reports 0 remaining.
 
 ## 2. Snapshot timestamp backfill  (IS-4 extractor fix - OPTIONAL)
 
