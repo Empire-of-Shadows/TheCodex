@@ -11,11 +11,7 @@ All read/write goes through storage.settings.config_manager (GuildConfigManager)
 Suggestion settings live inside config.suggestions on the GuildConfig dataclass.
 """
 
-import csv
-import io
-import json
 import re
-from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
 import discord
@@ -24,7 +20,18 @@ from storage.log import get_logger
 from storage.settings.config_manager import get_config, get_guild_config_manager
 from storage.settings.collections import db_manager
 
+from ....actions.collections.documents import count_documents
+from ....actions.collections.export import export_documents
+
 logger = get_logger("SuggestionActions")
+
+# Export goes through the engine exporter (actions/collections/export.py) instead of a
+# hand-rolled serializer; these pin the columns and the safety cap it is called with.
+_EXPORT_FIELDS = [
+    "suggestion_id", "user_id", "text", "category", "status", "anonymous",
+    "created_at", "updated_at",
+]
+_EXPORT_LIMIT = 1000
 
 # Valid statuses for admin updates
 VALID_STATUSES = ["Under Review", "Approved", "Implemented", "Rejected", "On Hold"]
@@ -249,45 +256,19 @@ class SuggestionActions:
         Returns ``(discord.File, count)`` or ``None`` if there are no suggestions.
         """
         try:
-            suggestions_cm = db_manager.get_collection_manager("suggestions_suggestions")
-            suggestions = await suggestions_cm.find_many({"guild_id": str(guild_id)}, limit=1000)
-
-            if not suggestions:
+            query = {"guild_id": str(guild_id)}
+            count = await count_documents("suggestions_suggestions", query)
+            if not count:
                 return None
 
-            if format_type == "CSV":
-                output = io.StringIO()
-                writer = csv.writer(output)
-                writer.writerow([
-                    "ID", "User ID", "Text", "Category", "Status", "Anonymous",
-                    "Created At", "Updated At",
-                ])
-                for s in suggestions:
-                    writer.writerow([
-                        s.get("suggestion_id", ""),
-                        s.get("user_id", ""),
-                        s.get("text", ""),
-                        s.get("category", ""),
-                        s.get("status", ""),
-                        s.get("anonymous", False),
-                        s.get("created_at", ""),
-                        s.get("updated_at", ""),
-                    ])
-                file_content = output.getvalue().encode("utf-8")
-                file = discord.File(io.BytesIO(file_content), filename="suggestions.csv")
-            else:
-                json_data = []
-                for s in suggestions:
-                    copy = s.copy()
-                    copy.pop("_id", None)
-                    for key, value in copy.items():
-                        if isinstance(value, datetime):
-                            copy[key] = value.isoformat()
-                    json_data.append(copy)
-                json_content = json.dumps(json_data, indent=2).encode("utf-8")
-                file = discord.File(io.BytesIO(json_content), filename="suggestions.json")
-
-            return file, len(suggestions)
+            file = await export_documents(
+                "suggestions_suggestions", query,
+                fmt="csv" if format_type == "CSV" else "json",
+                filename="suggestions",
+                fields=_EXPORT_FIELDS,
+                limit=_EXPORT_LIMIT,
+            )
+            return file, min(count, _EXPORT_LIMIT)
 
         except Exception as e:
             logger.error("Error exporting suggestions: %s", e, exc_info=True)

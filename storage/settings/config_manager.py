@@ -222,6 +222,20 @@ def _as_int_id_list(values: Any) -> List[int]:
     return out
 
 
+def _merge_unknown_keys(built: Dict[str, Any], stored: Dict[str, Any]) -> Dict[str, Any]:
+    """Carry through stored subkeys ``from_dict`` does not model.
+
+    Sections are rebuilt from their known keys; without this, a subkey written by a
+    newer panel leaf (or any future structured write) would vanish from memory on
+    reload and never round-trip through ``save_config``. Unknown keys are preserved
+    verbatim so load -> save is lossless and nothing needs whitelisting to survive.
+    """
+    for k, v in stored.items():
+        if k not in built:
+            built[k] = v
+    return built
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # GuildConfig dataclass - structured per-guild settings
 # ─────────────────────────────────────────────────────────────────────────────
@@ -283,21 +297,28 @@ class GuildConfig:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "GuildConfig":
-        """Create from a database document (current feature-centric schema)."""
+        """Create from a database document (current feature-centric schema).
+
+        Every section preserves subkeys it does not model (``_merge_unknown_keys``),
+        so a structured key written by a newer panel leaf survives reload and
+        round-trips through ``save_config`` without being whitelisted here.
+        Top-level keys outside the dataclass (the flat get_setting/set_setting
+        namespace) are deliberately not modeled; the diff-based save never
+        touches them."""
         # ── roles ──────────────────────────────────────────────────────
         # Normalize the permission-role lists to ints so downstream membership
         # checks (create_embed, whitelist, is_admin_role) are type-consistent
         # regardless of how the ids were stored.
         stored = data.get("roles") or {}
-        roles = {
+        roles = _merge_unknown_keys({
             "admin_role_ids": _as_int_id_list(stored.get("admin_role_ids")),
             "mod_role_ids": _as_int_id_list(stored.get("mod_role_ids")),
             "tiers": stored.get("tiers", {}),
-        }
+        }, stored)
 
         # ── server ─────────────────────────────────────────────────────
         stored = data.get("server") or {}
-        server = {"admin_channel_id": stored.get("admin_channel_id")}
+        server = _merge_unknown_keys({"admin_channel_id": stored.get("admin_channel_id")}, stored)
 
         # ── wyr ────────────────────────────────────────────────────────
         dw = _default_wyr()
@@ -315,6 +336,7 @@ class GuildConfig:
             "mapping_cleanup_days": stored.get("mapping_cleanup_days", dw["mapping_cleanup_days"]),
             "skip_initial_post": stored.get("skip_initial_post", dw["skip_initial_post"]),
         }
+        wyr = _merge_unknown_keys(wyr, stored)
         wyr["enabled"] = stored["enabled"] if "enabled" in stored else bool(wyr["channel_id"])
 
         # ── new_members ────────────────────────────────────────────────
@@ -332,6 +354,7 @@ class GuildConfig:
             "welcome_message_enabled": stored.get("welcome_message_enabled", True),
             "welcome_components": stored.get("welcome_components"),
         }
+        new_members = _merge_unknown_keys(new_members, stored)
 
         # ── announcement ───────────────────────────────────────────────
         stored = data.get("announcement") or {}
@@ -343,14 +366,15 @@ class GuildConfig:
             "thread_welcome_message": stored.get("thread_welcome_message", "💬 **Discussion Thread**\n\nDiscuss this announcement here!"),
             "auto_delete_threads": stored.get("auto_delete_threads", True),
         }
+        ann = _merge_unknown_keys(ann, stored)
 
         # ── tag_tracker ────────────────────────────────────────────────
         stored = data.get("tag_tracker") or {}
-        tag_tracker = {
+        tag_tracker = _merge_unknown_keys({
             "enabled": stored.get("enabled", False),
             "server_tag": stored.get("server_tag"),
             "role_id": stored.get("role_id"),
-        }
+        }, stored)
 
         # ── drops ──────────────────────────────────────────────────────
         _drops_defaults = _default_drops()
@@ -363,6 +387,7 @@ class GuildConfig:
             "post_minute": stored.get("post_minute", _drops_defaults["post_minute"]),
             "timezone": stored.get("timezone", _drops_defaults["timezone"]),
         }
+        drops = _merge_unknown_keys(drops, stored)
         if "enabled" in stored:
             drops["enabled"] = stored["enabled"]
         else:
@@ -370,20 +395,20 @@ class GuildConfig:
 
         # ── suggestions ────────────────────────────────────────────────
         stored = data.get("suggestions") or {}
-        suggestions = {"channel_id": stored.get("channel_id")}
+        suggestions = _merge_unknown_keys({"channel_id": stored.get("channel_id")}, stored)
 
         # ── boost ──────────────────────────────────────────────────────
         stored = data.get("boost") or {}
-        boost = {"channel_id": stored.get("channel_id")}
+        boost = _merge_unknown_keys({"channel_id": stored.get("channel_id")}, stored)
         boost["enabled"] = stored["enabled"] if "enabled" in stored else bool(boost["channel_id"])
 
         # ── guide ──────────────────────────────────────────────────────
         dg = _default_guide()
         stored = data.get("guide") or {}
-        guide = {
+        guide = _merge_unknown_keys({
             "enabled": stored.get("enabled", dg["enabled"]),
             "channel_id": stored.get("channel_id", dg["channel_id"]),
-        }
+        }, stored)
 
         # ── embed ──────────────────────────────────────────────────────
         stored = data.get("embed") or {}
@@ -394,6 +419,7 @@ class GuildConfig:
             "color_tiers": stored.get("color_tiers", {}),
             "feature_access": stored.get("feature_access", {}),
         }
+        embed = _merge_unknown_keys(embed, stored)
         embed["enabled"] = stored["enabled"] if "enabled" in stored else bool(embed["role_tier"])
 
         return cls(

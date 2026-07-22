@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased] - 2026-07-21
+
+### Changed
+- Exporting suggestions from the admin panel now uses the same exporter as the rest of the ecosystem. Exports contain the same information as before; CSV column headers now use the field names (for example `suggestion_id` instead of "ID"), and dates in the JSON export are in standard ISO format.
+
 ## [Unreleased] - 2026-07-20
 
 ### Fixed

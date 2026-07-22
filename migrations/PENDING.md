@@ -5,7 +5,12 @@ Each follows the standard framework in [`scripts/_common.py`](scripts/_common.py
 dry-run by default, `--apply` to write, idempotent - and is dry-run-verified against
 production before `--apply`.
 
-## 1. Int-ID -> string normalization  (IS-4 ruling)  -  ALL SCRIPTS WRITTEN 2026-07-21
+## 1. Int-ID -> string normalization  (IS-4 ruling)  -  ALL APPLIED 2026-07-21
+
+> **m5-m10 were applied and verified 2026-07-21** (every script re-run reports 0 int
+> docs remaining; m4 verified still clean). The flipped code must be deployed in the
+> same window; if the old bot wrote any int doc between apply and redeploy, re-running
+> the affected script after redeploy is a safe idempotent cleanup.
 
 The full set is now written; the field-by-field audit behind it found two corrections to
 the assumptions above: `daily_wyr_mappings` was NOT all-string (its `guild_id`/`channel_id`
@@ -14,7 +19,7 @@ were int; `message_id` was already str), and `prime_drops.sent_by_guild` needs N
 
 | Script | Converts |
 |---|---|
-| `m4_guildconfig_guild_id_to_str` | Settings.GuildConfig `guild_id`  (**APPLIED 2026-07-21**) |
+| `m4_guildconfig_guild_id_to_str` | Settings.GuildConfig `guild_id` (**APPLIED 2026-07-21**) |
 | `m5_suggestions_ids_to_str` | Suggestions.{Suggestions,Votes,UserStats,NotificationQueue} snowflakes |
 | `m6_wyr_mappings_ids_to_str` | Daily.WYR_Mappings `guild_id`/`channel_id` (`question_id` stays int - not a snowflake) |
 | `m7_updates_stats_guild_id_to_str` | Updates-Drops Stats{Monthly,Weekly,Totals} compound `_id.guild_id` (copy-and-replace, insert-before-delete) |
