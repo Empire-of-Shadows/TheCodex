@@ -1,7 +1,8 @@
 """FastAPI dependencies for authentication."""
 
-from fastapi import Cookie, Depends, HTTPException
+from fastapi import Cookie, Depends, HTTPException, Request
 
+from dashboard._engine.activity import record_actor
 from dashboard._engine.auth.panel_access import has_manage_guild
 from dashboard._engine.auth.session import get_session, refresh_guilds_if_stale
 from dashboard._engine.auth.signing import unsign_token
@@ -9,6 +10,7 @@ from dashboard.config import SESSION_COOKIE_NAME, MANAGE_GUILD_PERMISSION
 
 
 async def get_current_user(
+    request: Request,
     codex_session: str | None = Cookie(None, alias=SESSION_COOKIE_NAME),
 ) -> dict:
     """Dependency that returns the current authenticated user or raises 401."""
@@ -23,6 +25,8 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="Session expired")
     # Keep the cached guild list self-healing (best-effort; never raises).
     session = await refresh_guilds_if_stale(session)
+    # Name the actor so the activity log records a person, not just an IP.
+    record_actor(request, session)
     return session
 
 

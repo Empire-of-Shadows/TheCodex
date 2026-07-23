@@ -1,5 +1,26 @@
 # Changelog
 
+## [Unreleased] - 2026-07-23
+
+### Changed
+- The dashboard now keeps a readable activity log. Every settings change, sign-in and rejected
+  request is recorded with who did it, which server it was for, whether it worked and how long
+  it took - so an admin can look back and see what happened. Ordinary page loads stay out of the
+  log unless you ask for them (set `DASHBOARD_LOG_READS=1`).
+- The dashboard had been running with debug logging left on, which buried anything useful under
+  a constant stream of internal chatter. It now logs at the normal level, to both the console and
+  a rotating file under `logs/`. Set `LOG_LEVEL=DEBUG` if you ever need the extra detail back.
+
+### Fixed
+- The **Privacy Policy** link on the sign-in screen was showing in the browser's default
+  blue, which is very hard to read on the dark background - and it turned an even darker
+  purple once you had visited the page. It is now a light violet with an underline, so it
+  reads clearly and obviously looks like a link. Any other plain link on the dashboard that
+  had the same problem is fixed too.
+- Links in the footer (including **Privacy Policy**) were the same grey as the text next to
+  them, so they did not look clickable. They are now brighter and underline when you hover
+  or tab to them.
+
 ## [Unreleased] - 2026-07-21
 
 ### Changed
