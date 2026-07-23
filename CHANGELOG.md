@@ -12,6 +12,9 @@
   a rotating file under `logs/`. Set `LOG_LEVEL=DEBUG` if you ever need the extra detail back.
 
 ### Fixed
+- In the `/admin` panel, changing a setting that opens a text box saved your value but then
+  errored out instead of taking you back to the menu, and the panel stopped responding. It
+  now returns you to the menu with the new value showing.
 - The **Privacy Policy** link on the sign-in screen was showing in the browser's default
   blue, which is very hard to read on the dark background - and it turned an even darker
   purple once you had visited the page. It is now a light violet with an underline, so it
