@@ -896,13 +896,20 @@ function WyrTab({
           roles={roles}
           disabled={readOnly}
           onChange={(v) => onChange({ ...value, ping_role_id: v })}
-          description="Pinged on each post. Leave blank for no ping."
+          description="Pinged on each post, and self-assignable by members. Leave blank for no ping."
         />
         <ToggleField
           label="Enabled"
           value={value.enabled}
           disabled={readOnly}
           onChange={(v) => onChange({ ...value, enabled: v })}
+        />
+        <ToggleField
+          label="Notification Offer"
+          value={value.subscribe_prompt_enabled}
+          disabled={readOnly}
+          onChange={(v) => onChange({ ...value, subscribe_prompt_enabled: v })}
+          description="Offer the ping role to members who vote or check results without it."
         />
       </div>
 

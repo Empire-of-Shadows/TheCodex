@@ -165,6 +165,32 @@ class WYRConfigActions:
         config.wyr["ping_role_id"] = None
         return await gcm.save_config(config)
 
+    # -- Subscribe prompt ------------------------------------------------
+
+    @staticmethod
+    async def get_subscribe_prompt(guild_id: int) -> bool:
+        """Whether the ping role is offered to members who interact with a question."""
+        gcm = await _get_gcm()
+        config = await gcm.get_config(guild_id)
+        return config.wyr.get("subscribe_prompt_enabled", True)
+
+    @staticmethod
+    async def set_subscribe_prompt(guild_id: int, enabled: bool) -> bool:
+        """Enable or disable the in-line ping-role offer."""
+        gcm = await _get_gcm()
+        config = await gcm.get_config(guild_id)
+        config.wyr["subscribe_prompt_enabled"] = enabled
+        return await gcm.save_config(config)
+
+    @staticmethod
+    async def get_subscribe_prompt_as_list(guild_id: int) -> list:
+        """Return ["true"] / ["false"] for panel engine compatibility."""
+        return ["true" if await WYRConfigActions.get_subscribe_prompt(guild_id) else "false"]
+
+    @staticmethod
+    async def set_subscribe_prompt_from_list(guild_id: int, values: list) -> bool:
+        return await WYRConfigActions.set_subscribe_prompt(guild_id, values[0] == "true")
+
     # -- Channel list helper (panel engine requires list[str]) -----------
 
     @staticmethod
@@ -278,6 +304,7 @@ class WYRConfigActions:
             "thread_starter_message": wyr.get("thread_starter_message", _WYR_DEFAULTS["thread_starter_message"]),
             "thread_auto_archive": wyr.get("thread_auto_archive", _WYR_DEFAULTS["thread_auto_archive"]),
             "mapping_cleanup_days": wyr.get("mapping_cleanup_days", _WYR_DEFAULTS["mapping_cleanup_days"]),
+            "subscribe_prompt_enabled": wyr.get("subscribe_prompt_enabled", True),
         }
 
     # -- Enabled toggle --------------------------------------------------

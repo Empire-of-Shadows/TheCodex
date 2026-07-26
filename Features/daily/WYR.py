@@ -9,6 +9,7 @@ from discord.ext import commands, tasks
 from discord import app_commands
 from dotenv import load_dotenv
 
+from Features.daily import wyr_notify
 from startup.bot import s
 from storage.log import get_logger, PerformanceLogger
 from storage.settings.collections import db_manager
@@ -228,6 +229,22 @@ class WYRCommandGroup(app_commands.Group):
         except Exception as e:
             logger.error(f"Error retrieving WYR stats for {target_user}: {e}", exc_info=True)
             await interaction.response.send_message("❌ An error occurred while fetching stats.", ephemeral=True)
+
+    @app_commands.command(name="notify", description="Get pinged (or stop being pinged) when a new WYR question is posted")
+    async def wyr_notify_command(self, interaction: discord.Interaction):
+        """Show the member's notification state with the one button that changes it."""
+        logger.info(f"WYR notify settings opened by {interaction.user} (ID: {interaction.user.id})")
+
+        try:
+            content, view = await wyr_notify.build_status_view(interaction.user)
+            # No view when notifications are unavailable; send_message rejects a None one.
+            extra = {"view": view} if view is not None else {}
+            await interaction.response.send_message(content=content, ephemeral=True, **extra)
+        except Exception as e:
+            logger.error(f"Error opening WYR notify settings for {interaction.user}: {e}", exc_info=True)
+            await interaction.response.send_message(
+                "❌ An error occurred while checking your notification settings.", ephemeral=True
+            )
 
     @app_commands.command(name="results", description="Show results for a specific WYR question")
     @app_commands.describe(message_id="Message ID of the WYR question to check results for")
@@ -1196,6 +1213,9 @@ class WYRView(discord.ui.View):
             self.clear_items()
             for item in items:
                 self.add_item(item)
+        # Sits on its own row under the vote buttons: joining the ping role is
+        # one click from any question, old posts included.
+        self.add_item(wyr_notify.NotifyButton())
         if question_id:
             logger.debug(f"Created WYRView for question {question_id} (has_option3={has_option3})")
 
@@ -1298,7 +1318,11 @@ class WYRView(discord.ui.View):
                     inline=False
                 )
 
-                await interaction.response.send_message(embed=embed, ephemeral=True)
+                await interaction.response.send_message(
+                    embed=embed,
+                    ephemeral=True,
+                    **await wyr_notify.prompt_kwargs(interaction.user),
+                )
                 logger.info(f"Successfully showed results for question {question_id} to {interaction.user}")
 
         except Exception as e:
@@ -1332,7 +1356,13 @@ class WYRView(discord.ui.View):
                 )
                 embed.set_footer(text="Your vote has been saved • You can change your vote anytime")
 
-                await interaction.response.send_message(embed=embed, ephemeral=True)
+                # Riding along with the confirmation: members who already have
+                # the ping role (or who said no thanks) get nothing extra.
+                await interaction.response.send_message(
+                    embed=embed,
+                    ephemeral=True,
+                    **await wyr_notify.prompt_kwargs(interaction.user),
+                )
                 logger.info(f"Vote successfully processed for {interaction.user} (ID: {interaction.user.id}): {option}")
 
         except Exception as e:

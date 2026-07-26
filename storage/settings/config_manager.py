@@ -113,6 +113,10 @@ def _default_wyr() -> Dict[str, Any]:
         "thread_auto_archive": 1440,
         "mapping_cleanup_days": 30,
         "skip_initial_post": False,
+        # Offer the ping role to members who interact with a question and do
+        # not already have it. Off means the role stays available through
+        # /wyr notify and the post button, just never advertised.
+        "subscribe_prompt_enabled": True,
     }
 
 
@@ -335,6 +339,9 @@ class GuildConfig:
             "thread_auto_archive": stored.get("thread_auto_archive", dw["thread_auto_archive"]),
             "mapping_cleanup_days": stored.get("mapping_cleanup_days", dw["mapping_cleanup_days"]),
             "skip_initial_post": stored.get("skip_initial_post", dw["skip_initial_post"]),
+            "subscribe_prompt_enabled": stored.get(
+                "subscribe_prompt_enabled", dw["subscribe_prompt_enabled"]
+            ),
         }
         wyr = _merge_unknown_keys(wyr, stored)
         wyr["enabled"] = stored["enabled"] if "enabled" in stored else bool(wyr["channel_id"])

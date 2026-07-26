@@ -258,6 +258,7 @@ export interface WyrSection {
   thread_starter_message: string;
   thread_auto_archive: number;
   mapping_cleanup_days: number;
+  subscribe_prompt_enabled: boolean;
 }
 
 export interface NewMembersSection {

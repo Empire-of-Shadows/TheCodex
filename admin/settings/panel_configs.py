@@ -465,10 +465,33 @@ WYR_PING_ROLE_CONFIG = PanelNode(
     key="wyr_ping_role",
     label="WYR Ping Role",
     kind="role_select",
-    description="Role pinged when a WYR question is posted. Leave empty for no ping.",
+    description=(
+        "Role pinged when a WYR question is posted. Leave empty for no ping.\n"
+        "Members can give themselves this role from any question post or with "
+        "`/wyr notify`, so keep it below the bot's own role in the role list."
+    ),
     get_values=WYRConfigActions.get_ping_role,
     set_values=WYRConfigActions.set_ping_role,
     clear_values=WYRConfigActions.clear_ping_role,
+    min_values=1,
+    max_values=1,
+)
+
+_WYR_TOGGLE_OPTIONS = [("true", "Enabled"), ("false", "Disabled")]
+
+WYR_SUBSCRIBE_PROMPT_CONFIG = PanelNode(
+    key="wyr_subscribe_prompt",
+    label="Notification Offer",
+    kind="option_select",
+    description=(
+        "Offer the ping role to members who vote or check results and do not "
+        "already have it. Disabling only stops the offer - members can still "
+        "opt in from the question post or `/wyr notify`."
+    ),
+    options=_WYR_TOGGLE_OPTIONS,
+    get_values=WYRConfigActions.get_subscribe_prompt_as_list,
+    set_values=WYRConfigActions.set_subscribe_prompt_from_list,
+    is_customized=_value_diverges(WYRConfigActions.get_subscribe_prompt_as_list, "true"),
     min_values=1,
     max_values=1,
 )
@@ -1070,6 +1093,7 @@ _WYR_SETTINGS_GROUP = PanelNode(
     children={
         "wyr_channel": WYR_CHANNEL_CONFIG,
         "wyr_ping_role": WYR_PING_ROLE_CONFIG,
+        "wyr_subscribe_prompt": WYR_SUBSCRIBE_PROMPT_CONFIG,
         "wyr_schedule": WYR_SCHEDULE_CONFIG,
         "wyr_category": WYR_CATEGORY_CONFIG,
         "wyr_thread": WYR_THREAD_CONFIG,

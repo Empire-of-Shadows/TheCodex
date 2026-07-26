@@ -1,5 +1,25 @@
 # Changelog
 
+## [Unreleased] - 2026-07-26
+
+### Added
+- You can now sign yourself up to be pinged whenever a new **Would You Rather** question is
+  posted. Every question has a **🔔 Notify Me** button, and the new `/wyr notify` command shows
+  whether you're signed up with a single button to change it.
+- After you vote or check the results, the bot offers you the notification role - but only if you
+  don't already have it. If you'd rather not be asked, **Not Interested** stops the offer for good;
+  the button on the question posts and `/wyr notify` still work if you change your mind later.
+- Turning the pings back off is always one click: the same message that confirms you're signed up
+  carries a **🔕 Turn Off Pings** button, and `/wyr notify` offers it too. Nobody needs to ask a
+  moderator to add or remove the role.
+
+### Changed
+- Server admins have a new **Notification Offer** switch (in `/admin` under WYR Settings, and on
+  the dashboard) to stop the bot offering the role to people as they play. The role stays
+  available through the question button and `/wyr notify` either way. For any of this to appear,
+  the server needs a **WYR Ping Role** set, positioned below the bot's own role so the bot can
+  hand it out.
+
 ## [Unreleased] - 2026-07-23
 
 ### Changed

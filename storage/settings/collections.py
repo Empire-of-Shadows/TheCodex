@@ -75,6 +75,20 @@ COLLECTIONS: dict[str, CollectionConfig] = {
         ]
     ),
 
+    # Per-member WYR notification-role preferences - one document per
+    # (guild, user). Remembers a "not interested" dismissal and when the
+    # subscriber role was last advertised, so the in-line prompt cannot nag.
+    'daily_wyr_notify_prefs': CollectionConfig(
+        name='WYR_NotifyPrefs',
+        database='Daily',
+        connection='primary',
+        indexes=[
+            IndexModel([('guild_id', 1), ('user_id', 1)],
+                       unique=True, name='guild_user_unique'),
+            IndexModel([('updated_at', -1)]),
+        ]
+    ),
+
     # Guide V2: single document per guild with full page tree
     'guide_content': CollectionConfig(
         name='Content',
