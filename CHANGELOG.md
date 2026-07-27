@@ -20,6 +20,16 @@
   the server needs a **WYR Ping Role** set, positioned below the bot's own role so the bot can
   hand it out.
 
+### Fixed
+- The `/admin` panel's setup progress was counting things you cannot actually configure. Screens
+  like **View Status**, **Export** and **Update Status** were being added to each category's
+  "X of Y configured" total, so a category could never read as finished no matter how much you
+  set up - **Suggestions** was stuck at "1 of 4" with a fully working setup, and **New Members**
+  and **Updates & Drops** were each one short. Only real settings count now, and a category that
+  holds nothing but action screens just shows its name instead of a meaningless total.
+- A list you had not put anything in yet (such as an empty tracker list) was being counted as
+  configured. An empty list now correctly reads as still needing setup.
+
 ## [Unreleased] - 2026-07-23
 
 ### Changed
