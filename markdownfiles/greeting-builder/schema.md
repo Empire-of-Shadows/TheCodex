@@ -1,17 +1,17 @@
-# Welcome Builder - Schema Reference
+# Greeting Builder - Schema Reference
 
-Everything you can put in a welcome message, what each part does, and the limits
+Everything you can put in a greeting message, what each part does, and the limits
 Discord and the bot enforce. You do not have to write any of this by hand - the
 builder does it for you - but this is the page to check when something will not
 save.
 
 ## The message
 
-A welcome message is a single list of blocks, up to **10** of them, plus an accent
+A greeting message is a single list of blocks, up to **10** of them, plus an accent
 color. There are no pages here - that is the guide builder.
 
 The whole design can be up to 64 KB, which is far more text than anybody should
-put in a welcome message.
+put in a greeting message.
 
 ## Blocks
 
@@ -77,10 +77,10 @@ A grid of images, good for a server banner.
 | Emoji | Shown before the label | Optional |
 | Action | What happens on click | Required unless it is a link button |
 
-### What a welcome button can do
+### What a greeting button can do
 
 Pick one of these from the dropdown. Everything a member sees from these buttons
-is private to them, so clicking around does not spam your welcome channel.
+is private to them, so clicking around does not spam your greeting channel.
 
 | Action | What the member gets |
 |---|---|

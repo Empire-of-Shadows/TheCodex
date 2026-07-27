@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ComponentDef, BuilderMode, GuidePage, Channel, Role } from "../../api/types";
+import type { ComponentDef, BuilderMode, GuidePage, Channel, Role, BoardResponse } from "../../api/types";
 import { VALID_ACTIONS } from "../../api/types";
 
 let _childId = 1;
@@ -15,6 +15,7 @@ interface Props {
   pages: GuidePage[];
   channels: Channel[];
   roles: Role[];
+  boardResponses: BoardResponse[];
   onChange: (updated: ComponentDef) => void;
 }
 
@@ -30,7 +31,7 @@ function collectPageIds(pages: GuidePage[]): { id: string; label: string }[] {
   return result;
 }
 
-export default function PropertyPanel({ component, mode, pages, channels, roles, onChange }: Props) {
+export default function PropertyPanel({ component, mode, pages, channels, roles, boardResponses, onChange }: Props) {
   if (!component) {
     return (
       <div className="property-panel">
@@ -69,9 +70,9 @@ export default function PropertyPanel({ component, mode, pages, channels, roles,
         </div>
       )}
 
-      {component.type === "section" && <SectionProps comp={comp} mode={mode} pages={pages} channels={channels} roles={roles} update={update} />}
-      {component.type === "action_row" && <ActionRowProps comp={comp} mode={mode} pages={pages} channels={channels} roles={roles} update={update} />}
-      {component.type === "container" && <ContainerProps comp={comp} mode={mode} pages={pages} channels={channels} roles={roles} update={update} />}
+      {component.type === "section" && <SectionProps comp={comp} mode={mode} pages={pages} channels={channels} roles={roles} boardResponses={boardResponses} update={update} />}
+      {component.type === "action_row" && <ActionRowProps comp={comp} mode={mode} pages={pages} channels={channels} roles={roles} boardResponses={boardResponses} update={update} />}
+      {component.type === "container" && <ContainerProps comp={comp} mode={mode} pages={pages} channels={channels} roles={roles} boardResponses={boardResponses} update={update} />}
       {component.type === "media_gallery" && <MediaGalleryProps comp={comp} update={update} />}
       {component.type === "separator" && (
         <p style={{ color: "var(--dc-text-muted)", fontSize: 13 }}>Separator has no editable properties.</p>
@@ -87,11 +88,13 @@ interface EditorResources {
   pages: GuidePage[];
   channels: Channel[];
   roles: Role[];
+  /** Board mode only: the response pool a "reply" action can point at. */
+  boardResponses: BoardResponse[];
 }
 
 // ── Section ──────────────────────────────────────────────────────────────
 
-function SectionProps({ comp, mode, pages, channels, roles, update }: { comp: any; update: (p: any) => void } & EditorResources) {
+function SectionProps({ comp, mode, pages, channels, roles, boardResponses, update }: { comp: any; update: (p: any) => void } & EditorResources) {
   const content = comp.content || [{ type: "text", content: "" }];
   const accessory = comp.accessory || { type: "thumbnail", media: "member_avatar" };
 
@@ -146,6 +149,7 @@ function SectionProps({ comp, mode, pages, channels, roles, update }: { comp: an
             pages={pages}
             channels={channels}
             roles={roles}
+            boardResponses={boardResponses}
             onChange={(btn) => update({ accessory: btn })}
           />
         )}
@@ -156,7 +160,7 @@ function SectionProps({ comp, mode, pages, channels, roles, update }: { comp: an
 
 // ── Action Row ───────────────────────────────────────────────────────────
 
-function ActionRowProps({ comp, mode, pages, channels, roles, update }: { comp: any; update: (p: any) => void } & EditorResources) {
+function ActionRowProps({ comp, mode, pages, channels, roles, boardResponses, update }: { comp: any; update: (p: any) => void } & EditorResources) {
   const hasSelect = !!comp.select;
   const buttons = comp.buttons || [];
   const select = comp.select || { placeholder: "", options: [] };
@@ -169,7 +173,9 @@ function ActionRowProps({ comp, mode, pages, channels, roles, update }: { comp: 
           value={hasSelect ? "select" : "buttons"}
           onChange={(e) => {
             if (e.target.value === "select") {
-              update({ select: { placeholder: "Choose...", options: [{ label: "Option 1", action: mode === "guide" ? "navigate" : "server_info", target: "" }] }, buttons: undefined });
+              const defaultAction =
+                mode === "guide" ? "navigate" : mode === "board" ? "reply" : "server_info";
+              update({ select: { placeholder: "Choose...", options: [{ label: "Option 1", action: defaultAction, target: "" }] }, buttons: undefined });
             } else {
               update({ buttons: [{ type: "button", style: "primary", label: "Button" }], select: undefined });
             }
@@ -181,7 +187,7 @@ function ActionRowProps({ comp, mode, pages, channels, roles, update }: { comp: 
       </div>
 
       {hasSelect ? (
-        <SelectEditor select={select} mode={mode} pages={pages} channels={channels} roles={roles} onChange={(s) => update({ select: s })} />
+        <SelectEditor select={select} mode={mode} pages={pages} channels={channels} roles={roles} boardResponses={boardResponses} onChange={(s) => update({ select: s })} />
       ) : (
         <div className="property-group">
           <label>Buttons (1-5)</label>
@@ -205,6 +211,7 @@ function ActionRowProps({ comp, mode, pages, channels, roles, update }: { comp: 
                 pages={pages}
                 channels={channels}
                 roles={roles}
+                boardResponses={boardResponses}
                 onChange={(updated) => {
                   const nb = [...buttons];
                   nb[i] = updated;
@@ -223,6 +230,69 @@ function ActionRowProps({ comp, mode, pages, channels, roles, update }: { comp: 
             </button>
           )}
         </div>
+      )}
+    </>
+  );
+}
+
+// ── Board Action Picker ─────────────────────────────────────────────────
+
+/**
+ * What a board button or option does. "reply" is the headline case: it points at
+ * a response the admin wrote, which the bot sends privately to whoever clicks.
+ */
+function BoardActionPicker({
+  action,
+  target,
+  boardResponses,
+  channels,
+  roles,
+  onChange,
+}: {
+  action: string;
+  target: string;
+  boardResponses: BoardResponse[];
+  channels: Channel[];
+  roles: Role[];
+  onChange: (action: string, target: string) => void;
+}) {
+  const current = action || "reply";
+  return (
+    <>
+      <select value={current} onChange={(e) => onChange(e.target.value, "")}>
+        <option value="reply">Send a private reply</option>
+        <option value="channel">Link to Channel</option>
+        <option value="role">Give / Toggle Role</option>
+      </select>
+      {current === "reply" ? (
+        boardResponses.length === 0 ? (
+          <div style={{ fontSize: 11, color: "var(--dc-text-muted)", marginTop: 4 }}>
+            No responses yet - add one in the Board list on the left, then pick it here.
+          </div>
+        ) : (
+          <select value={target || ""} onChange={(e) => onChange("reply", e.target.value)}>
+            <option value="">Select response...</option>
+            {boardResponses.map((r) => (
+              <option key={r.id} value={r.id}>{r.label || r.id}</option>
+            ))}
+          </select>
+        )
+      ) : current === "channel" ? (
+        <select value={target || ""} onChange={(e) => onChange("channel", e.target.value)}>
+          <option value="">Select channel...</option>
+          {channels.map((ch) => (
+            <option key={ch.id} value={ch.id}>#{ch.name}</option>
+          ))}
+        </select>
+      ) : (
+        <select value={target || ""} onChange={(e) => onChange("role", e.target.value)}>
+          <option value="">Select role...</option>
+          {roles.map((r) => (
+            <option key={r.id} value={r.id} style={r.color ? { color: `#${r.color.toString(16).padStart(6, "0")}` } : undefined}>
+              @{r.name}
+            </option>
+          ))}
+        </select>
       )}
     </>
   );
@@ -293,6 +363,7 @@ function ButtonEditor({
   pages,
   channels,
   roles,
+  boardResponses,
   onChange,
 }: {
   button: any;
@@ -349,6 +420,15 @@ function ButtonEditor({
           roles={roles}
           onChange={(action, target) => onChange({ ...button, action, target, url: undefined })}
         />
+      ) : mode === "board" ? (
+        <BoardActionPicker
+          action={button.action || "reply"}
+          target={button.target || ""}
+          boardResponses={boardResponses}
+          channels={channels}
+          roles={roles}
+          onChange={(action, target) => onChange({ ...button, action, target, url: undefined })}
+        />
       ) : (
         <select
           value={button.action || ""}
@@ -372,6 +452,7 @@ function SelectEditor({
   pages,
   channels,
   roles,
+  boardResponses,
   onChange,
 }: {
   select: any;
@@ -440,6 +521,19 @@ function SelectEditor({
                 onChange({ ...select, options: no });
               }}
             />
+          ) : mode === "board" ? (
+            <BoardActionPicker
+              action={opt.action || "reply"}
+              target={opt.target || ""}
+              boardResponses={boardResponses}
+              channels={channels}
+              roles={roles}
+              onChange={(action, target) => {
+                const no = [...options];
+                no[i] = { ...no[i], action, target };
+                onChange({ ...select, options: no });
+              }}
+            />
           ) : (
             <select
               value={opt.action || ""}
@@ -464,7 +558,14 @@ function SelectEditor({
           onClick={() =>
             onChange({
               ...select,
-              options: [...options, { label: "", action: mode === "guide" ? "navigate" : "", target: "" }],
+              options: [
+                ...options,
+                {
+                  label: "",
+                  action: mode === "guide" ? "navigate" : mode === "board" ? "reply" : "",
+                  target: "",
+                },
+              ],
             })
           }
         >
@@ -477,7 +578,7 @@ function SelectEditor({
 
 // ── Container ────────────────────────────────────────────────────────────
 
-function ContainerProps({ comp, mode, pages, channels, roles, update }: { comp: any; update: (p: any) => void } & EditorResources) {
+function ContainerProps({ comp, mode, pages, channels, roles, boardResponses, update }: { comp: any; update: (p: any) => void } & EditorResources) {
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
   const children: any[] = comp.components || [];
 
@@ -581,7 +682,7 @@ function ContainerProps({ comp, mode, pages, channels, roles, update }: { comp: 
               </div>
             </div>
             {expandedIdx === i && (
-              <ContainerChildEditor child={child} mode={mode} pages={pages} channels={channels} roles={roles} onChange={(patch) => updateChild(i, patch)} />
+              <ContainerChildEditor child={child} mode={mode} pages={pages} channels={channels} roles={roles} boardResponses={boardResponses} onChange={(patch) => updateChild(i, patch)} />
             )}
           </div>
         ))}
@@ -602,7 +703,7 @@ function ContainerProps({ comp, mode, pages, channels, roles, update }: { comp: 
   );
 }
 
-function ContainerChildEditor({ child, mode, pages, channels, roles, onChange }: { child: any; onChange: (patch: any) => void } & EditorResources) {
+function ContainerChildEditor({ child, mode, pages, channels, roles, boardResponses, onChange }: { child: any; onChange: (patch: any) => void } & EditorResources) {
   switch (child.type) {
     case "text":
       return (
@@ -619,9 +720,9 @@ function ContainerChildEditor({ child, mode, pages, channels, roles, onChange }:
         </div>
       );
     case "section":
-      return <SectionProps comp={child} mode={mode} pages={pages} channels={channels} roles={roles} update={onChange} />;
+      return <SectionProps comp={child} mode={mode} pages={pages} channels={channels} roles={roles} boardResponses={boardResponses} update={onChange} />;
     case "action_row":
-      return <ActionRowProps comp={child} mode={mode} pages={pages} channels={channels} roles={roles} update={onChange} />;
+      return <ActionRowProps comp={child} mode={mode} pages={pages} channels={channels} roles={roles} boardResponses={boardResponses} update={onChange} />;
     case "media_gallery":
       return <MediaGalleryProps comp={child} update={onChange} />;
     case "separator":

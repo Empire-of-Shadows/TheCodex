@@ -56,6 +56,11 @@ def guide_content():
     return _get_client()["Guide"]["Content"]
 
 
+def board_content():
+    """Board.Content - one document per guild per board (board_id is "main" today)."""
+    return _get_client()["Board"]["Content"]
+
+
 def guild_config():
     """Settings.GuildConfig - per-guild configuration."""
     return _get_client()["Settings"]["GuildConfig"]

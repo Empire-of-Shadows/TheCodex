@@ -2,7 +2,7 @@
 Shared Components V2 Builders
 
 Reusable rendering functions for Discord Components V2 layouts.
-Used by both the welcome renderer and guide renderer.
+Used by the greeting, guide, and info board renderers.
 
 Button building is feature-specific (different custom_id encoding),
 so button_builder is passed as a callback.

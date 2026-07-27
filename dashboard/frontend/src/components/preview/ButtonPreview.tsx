@@ -14,6 +14,9 @@ export default function ButtonPreview({ button, onInteract }: Props) {
 
     if (button.action === "navigate" && button.target) {
       onInteract({ type: "navigate", target: button.target });
+    } else if (button.action === "reply" && button.target) {
+      // Board: reveal the named response as a private reply.
+      onInteract({ type: "board_reply", target: button.target });
     } else if (button.action === "channel" && button.target) {
       onInteract({ type: "channel", target: button.target });
     } else if (button.action === "role" && button.target) {
@@ -21,7 +24,7 @@ export default function ButtonPreview({ button, onInteract }: Props) {
     } else if (button.style === "link" && button.url?.startsWith("https://")) {
       window.open(button.url, "_blank", "noopener,noreferrer");
     } else if (button.action && button.action in VALID_ACTIONS) {
-      onInteract({ type: "welcome_action", action: button.action });
+      onInteract({ type: "greeting_action", action: button.action });
     } else if (button.action) {
       onInteract({ type: button.action as SimulationAction["type"] });
     }

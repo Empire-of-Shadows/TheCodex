@@ -1,5 +1,5 @@
 /**
- * Welcome schema validator - port of Features/NewMembers/welcome_schema.py
+ * Greeting schema validator - port of Features/NewMembers/greeting_schema.py
  */
 
 import {
@@ -15,7 +15,7 @@ import { VALID_ACTIONS } from "../api/types";
 const VALID_BUTTON_STYLES = new Set(["primary", "secondary", "success", "danger", "link"]);
 const actionNames = Object.keys(VALID_ACTIONS);
 
-export function validateWelcomeSchema(data: unknown): ValidationResult {
+export function validateGreetingSchema(data: unknown): ValidationResult {
   if (typeof data !== "object" || data === null) {
     return { valid: false, error: "Top-level value must be a JSON object." };
   }
@@ -30,14 +30,14 @@ export function validateWelcomeSchema(data: unknown): ValidationResult {
     return { valid: false, error: 'Missing required field: "components".' };
   }
 
-  const r = validateComponentsList(d.components, validateWelcomeButton, validateWelcomeSelect);
+  const r = validateComponentsList(d.components, validateGreetingButton, validateGreetingSelect);
   if (!r.valid) return r;
 
   // Content-safety scan runs last so structural errors keep their specific messages.
   return checkNoDangerousContent(data);
 }
 
-const validateWelcomeButton: ActionValidator = (comp, prefix) => {
+const validateGreetingButton: ActionValidator = (comp, prefix) => {
   const style = comp.style as string;
   if (!VALID_BUTTON_STYLES.has(style)) {
     return { valid: false, error: `${prefix} - style "${style}" is invalid.` };
@@ -66,7 +66,7 @@ const validateWelcomeButton: ActionValidator = (comp, prefix) => {
   return { valid: true, error: "" };
 };
 
-const validateWelcomeSelect: ActionValidator = (comp, prefix) => {
+const validateGreetingSelect: ActionValidator = (comp, prefix) => {
   const optionValidator: ActionValidator = (opt, pfx) => {
     if (typeof opt.label !== "string" || !opt.label) return { valid: false, error: `${pfx} - label must be a non-empty string.` };
     if ((opt.label as string).length > 100) return { valid: false, error: `${pfx} - label exceeds 100 characters.` };

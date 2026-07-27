@@ -26,11 +26,11 @@ class NewMemberActions:
             "new_members_enabled": config.new_members["enabled"],
             "account_age_requirement_days": config.new_members["account_age_requirement_days"],
             "auto_kick_new_accounts": config.new_members["auto_kick"],
-            "welcome_message_enabled": config.new_members["welcome_message_enabled"],
+            "greeting_enabled": config.new_members["greeting_enabled"],
             "whitelist_enabled": config.new_members["whitelist_enabled"],
             "whitelist_role_name": config.new_members["whitelist_role_name"],
             "whitelist_role_id": config.new_members["whitelist_role_id"],
-            "welcome_channel_id": config.new_members["welcome_channel_id"],
+            "greeting_channel_id": config.new_members["greeting_channel_id"],
         }
 
     # -- Setters ---------------------------------------------------------
@@ -52,11 +52,11 @@ class NewMemberActions:
         return await manager.save_config(config)
 
     @staticmethod
-    async def set_welcome_enabled(guild_id: int, enabled: bool) -> bool:
-        """Toggle welcome messages."""
+    async def set_greeting_enabled(guild_id: int, enabled: bool) -> bool:
+        """Toggle greeting messages."""
         manager = await get_guild_config_manager()
         config = await manager.get_config(guild_id)
-        config.new_members["welcome_message_enabled"] = enabled
+        config.new_members["greeting_enabled"] = enabled
         return await manager.save_config(config)
 
     @staticmethod
@@ -84,10 +84,10 @@ class NewMemberActions:
         return await manager.save_config(config)
 
     @staticmethod
-    async def set_welcome_channel(guild_id: int, channel_id: int) -> bool:
-        """Set welcome channel ID."""
+    async def set_greeting_channel(guild_id: int, channel_id: int) -> bool:
+        """Set greeting channel ID."""
         manager = await get_guild_config_manager()
-        return await manager.set_channel(guild_id, "welcome", channel_id)
+        return await manager.set_channel(guild_id, "greeting", channel_id)
 
     # -- Panel Engine Wrappers -------------------------------------------
 
@@ -110,13 +110,13 @@ class NewMemberActions:
         return await NewMemberActions.set_auto_kick(guild_id, values[0] == "true")
 
     @staticmethod
-    async def get_welcome_enabled_as_list(guild_id: int) -> list:
+    async def get_greeting_enabled_as_list(guild_id: int) -> list:
         s = await NewMemberActions.get_settings(guild_id)
-        return ["true" if s.get("welcome_message_enabled", True) else "false"]
+        return ["true" if s.get("greeting_enabled", True) else "false"]
 
     @staticmethod
-    async def set_welcome_enabled_from_list(guild_id: int, values: list) -> bool:
-        return await NewMemberActions.set_welcome_enabled(guild_id, values[0] == "true")
+    async def set_greeting_enabled_from_list(guild_id: int, values: list) -> bool:
+        return await NewMemberActions.set_greeting_enabled(guild_id, values[0] == "true")
 
     @staticmethod
     async def get_whitelist_system_as_list(guild_id: int) -> list:
@@ -128,18 +128,18 @@ class NewMemberActions:
         return await NewMemberActions.set_whitelist_enabled(guild_id, values[0] == "true")
 
     @staticmethod
-    async def get_welcome_channel_as_list(guild_id: int) -> list:
+    async def get_greeting_channel_as_list(guild_id: int) -> list:
         s = await NewMemberActions.get_settings(guild_id)
-        cid = s.get("welcome_channel_id")
+        cid = s.get("greeting_channel_id")
         return [str(cid)] if cid else []
 
     @staticmethod
-    async def set_welcome_channel_from_list(guild_id: int, values: list) -> bool:
-        return await NewMemberActions.set_welcome_channel(guild_id, int(values[0]))
+    async def set_greeting_channel_from_list(guild_id: int, values: list) -> bool:
+        return await NewMemberActions.set_greeting_channel(guild_id, int(values[0]))
 
     @staticmethod
-    async def clear_welcome_channel(guild_id: int) -> bool:
-        return await NewMemberActions.set_welcome_channel(guild_id, None)
+    async def clear_greeting_channel(guild_id: int) -> bool:
+        return await NewMemberActions.set_greeting_channel(guild_id, None)
 
     @staticmethod
     async def get_whitelist_role_as_list(guild_id: int) -> list:
@@ -156,24 +156,24 @@ class NewMemberActions:
         return await NewMemberActions.set_whitelist_role_id(guild_id, None)
 
     @staticmethod
-    async def get_welcome_components_raw(guild_id: int) -> list:
+    async def get_greeting_components_raw(guild_id: int) -> list:
         config = await get_config(guild_id)
-        val = config.new_members.get("welcome_components")
+        val = config.new_members.get("greeting_components")
         return [json.dumps(val, indent=2, ensure_ascii=False)] if val else []
 
     @staticmethod
-    async def set_welcome_components_from_list(guild_id: int, values: list) -> bool:
+    async def set_greeting_components_from_list(guild_id: int, values: list) -> bool:
         manager = await get_guild_config_manager()
         config = await manager.get_config(guild_id)
         raw = values[0].strip() if values else ""
-        config.new_members["welcome_components"] = json.loads(raw) if raw else None
+        config.new_members["greeting_components"] = json.loads(raw) if raw else None
         return await manager.save_config(config)
 
     @staticmethod
-    async def clear_welcome_components(guild_id: int) -> bool:
+    async def clear_greeting_components(guild_id: int) -> bool:
         manager = await get_guild_config_manager()
         config = await manager.get_config(guild_id)
-        config.new_members["welcome_components"] = None
+        config.new_members["greeting_components"] = None
         return await manager.save_config(config)
 
     # -- Stats -----------------------------------------------------------
@@ -235,6 +235,6 @@ class NewMemberActions:
 
     @staticmethod
     async def has_channel_configured(guild_id: int) -> bool:
-        """Return True if a welcome channel has been saved for this guild."""
+        """Return True if a greeting channel has been saved for this guild."""
         config = await get_config(guild_id)
-        return bool(config.new_members.get("welcome_channel_id"))
+        return bool(config.new_members.get("greeting_channel_id"))

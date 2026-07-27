@@ -34,6 +34,12 @@ export default function SelectPreview({ select, onInteract }: Props) {
     triggerRef.current?.focus();
     if (!onInteract) return;
     if (option.action && option.target) {
+      // Board's "reply" maps to the board_reply simulation action; the rest
+      // share their name with the simulation action type.
+      if (option.action === "reply") {
+        onInteract({ type: "board_reply", target: option.target });
+        return;
+      }
       const actionType = option.action as SimulationAction["type"];
       if (actionType === "navigate" || actionType === "channel" || actionType === "role") {
         onInteract({ type: actionType, target: option.target });

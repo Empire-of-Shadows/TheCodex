@@ -337,7 +337,7 @@ class GuildEventHandler:
             # Disable all toggleable features - owner turns them on in settings
             config.new_members['enabled'] = False
             config.new_members['auto_kick'] = False
-            config.new_members['welcome_message_enabled'] = False
+            config.new_members['greeting_enabled'] = False
             config.new_members['whitelist_enabled'] = False
             config.announcement['thread_auto_create'] = False
             config.announcement['auto_delete_threads'] = False
@@ -439,9 +439,9 @@ class GuildEventHandler:
                             except Exception as role_error:
                                 self.logger.error(f"\n{s}Failed to assign whitelist role to {member}: {role_error}\n")
 
-                        # Continue with normal welcome flow (skip the kick)
-                        channel = member.guild.get_channel(guild_config.new_members["welcome_channel_id"]) if guild_config.new_members["welcome_channel_id"] else None
-                        if channel and guild_config.new_members["welcome_message_enabled"]:
+                        # Continue with normal greeting flow (skip the kick)
+                        channel = member.guild.get_channel(guild_config.new_members["greeting_channel_id"]) if guild_config.new_members["greeting_channel_id"] else None
+                        if channel and guild_config.new_members["greeting_enabled"]:
                             try:
                                 # Update members cache for this guild
                                 await self.cache_manager.cache_members(member.guild)
@@ -451,10 +451,10 @@ class GuildEventHandler:
 
                             try:
                                 await asyncio.sleep(1.2)
-                                await self.send_welcome_message(member)
-                                self.logger.info(f"Interactive welcome message sent for whitelisted member {member}\n")
+                                await self.send_greeting_message(member)
+                                self.logger.info(f"Interactive greeting message sent for whitelisted member {member}\n")
                             except Exception as e:
-                                self.logger.error(f"Error sending welcome message: {e}\n")
+                                self.logger.error(f"Error sending greeting message: {e}\n")
                         return  # Exit early, don't kick
                 except Exception as whitelist_error:
                     self.logger.error(f"\n{s}Error checking whitelist: {whitelist_error}\n", exc_info=True)
@@ -499,9 +499,9 @@ class GuildEventHandler:
                 self.logger.error(f"\n{s}Failed to kick {member}: {e}\n")
             return
 
-        # Account is old enough (or auto-kick disabled) - proceed with welcome
-        channel = member.guild.get_channel(guild_config.new_members["welcome_channel_id"]) if guild_config.new_members["welcome_channel_id"] else None
-        if channel and guild_config.new_members["welcome_message_enabled"]:
+        # Account is old enough (or auto-kick disabled) - proceed with the greeting
+        channel = member.guild.get_channel(guild_config.new_members["greeting_channel_id"]) if guild_config.new_members["greeting_channel_id"] else None
+        if channel and guild_config.new_members["greeting_enabled"]:
             try:
                 # Update members cache for this guild
                 await self.cache_manager.cache_members(member.guild)
@@ -511,23 +511,23 @@ class GuildEventHandler:
 
             try:
                 await asyncio.sleep(1.2)
-                await self.send_welcome_message(member)
-                self.logger.info(f"Interactive welcome message sent for {member}\n")
+                await self.send_greeting_message(member)
+                self.logger.info(f"Interactive greeting message sent for {member}\n")
             except Exception as e:
-                self.logger.error(f"Error sending welcome message: {e}\n")
+                self.logger.error(f"Error sending greeting message: {e}\n")
 
-    async def send_welcome_message(self, member: discord.Member, avatar_url: str = None):
-        """Send enhanced welcome message using Discord components v2 through discord.py"""
+    async def send_greeting_message(self, member: discord.Member, avatar_url: str = None):
+        """Send enhanced greeting message using Discord components v2 through discord.py"""
         # Get guild config for channel IDs
         guild_config = await get_config(member.guild.id)
 
-        if not guild_config.new_members["welcome_channel_id"]:
-            self.logger.warning(f"Welcome channel not configured for guild {member.guild.name} ({member.guild.id})")
+        if not guild_config.new_members["greeting_channel_id"]:
+            self.logger.warning(f"Greeting channel not configured for guild {member.guild.name} ({member.guild.id})")
             return
 
-        channel = member.guild.get_channel(guild_config.new_members["welcome_channel_id"])
+        channel = member.guild.get_channel(guild_config.new_members["greeting_channel_id"])
         if not channel:
-            self.logger.error(f"Welcome channel {guild_config.new_members['welcome_channel_id']} not found in guild {member.guild.name}")
+            self.logger.error(f"Greeting channel {guild_config.new_members['greeting_channel_id']} not found in guild {member.guild.name}")
             return
 
         # Store guild_id for URL building
@@ -537,45 +537,46 @@ class GuildEventHandler:
             avatar_url = member.display_avatar.url if member.display_avatar else "https://cdn.discordapp.com/embed/avatars/0.png"
 
         try:
-            # Get guild analytics for personalized welcome
+            # Get guild analytics for a personalized greeting
             analytics = await self.get_guild_analytics(member.guild.id)
             member_number = analytics['basic_stats']['human_members']  # This now uses accurate human count
 
-            # Render welcome message from JSON builder config
-            welcome_components = guild_config.new_members.get("welcome_components")
-            if not welcome_components:
+            # Render greeting message from JSON builder config
+            greeting_components = guild_config.new_members.get("greeting_components")
+            if not greeting_components:
                 self.logger.warning(
-                    f"[WELCOME] No welcome_components configured for guild {member.guild.id} - skipping welcome message for {member}"
+                    f"[GREETING] No greeting_components configured for guild {member.guild.id} - skipping greeting message for {member}"
                 )
                 return
 
-            from Features.NewMembers.welcome_renderer import WelcomeRenderer
-            layout_view = WelcomeRenderer.render(
-                welcome_components, member, member_number, analytics=analytics
+            from Features.NewMembers.greeting_renderer import GreetingRenderer
+            layout_view = GreetingRenderer.render(
+                greeting_components, member, member_number, analytics=analytics
             )
             await channel.send(view=layout_view)
 
-            self.logger.info(f"\n{s}[WELCOME] Successfully sent welcome message for {member}\n")
+            self.logger.info(f"\n{s}[GREETING] Successfully sent greeting message for {member}\n")
 
         except Exception as e:
-            self.logger.error(f"Error sending Components v2 welcome message: {e}", exc_info=True)
+            self.logger.error(f"Error sending Components v2 greeting message: {e}", exc_info=True)
 
     async def handle_interaction(self, interaction: discord.Interaction):
-        """Handle component interactions - routes to welcome or guide dispatchers."""
+        """Handle component interactions - routes to greeting or guide dispatchers."""
         if interaction.type != discord.InteractionType.component:
             return
 
         custom_id = interaction.data.get("custom_id", "")
 
-        # Route guide interactions (g: prefix) to the guide dispatcher
+        # Route guide interactions (g: prefix) to the guide dispatcher. Checked
+        # with the colon, so the greeting's "gr:" prefix does not match here.
         if custom_id.startswith("g:"):
             from Features.Guide.guide import dispatch_guide_interaction
             await dispatch_guide_interaction(interaction)
             return
 
-        # Route welcome interactions (w: prefix)
-        from Features.NewMembers.welcome_actions import dispatch_welcome_action
-        handled = await dispatch_welcome_action(interaction)
+        # Route greeting interactions (gr: prefix)
+        from Features.NewMembers.greeting_actions import dispatch_greeting_action
+        handled = await dispatch_greeting_action(interaction)
         if not handled:
             self.logger.debug(f"Unhandled component interaction: {custom_id}")
 
@@ -740,6 +741,9 @@ class GuildEventHandler:
             # --- Guide content ---
             totals["guide_content"] = await col("guide_content").delete_many({"guild_id": gid_str})
 
+            # --- Info board content ---
+            totals["board_content"] = await col("board_content").delete_many({"guild_id": gid_str})
+
             deleted_total = sum(totals.values())
             self.logger.info(
                 f"Guild data cleanup complete for {guild_name} ({guild_id}): "
@@ -754,7 +758,7 @@ class GuildEventHandler:
 
 
 # The guild event handler instance. Kept at module level because
-# welcometrigger.py imports `guild_handler` directly; the listeners it relies on
+# greetingtrigger.py imports `guild_handler` directly; the listeners it relies on
 # are registered explicitly in setup() below, so this feature now loads through
 # the normal cog loader instead of only as an import side effect of that cog.
 guild_handler = GuildEventHandler(bot)

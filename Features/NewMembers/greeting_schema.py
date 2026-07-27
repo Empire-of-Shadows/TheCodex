@@ -1,17 +1,17 @@
 """
-Welcome Message Schema Validator
+Greeting Message Schema Validator
 
-Validates the JSON config for the JSON-driven welcome message builder.
+Validates the JSON config for the JSON-driven greeting message builder.
 All validation is synchronous and returns (bool, str) - success or first error.
 
 Delegates structural component validation to the shared component_validators module.
-Button/select action validation is welcome-specific (validates against VALID_ACTIONS).
+Button/select action validation is greeting-specific (validates against VALID_ACTIONS).
 """
 
 import json
 from typing import Any, Tuple
 
-from Features.NewMembers.welcome_actions import VALID_ACTIONS, encode_custom_id
+from Features.NewMembers.greeting_actions import VALID_ACTIONS, encode_custom_id
 from utils.component_validators import (
     validate_accent_color,
     validate_components_list,
@@ -24,12 +24,12 @@ _VALID_BUTTON_STYLES = {"primary", "secondary", "success", "danger", "link"}
 # already bound a *well-formed* layout; this stops a caller from smuggling
 # megabytes of junk in unrecognised keys (which would otherwise be stored
 # verbatim) and bloating the guild config document.
-_MAX_WELCOME_BYTES = 64 * 1024
+_MAX_GREETING_BYTES = 64 * 1024
 _ALLOWED_TOP_LEVEL = {"accent_color", "components"}
 
 
-def validate_welcome_schema(data: Any) -> Tuple[bool, str]:
-    """Validate a welcome components JSON config dict.
+def validate_greeting_schema(data: Any) -> Tuple[bool, str]:
+    """Validate a greeting components JSON config dict.
 
     Returns (True, "") on success or (False, human-readable error) on first failure.
     """
@@ -40,8 +40,8 @@ def validate_welcome_schema(data: Any) -> Tuple[bool, str]:
         size = len(json.dumps(data, default=str))
     except (TypeError, ValueError):
         return False, "Payload is not JSON-serializable."
-    if size > _MAX_WELCOME_BYTES:
-        return False, f"Welcome payload is too large ({size} bytes; max {_MAX_WELCOME_BYTES})."
+    if size > _MAX_GREETING_BYTES:
+        return False, f"Greeting payload is too large ({size} bytes; max {_MAX_GREETING_BYTES})."
 
     unknown = set(data) - _ALLOWED_TOP_LEVEL
     if unknown:
@@ -59,8 +59,8 @@ def validate_welcome_schema(data: Any) -> Tuple[bool, str]:
 
     ok, msg = validate_components_list(
         data["components"],
-        action_validator=_validate_welcome_button,
-        select_validator=_validate_welcome_select,
+        action_validator=_validate_greeting_button,
+        select_validator=_validate_greeting_select,
     )
     if not ok:
         return False, msg
@@ -70,11 +70,11 @@ def validate_welcome_schema(data: Any) -> Tuple[bool, str]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Welcome-specific action validators
+# Greeting-specific action validators
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _validate_welcome_button(comp: dict, prefix: str) -> Tuple[bool, str]:
-    """Validate a button with welcome-specific action semantics."""
+def _validate_greeting_button(comp: dict, prefix: str) -> Tuple[bool, str]:
+    """Validate a button with greeting-specific action semantics."""
     if not isinstance(comp, dict):
         return False, f"{prefix} \u2014 must be an object."
     style = comp.get("style")
@@ -121,13 +121,13 @@ def _validate_welcome_button(comp: dict, prefix: str) -> Tuple[bool, str]:
     return True, ""
 
 
-def _validate_welcome_select(comp: Any, prefix: str) -> Tuple[bool, str]:
-    """Validate a string select with welcome-specific option actions."""
+def _validate_greeting_select(comp: Any, prefix: str) -> Tuple[bool, str]:
+    """Validate a string select with greeting-specific option actions."""
     from utils.component_validators import validate_string_select
-    return validate_string_select(comp, prefix, option_validator=_validate_welcome_select_option)
+    return validate_string_select(comp, prefix, option_validator=_validate_greeting_select_option)
 
 
-def _validate_welcome_select_option(opt: Any, prefix: str) -> Tuple[bool, str]:
+def _validate_greeting_select_option(opt: Any, prefix: str) -> Tuple[bool, str]:
     if not isinstance(opt, dict):
         return False, f"{prefix} \u2014 must be an object."
 

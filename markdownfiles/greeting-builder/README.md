@@ -1,9 +1,9 @@
-# Welcome Builder - Getting Started
+# Greeting Builder - Getting Started
 
 This is the message your server posts when somebody new joins. You design it
-here, the bot sends it to your welcome channel the moment a member walks in.
+here, the bot sends it to your greeting channel the moment a member walks in.
 
-Unlike the guide, there are no pages. A welcome message is one screen: some text,
+Unlike the guide, there are no pages. A greeting message is one screen: some text,
 maybe the new member's avatar, and a few buttons that help them get started.
 
 ## Before it will send
@@ -11,15 +11,15 @@ maybe the new member's avatar, and a few buttons that help them get started.
 Two things have to be true:
 
 1. You have designed a message here and pressed **Save**.
-2. A welcome channel is set for your server (Admin panel, New Members section).
+2. A greeting channel is set for your server (Admin panel, New Members section).
 
-If either is missing, joins happen quietly and no welcome is posted.
+If either is missing, joins happen quietly and no greeting is posted.
 
 ## A tour of the screen
 
 **Top bar**
-- **Guide / Welcome** - switches between the two builders. Your work in the other
-  one is kept, so you can flip back and forth freely.
+- **Guide / Greeting / Board** - switches between the three builders. Your work in
+  the others is kept, so you can flip back and forth freely.
 - **Accent** - the color of the stripe down the left edge of the message.
 - **Import JSON / Export JSON** - save a backup to your computer, or load one back
   in. Handy for copying a design between servers.
@@ -42,7 +42,7 @@ If either is missing, joins happen quietly and no welcome is posted.
 - Below that, any problems with your message. Fix everything listed here and the
   Save button turns back on.
 
-## Building your first welcome message
+## Building your first greeting message
 
 1. Drag a **Section** onto the canvas. A section is text with something attached
    on the right.

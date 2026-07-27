@@ -81,7 +81,7 @@ class PrimeDrops(commands.Cog):
     def _create_drop_embeds(
         self, drops: list[Dict[str, Any]], title: Optional[str] = None
     ) -> list[discord.Embed]:
-        """Build a summary embed listing multiple drops. Used by the welcome browse flow."""
+        """Build a summary embed listing multiple drops. Used by the greeting browse flow."""
         if not drops:
             return []
 

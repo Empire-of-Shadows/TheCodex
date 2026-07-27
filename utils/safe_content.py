@@ -3,7 +3,7 @@ Content-safety scan - shared guard against payloads that pass the structural
 schema but are "not what we intend to be uploaded".
 
 Mirror of dashboard/frontend/src/validators/safeContent.ts (keep the two in sync).
-Applied to every guide and welcome payload after structural validation.
+Applied to every guide, greeting, and board payload after structural validation.
 
 Rejects:
   - Prototype-pollution key names anywhere in the object tree

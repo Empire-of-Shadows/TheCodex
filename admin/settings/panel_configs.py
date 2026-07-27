@@ -33,8 +33,14 @@ from ..bot_specific.codex.suggestions import (
 from ..actions.guide_actions import GuideActions
 from ..actions.drops_actions import DropsActions
 from ..actions.color_set_actions import ColorSetActions
+from ..actions.board_actions import (
+    BoardActions,
+    build_board_publish_node,
+    build_board_status_node,
+)
 from .setup_gatekeeper import setup_gatekeeper
-from Features.NewMembers.welcome_schema import validate_welcome_schema
+from Features.NewMembers.greeting_schema import validate_greeting_schema
+from Features.Board.board_schema import validate_board_schema
 from Features.Guide.guide_schema import validate_guide_schema
 
 def _value_diverges(getter, default_str: str):
@@ -52,7 +58,7 @@ def _value_diverges(getter, default_str: str):
 
 # ── Template download helpers ────────────────────────────────────────────────
 
-_WELCOME_TEMPLATE = {
+_GREETING_TEMPLATE = {
     "accent_color": "#5865F2",
     "components": [
         {"type": "separator"},
@@ -94,14 +100,89 @@ _WELCOME_TEMPLATE = {
     ],
 }
 
+# A starter info board: a boxed message with buttons and a dropdown, each pointing
+# at a private response the admin can then rewrite. Shows the whole shape of the
+# feature - board layout plus the response pool - in one downloadable file.
+_BOARD_TEMPLATE = {
+    "accent_color": "#4D0EB3",
+    "components": [
+        {
+            "type": "container",
+            "components": [
+                {"type": "text", "content": "# Welcome to {guild_name}\nEverything you need to get started is right here."},
+                {"type": "separator"},
+                {"type": "text", "content": "Tap a button below and I'll send you the details privately, so this channel stays tidy."},
+                {
+                    "type": "action_row",
+                    "buttons": [
+                        {"type": "button", "style": "primary", "label": "Server Rules", "action": "reply", "target": "rules"},
+                        {"type": "button", "style": "secondary", "label": "Getting Started", "action": "reply", "target": "getting-started"},
+                        {"type": "button", "style": "link", "label": "Website", "url": "https://eosofficial.club"},
+                    ],
+                },
+                {
+                    "type": "action_row",
+                    "select": {
+                        "placeholder": "Looking for something else?",
+                        "options": [
+                            {"label": "How roles work", "description": "Earning and picking roles", "action": "reply", "target": "roles"},
+                            {"label": "Frequently asked questions", "action": "reply", "target": "faq"},
+                        ],
+                    },
+                },
+            ],
+        },
+    ],
+    "responses": [
+        {
+            "id": "rules",
+            "label": "Server Rules",
+            "components": [
+                {"type": "text", "content": "## Server Rules\n1. Treat everyone with respect.\n2. Keep content appropriate for all members.\n3. No spam or self-promotion.\n4. Listen to the staff team."},
+                {
+                    "type": "action_row",
+                    "buttons": [
+                        {"type": "button", "style": "secondary", "label": "Getting Started", "action": "reply", "target": "getting-started"},
+                    ],
+                },
+            ],
+        },
+        {
+            "id": "getting-started",
+            "label": "Getting Started",
+            "components": [
+                {"type": "text", "content": "## Getting Started\n- Introduce yourself in chat.\n- Pick up a few roles.\n- Jump into a game or a voice channel.\n\nMention me any time and I'll help you find your way around."},
+            ],
+        },
+        {
+            "id": "roles",
+            "label": "How roles work",
+            "components": [
+                {"type": "text", "content": "## Roles\nSome roles are handed out automatically as you take part. Others you can pick yourself.\n\nReplace this text with how roles work in your server."},
+            ],
+        },
+        {
+            "id": "faq",
+            "label": "FAQ",
+            "components": [
+                {"type": "text", "content": "## Frequently Asked Questions\n**How do I get help?**\nMention me with what you're looking for.\n\n**Where do I report a problem?**\nMessage a member of staff.\n\nReplace these with the questions your members actually ask."},
+            ],
+        },
+    ],
+}
+
 _GUIDE_TEMPLATE_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
     "defaults", "guide_template.json",
 )
 
 
-def _welcome_template_data() -> tuple[bytes, str]:
-    return json.dumps(_WELCOME_TEMPLATE, indent=2, ensure_ascii=False).encode("utf-8"), "welcome_template.json"
+def _board_template_data() -> tuple[bytes, str]:
+    return json.dumps(_BOARD_TEMPLATE, indent=2, ensure_ascii=False).encode("utf-8"), "board_template.json"
+
+
+def _greeting_template_data() -> tuple[bytes, str]:
+    return json.dumps(_GREETING_TEMPLATE, indent=2, ensure_ascii=False).encode("utf-8"), "greeting_template.json"
 
 
 def _guide_template_data() -> tuple[bytes, str]:
@@ -168,7 +249,7 @@ _FEATURE_AUTO_ENABLE = {
         "message": (
             "✅ **New Member processing is now enabled.** Members will now be screened on join. "
             "Use **General Settings** to configure the age requirement and auto-kick, and "
-            "**Welcome Message Builder** to upload a custom JSON layout."
+            "**Greeting Message Builder** to upload a custom JSON layout."
         ),
     },
 }
@@ -677,35 +758,35 @@ _NM_ACCOUNT_AGE_OPTIONS = [
 
 _NM_TOGGLE_OPTIONS = [("true", "Enabled"), ("false", "Disabled")]
 
-NM_WELCOME_CHANNEL_CONFIG = PanelNode(
-    key="nm_welcome_channel",
-    label="Welcome Channel",
+NM_GREETING_CHANNEL_CONFIG = PanelNode(
+    key="nm_greeting_channel",
+    label="Greeting Channel",
     kind="channel_select",
-    description="Channel where welcome messages are sent when new members join.",
-    get_values=NewMemberActions.get_welcome_channel_as_list,
-    set_values=NewMemberActions.set_welcome_channel_from_list,
-    clear_values=NewMemberActions.clear_welcome_channel,
+    description="Channel where greeting messages are sent when new members join.",
+    get_values=NewMemberActions.get_greeting_channel_as_list,
+    set_values=NewMemberActions.set_greeting_channel_from_list,
+    clear_values=NewMemberActions.clear_greeting_channel,
     min_values=1,
     max_values=1,
 )
 
-NM_WELCOME_TEXT_CONFIG = PanelNode(
-    key="nm_welcome_builder",
-    label="Welcome Message Builder",
+NM_GREETING_TEXT_CONFIG = PanelNode(
+    key="nm_greeting_builder",
+    label="Greeting Message Builder",
     kind="file_upload",
     description=(
-        "Upload a JSON file to define a fully custom welcome message layout.\n\n"
+        "Upload a JSON file to define a fully custom greeting message layout.\n\n"
         "**To upload:** Click **Upload JSON** below and attach a `.json` file.\n"
         "**To get the template:** Click **Download Template** for a ready-to-edit example.\n\n"
         "**Placeholders:** `{member}` · `{member_name}` · `{member_count}` · `{guild_name}` · `{voice_active}` · `{random_greeting}` (random themed greeting)\n\n"
         "Use **Clear** below to remove the custom layout. "
-        "If no layout is configured, welcome messages will be skipped."
+        "If no layout is configured, greeting messages will be skipped."
     ),
-    get_values=NewMemberActions.get_welcome_components_raw,
-    set_values=NewMemberActions.set_welcome_components_from_list,
-    clear_values=NewMemberActions.clear_welcome_components,
-    schema_validator=validate_welcome_schema,
-    template_data=_welcome_template_data,
+    get_values=NewMemberActions.get_greeting_components_raw,
+    set_values=NewMemberActions.set_greeting_components_from_list,
+    clear_values=NewMemberActions.clear_greeting_components,
+    schema_validator=validate_greeting_schema,
+    template_data=_greeting_template_data,
 )
 
 NM_SETTINGS_CONFIG = PanelNode(
@@ -719,7 +800,7 @@ NM_SETTINGS_CONFIG = PanelNode(
             key="nm_enabled",
             label="New Members Processing",
             kind="option_select",
-            description="Master toggle - enable or disable all new-member processing (screening, welcome messages, whitelist).",
+            description="Master toggle - enable or disable all new-member processing (screening, greeting messages, whitelist).",
             options=_NM_TOGGLE_OPTIONS,
             get_values=NewMemberActions.get_enabled_as_list,
             set_values=NewMemberActions.set_enabled_from_list,
@@ -751,15 +832,15 @@ NM_SETTINGS_CONFIG = PanelNode(
             min_values=1,
             max_values=1,
         ),
-        "nm_welcome_msg": PanelNode(
-            key="nm_welcome_msg",
-            label="Welcome Messages",
+        "nm_greeting_msg": PanelNode(
+            key="nm_greeting_msg",
+            label="Greeting Messages",
             kind="option_select",
-            description="Send a welcome message when a new member successfully joins.",
+            description="Send a greeting message when a new member successfully joins.",
             options=_NM_TOGGLE_OPTIONS,
-            get_values=NewMemberActions.get_welcome_enabled_as_list,
-            set_values=NewMemberActions.set_welcome_enabled_from_list,
-            is_customized=_value_diverges(NewMemberActions.get_welcome_enabled_as_list, "true"),
+            get_values=NewMemberActions.get_greeting_enabled_as_list,
+            set_values=NewMemberActions.set_greeting_enabled_from_list,
+            is_customized=_value_diverges(NewMemberActions.get_greeting_enabled_as_list, "true"),
             min_values=1,
             max_values=1,
         ),
@@ -1105,11 +1186,11 @@ _NEW_MEMBERS_GROUP = PanelNode(
     key="new_members",
     label="New Members",
     kind="menu",
-    description="Configure welcome messages, account age, and whitelist.",
+    description="Configure greeting messages, account age, and whitelist.",
     category_group="feature",
     children={
-        "nm_welcome_channel": NM_WELCOME_CHANNEL_CONFIG,
-        "nm_welcome_builder": NM_WELCOME_TEXT_CONFIG,
+        "nm_greeting_channel": NM_GREETING_CHANNEL_CONFIG,
+        "nm_greeting_builder": NM_GREETING_TEXT_CONFIG,
         "nm_settings": NM_SETTINGS_CONFIG,
         "nm_whitelist_role": NM_WHITELIST_ROLE_CONFIG,
         "nm_status": NM_STATUS_NODE,
@@ -1183,6 +1264,43 @@ _GUIDE_SETTINGS_GROUP = PanelNode(
 )
 
 
+BOARD_UPLOAD_CONFIG = PanelNode(
+    key="board_builder",
+    label="Board Builder",
+    kind="file_upload",
+    description=(
+        "Upload a JSON file to define the info board - a static message that sits in "
+        "a channel and holds information.\n\n"
+        "**To upload:** Click **Upload JSON** below and attach a `.json` file.\n"
+        "**To get the template:** Click **Download Template** for a ready-to-edit example.\n\n"
+        "Buttons and dropdown options point at named **responses** you write in the same "
+        "file. Clicking one sends that response privately, so the channel stays tidy. "
+        "Options can also jump to a channel or hand out a self-assignable role.\n\n"
+        "**Placeholders:** `{guild_name}` everywhere; `{member}` and `{member_name}` "
+        "inside a private response.\n\n"
+        "Uploading only saves the layout - use **Post / Update Board** to push it live."
+    ),
+    get_values=BoardActions.get_board_json_raw,
+    set_values=BoardActions.set_board_json_from_list,
+    clear_values=BoardActions.clear_board_json,
+    schema_validator=validate_board_schema,
+    template_data=_board_template_data,
+)
+
+_BOARD_GROUP = PanelNode(
+    key="board_settings",
+    label="Info Board",
+    kind="menu",
+    description="A static info message with buttons that reply privately.",
+    category_group="feature",
+    children={
+        "board_builder": BOARD_UPLOAD_CONFIG,
+        "board_publish": build_board_publish_node(),
+        "board_status": build_board_status_node(),
+    },
+)
+
+
 MAIN_PANEL = PanelNode(
     key="main",
     label=PANEL_TITLE,
@@ -1200,5 +1318,6 @@ MAIN_PANEL = PanelNode(
         "announcements": _ANNOUNCEMENTS_GROUP,
         "suggestions": _SUGGESTIONS_GROUP,
         "guide_settings": _GUIDE_SETTINGS_GROUP,
+        "board_settings": _BOARD_GROUP,
     },
 )

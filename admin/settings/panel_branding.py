@@ -34,7 +34,7 @@ SETUP_GUIDE_TEXT = (
     "**3. Feature Channels**"
     "Pick where each feature posts in your server.\n"
     "- **WYR Channel** - required before any WYR sub-setting unlocks.\n"
-    "- **Welcome Channel** - required before New Members sub-settings unlock.\n"
+    "- **Greeting Channel** - required before New Members sub-settings unlock.\n"
     "- **Drops Channel**, **Announcement Channel**, **Suggestion Channel**, "
     "**Guide Channel** - set per feature you want enabled.\n"
     "\n"

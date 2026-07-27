@@ -32,7 +32,7 @@ export default function DocsPanel({ mode }: Props) {
   const cache = useRef<Record<string, DocsCacheEntry>>({});
 
   const topic = TOPICS[topicIdx].key;
-  const builder = mode === "guide" ? "guide" : "welcome";
+  const builder = mode;
 
   const fetchDoc = useCallback(async (b: string, t: TopicKey) => {
     const cacheKey = `${b}:${t}`;
@@ -44,7 +44,7 @@ export default function DocsPanel({ mode }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const result = await api.getDocs(b as "guide" | "welcome", t);
+      const result = await api.getDocs(b as "guide" | "greeting" | "board", t);
       cache.current[cacheKey] = result;
       setDoc(result);
     } catch (err: any) {

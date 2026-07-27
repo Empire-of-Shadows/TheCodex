@@ -100,6 +100,19 @@ COLLECTIONS: dict[str, CollectionConfig] = {
         ]
     ),
 
+    # Info Board: one document per guild per board (board_id is "main" today;
+    # the compound key leaves room for a second board without a storage redo).
+    'board_content': CollectionConfig(
+        name='Content',
+        database='Board',
+        connection='primary',
+        indexes=[
+            IndexModel([('guild_id', 1), ('board_id', 1)],
+                       unique=True, name='guild_board_unique'),
+            IndexModel([('updated_at', -1)], name='updated_at_desc'),
+        ]
+    ),
+
     # Prime Drops Collections
     'prime_drops': CollectionConfig(
         name='AmazonPrime',

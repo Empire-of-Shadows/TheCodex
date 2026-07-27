@@ -2,7 +2,9 @@
 Guide Action Registry & Dispatcher
 
 Named action system for guide component interactions.
-All custom_ids use the "g:" prefix to avoid collisions with the welcome system ("w:").
+All custom_ids use the "g:" prefix to avoid collisions with the greeting system ("gr:")
+and the info board ("b:"). The prefix is always matched with its colon, so "g:" and
+"gr:" never collide.
 """
 
 import discord

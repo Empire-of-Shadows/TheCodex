@@ -29,7 +29,7 @@ _VALID_GUIDE_ACTIONS = {"navigate", "channel", "role"}
 
 # Hard ceiling on the serialized payload. Per-field limits bound a well-formed
 # guide; this stops megabytes of junk in unrecognised keys from being stored
-# verbatim. Guides nest deeper than welcome layouts, so the cap is larger.
+# verbatim. Guides nest deeper than greeting layouts, so the cap is larger.
 _MAX_GUIDE_BYTES = 256 * 1024
 _ALLOWED_TOP_LEVEL = {"accent_color", "pages"}
 

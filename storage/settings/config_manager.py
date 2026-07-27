@@ -125,12 +125,12 @@ def _default_new_members() -> Dict[str, Any]:
         "enabled": False,
         "account_age_requirement_days": 90,
         "auto_kick": True,
-        "welcome_channel_id": None,
+        "greeting_channel_id": None,
         "whitelist_role_id": None,
         "whitelist_enabled": True,
         "whitelist_role_name": "Whitelisted New Member",
-        "welcome_message_enabled": True,
-        "welcome_components": None,
+        "greeting_enabled": True,
+        "greeting_components": None,
     }
 
 
@@ -348,18 +348,18 @@ class GuildConfig:
 
         # ── new_members ────────────────────────────────────────────────
         stored = data.get("new_members") or {}
-        nm_welcome_ch = stored.get("welcome_channel_id")
+        nm_greeting_ch = stored.get("greeting_channel_id")
         nm_whitelist_role = stored.get("whitelist_role_id")
         new_members = {
-            "enabled": stored["enabled"] if "enabled" in stored else bool(nm_welcome_ch or nm_whitelist_role),
+            "enabled": stored["enabled"] if "enabled" in stored else bool(nm_greeting_ch or nm_whitelist_role),
             "account_age_requirement_days": stored.get("account_age_requirement_days", 90),
             "auto_kick": stored.get("auto_kick", True),
-            "welcome_channel_id": nm_welcome_ch,
+            "greeting_channel_id": nm_greeting_ch,
             "whitelist_role_id": nm_whitelist_role,
             "whitelist_enabled": stored.get("whitelist_enabled", True),
             "whitelist_role_name": stored.get("whitelist_role_name", "Whitelisted New Member"),
-            "welcome_message_enabled": stored.get("welcome_message_enabled", True),
-            "welcome_components": stored.get("welcome_components"),
+            "greeting_enabled": stored.get("greeting_enabled", True),
+            "greeting_components": stored.get("greeting_components"),
         }
         new_members = _merge_unknown_keys(new_members, stored)
 
@@ -652,7 +652,7 @@ class GuildConfigManager:
     async def set_channel(self, guild_id: int, channel_type: str, channel_id: Optional[int]) -> bool:
         """Set a channel ID for a guild via the feature-centric config."""
         _channel_map = {
-            "welcome":      ("new_members", "welcome_channel_id"),
+            "greeting":     ("new_members", "greeting_channel_id"),
             "suggestions":  ("suggestions", "channel_id"),
             "admin":        ("server", "admin_channel_id"),
             "drops":        ("drops", "channel_id"),

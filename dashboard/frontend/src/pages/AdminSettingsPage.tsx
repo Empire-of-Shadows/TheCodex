@@ -1011,16 +1011,16 @@ function NewMembersTab({
   return (
     <SectionCard
       title="New Members"
-      description="Account-age screening, welcome messages, and whitelist role assignment."
+      description="Account-age screening, greeting messages, and whitelist role assignment."
     >
       <div className="field-row">
         <ChannelField
-          label="Welcome Channel"
-          value={value.welcome_channel_id}
+          label="Greeting Channel"
+          value={value.greeting_channel_id}
           channels={channels}
           filterType={0}
           disabled={readOnly}
-          onChange={(v) => onChange({ ...value, welcome_channel_id: v })}
+          onChange={(v) => onChange({ ...value, greeting_channel_id: v })}
         />
         <RoleField
           label="Whitelist Role"
@@ -1054,10 +1054,10 @@ function NewMembersTab({
           onChange={(v) => onChange({ ...value, auto_kick: v })}
         />
         <ToggleField
-          label="Welcome Messages"
-          value={value.welcome_message_enabled}
+          label="Greeting Messages"
+          value={value.greeting_enabled}
           disabled={readOnly}
-          onChange={(v) => onChange({ ...value, welcome_message_enabled: v })}
+          onChange={(v) => onChange({ ...value, greeting_enabled: v })}
         />
         <ToggleField
           label="Whitelist System"
@@ -1077,8 +1077,8 @@ function NewMembersTab({
       />
 
       <p className="muted" style={{ marginTop: 16 }}>
-        Welcome message layout is managed in the{" "}
-        <Link to={`/builder/${guildId}?mode=welcome`}>builder</Link>.
+        Greeting message layout is managed in the{" "}
+        <Link to={`/builder/${guildId}?mode=greeting`}>builder</Link>.
       </p>
 
       <SaveBar dirty={dirty} saving={saving} onSave={onSave} readOnly={readOnly} />

@@ -246,7 +246,7 @@ class GuideRenderer:
 	) -> Dict[str, str]:
 		"""Build placeholder dict from guild/member context.
 
-		Supports the same placeholders as the welcome system:
+		Supports the same placeholders as the greeting system:
 		{member}, {member_name}, {member_count}, {guild_name},
 		{voice_active}, {random_greeting}
 		"""

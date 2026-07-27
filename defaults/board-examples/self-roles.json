@@ -1,0 +1,39 @@
+{
+  "components": [
+    {
+      "type": "container",
+      "components": [
+        {
+          "type": "text",
+          "content": "# Pick your roles\nTap to add, tap again to remove."
+        },
+        {
+          "type": "action_row",
+          "buttons": [
+            {
+              "type": "button",
+              "style": "secondary",
+              "label": "Gamer",
+              "action": "role",
+              "target": "111111111111111111"
+            },
+            {
+              "type": "button",
+              "style": "secondary",
+              "label": "Movie Night",
+              "action": "role",
+              "target": "222222222222222222"
+            },
+            {
+              "type": "button",
+              "style": "secondary",
+              "label": "Announcements",
+              "action": "role",
+              "target": "333333333333333333"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -17,7 +17,8 @@ from Features.Guide.guide_schema import (  # noqa: E402
     normalize_pages,
     validate_guide_schema,
 )
-from Features.NewMembers.welcome_schema import validate_welcome_schema  # noqa: E402
+from Features.NewMembers.greeting_schema import validate_greeting_schema  # noqa: E402
+from Features.Board.board_schema import validate_board_schema  # noqa: E402
 
 router = APIRouter(tags=["validate"])
 
@@ -26,8 +27,12 @@ class GuideValidateBody(BaseModel):
     data: dict = Field(..., description="Guide payload to validate")
 
 
-class WelcomeValidateBody(BaseModel):
-    data: dict = Field(..., description="Welcome payload to validate")
+class GreetingValidateBody(BaseModel):
+    data: dict = Field(..., description="Greeting payload to validate")
+
+
+class BoardValidateBody(BaseModel):
+    data: dict = Field(..., description="Board payload to validate")
 
 
 @router.post("/validate/guide")
@@ -41,11 +46,21 @@ async def validate_guide(
     return {"valid": ok, "error": error if not ok else None}
 
 
-@router.post("/validate/welcome")
-async def validate_welcome(
-    body: WelcomeValidateBody,
+@router.post("/validate/greeting")
+async def validate_greeting(
+    body: GreetingValidateBody,
     _: dict = Depends(get_current_user),
 ):
-    """Validate welcome JSON and return result."""
-    ok, error = validate_welcome_schema(body.data)
+    """Validate greeting JSON and return result."""
+    ok, error = validate_greeting_schema(body.data)
+    return {"valid": ok, "error": error if not ok else None}
+
+
+@router.post("/validate/board")
+async def validate_board(
+    body: BoardValidateBody,
+    _: dict = Depends(get_current_user),
+):
+    """Validate board JSON and return result."""
+    ok, error = validate_board_schema(body.data)
     return {"valid": ok, "error": error if not ok else None}

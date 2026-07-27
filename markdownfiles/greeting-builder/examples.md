@@ -1,4 +1,4 @@
-# Welcome Builder - Examples
+# Greeting Builder - Examples
 
 Layouts you can copy. Save any of these as a `.json` file and use **Import JSON**
 in the top bar to load it, then edit it in the builder like anything else.
@@ -6,7 +6,7 @@ in the top bar to load it, then edit it in the builder like anything else.
 Importing replaces what is currently loaded, so export a backup first if you have
 work you want to keep.
 
-## 1. The simplest welcome
+## 1. The simplest greeting
 
 One line of text. Does the job.
 
@@ -45,7 +45,7 @@ most servers want.
 
 ## 3. Greeting plus a row of helpful buttons
 
-Everything these buttons show is private to the person who clicks, so your welcome
+Everything these buttons show is private to the person who clicks, so your greeting
 channel stays clean.
 
 ```json
@@ -103,10 +103,10 @@ When you want to offer a lot without cluttering the message.
 }
 ```
 
-## 5. A boxed welcome with a random greeting
+## 5. A boxed greeting with a random opener
 
 A container gives the message its own framed look. `{random_greeting}` means the
-welcome channel does not read identically every single time.
+greeting channel does not read identically every single time.
 
 ```json
 {
@@ -142,7 +142,7 @@ welcome channel does not read identically every single time.
 ## 6. The full treatment
 
 Banner image, greeting, a short orientation, buttons, and a dropdown. This is
-about as much as anyone should put in a welcome message.
+about as much as anyone should put in a greeting message.
 
 ```json
 {
@@ -209,7 +209,7 @@ member's avatar. For your own artwork, use a Media Gallery instead.
 Too many buttons in one row. Add a second row, or move some into a dropdown.
 
 **"components has 12 items; max is 10"**
-Too many blocks overall. A welcome message is a doorway, not the whole house.
+Too many blocks overall. A greeting message is a doorway, not the whole house.
 
 **"url is required for link buttons and must start with https://"**
 A link button with no address, or one starting with `http://`.

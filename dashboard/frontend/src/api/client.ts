@@ -2,7 +2,9 @@ import type {
   User,
   Guild,
   GuideData,
-  WelcomeData,
+  GreetingData,
+  BoardData,
+  BoardPosted,
   UserActivity,
   Channel,
   Role,
@@ -37,12 +39,22 @@ export const api = {
       body: JSON.stringify({ guide_data }),
     }),
 
-  getWelcome: (guildId: string) =>
-    apiFetch<{ welcome_data: WelcomeData | null }>(`/api/guilds/${guildId}/welcome`),
-  putWelcome: (guildId: string, welcome_data: WelcomeData) =>
-    apiFetch<{ ok: boolean }>(`/api/guilds/${guildId}/welcome`, {
+  getGreeting: (guildId: string) =>
+    apiFetch<{ greeting_data: GreetingData | null }>(`/api/guilds/${guildId}/greeting`),
+  putGreeting: (guildId: string, greeting_data: GreetingData) =>
+    apiFetch<{ ok: boolean }>(`/api/guilds/${guildId}/greeting`, {
       method: "PUT",
-      body: JSON.stringify({ welcome_data }),
+      body: JSON.stringify({ greeting_data }),
+    }),
+
+  getBoard: (guildId: string) =>
+    apiFetch<{ board_data: BoardData | null; posted: BoardPosted | null }>(
+      `/api/guilds/${guildId}/board`,
+    ),
+  putBoard: (guildId: string, board_data: BoardData) =>
+    apiFetch<{ ok: boolean }>(`/api/guilds/${guildId}/board`, {
+      method: "PUT",
+      body: JSON.stringify({ board_data }),
     }),
 
   validateGuide: (data: GuideData) =>
@@ -50,8 +62,13 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ data }),
     }),
-  validateWelcome: (data: WelcomeData) =>
-    apiFetch<{ valid: boolean; error: string | null }>("/api/validate/welcome", {
+  validateGreeting: (data: GreetingData) =>
+    apiFetch<{ valid: boolean; error: string | null }>("/api/validate/greeting", {
+      method: "POST",
+      body: JSON.stringify({ data }),
+    }),
+  validateBoard: (data: BoardData) =>
+    apiFetch<{ valid: boolean; error: string | null }>("/api/validate/board", {
       method: "POST",
       body: JSON.stringify({ data }),
     }),
@@ -61,7 +78,7 @@ export const api = {
   getRoles: (guildId: string) =>
     apiFetch<Role[]>(`/api/guilds/${guildId}/roles`),
 
-  getDocs: (builder: "guide" | "welcome", topic: string) =>
+  getDocs: (builder: "guide" | "greeting" | "board", topic: string) =>
     apiFetch<{ title: string; content: string }>(`/api/docs/${builder}/${topic}`),
 
   settings: (guildId: string) =>

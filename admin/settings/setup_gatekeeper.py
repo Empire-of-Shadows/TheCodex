@@ -3,7 +3,7 @@ Setup Gatekeeper for TheCodex.
 
 Fast, cached per-feature "is this configured yet?" gates used by the admin panel
 so admins can't open a feature's settings before its prerequisite (WYR channel,
-welcome channel, embed role-tier mapping, ...) has been set.
+greeting channel, embed role-tier mapping, ...) has been set.
 
 Each feature predicate delegates to an engine ``SetupGate`` (cached, fail-open); this
 class keeps only the codex-specific requirement definitions and the discord-facing
@@ -77,7 +77,7 @@ class SetupGatekeeper:
 
     @staticmethod
     def _new_members_requirement(config) -> bool:
-        return bool(config.new_members.get("welcome_channel_id"))
+        return bool(config.new_members.get("greeting_channel_id"))
 
     @staticmethod
     def _tier_requirement(tier_name: str):
@@ -223,11 +223,11 @@ class SetupGatekeeper:
         logger.debug(f"Guild {guild_id} WYR setup cache invalidated")
 
     # ------------------------------------------------------------------
-    # New Members Settings gate (requires welcome_channel_id to be configured)
+    # New Members Settings gate (requires greeting_channel_id to be configured)
     # ------------------------------------------------------------------
 
     async def is_new_members_setup_complete(self, guild_id: int) -> bool:
-        """Check whether the guild has a welcome channel configured for New Members.
+        """Check whether the guild has a greeting channel configured for New Members.
 
         Cached under ``new_members_{guild_id}`` with the same 120 s TTL.
         Fails open on errors so existing configurations are never blocked
@@ -236,9 +236,9 @@ class SetupGatekeeper:
         return await self._new_members_gate.is_complete(guild_id)
 
     async def check_new_members_or_notify(self, interaction: discord.Interaction) -> bool:
-        """Guard for New Members settings that require welcome_channel_id.
+        """Guard for New Members settings that require greeting_channel_id.
 
-        If the welcome channel has not been configured yet, sends an ephemeral
+        If the greeting channel has not been configured yet, sends an ephemeral
         embed directing the admin to set the channel first and returns False.
         Otherwise returns True.
         """
@@ -250,12 +250,12 @@ class SetupGatekeeper:
             return True
 
         embed = discord.Embed(
-            title="Welcome Channel Required",
+            title="Greeting Channel Required",
             description=(
-                "A **Welcome Channel** must be configured before these settings "
+                "A **Greeting Channel** must be configured before these settings "
                 "can be changed.\n\n"
                 "**How to fix:**\n"
-                "Select **Welcome Channel** and choose the channel where welcome "
+                "Select **Greeting Channel** and choose the channel where greeting "
                 "messages will be sent. All other New Member settings will unlock immediately."
             ),
             color=discord.Color.orange(),

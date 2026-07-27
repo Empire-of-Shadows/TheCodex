@@ -2,7 +2,7 @@
 Shared Components V2 Validators
 
 Reusable validation functions for Discord Components V2 JSON schemas.
-Used by both the welcome-builder and guide-builder systems.
+Used by the greeting-builder, guide-builder, and board-builder systems.
 
 All validators return (bool, str) - True/"" on success, or False/error message.
 Button/select action validation is delegated to a feature-specific callback.

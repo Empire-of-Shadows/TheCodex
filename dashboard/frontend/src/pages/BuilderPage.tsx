@@ -21,14 +21,18 @@ import type {
   GuidePage,
   Role,
   SimulationAction,
-  WelcomeData,
+  GreetingData,
+  BoardData,
+  BoardResponse,
 } from "../api/types";
 import { VALID_ACTIONS } from "../api/types";
 import { validateGuideSchema } from "../validators/guideValidator";
-import { validateWelcomeSchema } from "../validators/welcomeValidator";
+import { validateGreetingSchema } from "../validators/greetingValidator";
+import { validateBoardSchema } from "../validators/boardValidator";
 import { checkNoDangerousContent } from "../validators/safeContent";
 import ComponentPalette from "../components/builder/ComponentPalette";
 import PageTreeEditor from "../components/builder/PageTreeEditor";
+import ResponseListEditor, { BOARD_MAIN_ID } from "../components/builder/ResponseListEditor";
 import Canvas from "../components/builder/Canvas";
 import SimulationCanvas from "../components/builder/SimulationCanvas";
 import PropertyPanel from "../components/builder/PropertyPanel";
@@ -39,9 +43,10 @@ import { formatError } from "../_engine/api/formatError";
 import { useToast, ToastStack } from "../_engine/components/ToastStack";
 
 // Import file-size ceilings - mirror the backend byte limits
-// (guide_schema.py _MAX_GUIDE_BYTES / welcome_schema.py _MAX_WELCOME_BYTES).
+// (guide_schema.py _MAX_GUIDE_BYTES / greeting_schema.py _MAX_GREETING_BYTES).
 const MAX_GUIDE_BYTES = 256 * 1024;
-const MAX_WELCOME_BYTES = 64 * 1024;
+const MAX_GREETING_BYTES = 64 * 1024;
+const MAX_BOARD_BYTES = 128 * 1024;
 
 let _nextId = 1;
 function uid(): string {
@@ -359,18 +364,79 @@ interface GuideCache {
   accentColor?: string;
 }
 
-interface WelcomeCache {
+interface GreetingCache {
   components: ComponentDef[];
   accentColor?: string;
 }
 
+/** A board response while it is being edited (components carry _ids). */
+interface BoardResponseDraft {
+  id: string;
+  label?: string;
+  accent_color?: string | number;
+  components: ComponentDef[];
+}
+
+interface BoardCache {
+  /** The static board message's own components. */
+  main: ComponentDef[];
+  responses: BoardResponseDraft[];
+  /** BOARD_MAIN_ID, or the id of the response being edited. */
+  currentId: string;
+  accentColor?: string;
+}
+
+/** Fold the live editor components back into whichever board target is selected. */
+function foldBoard(
+  main: ComponentDef[],
+  responses: BoardResponseDraft[],
+  currentId: string,
+  components: ComponentDef[],
+): { main: ComponentDef[]; responses: BoardResponseDraft[] } {
+  if (currentId === BOARD_MAIN_ID) {
+    return { main: [...components], responses };
+  }
+  return {
+    main,
+    responses: responses.map((r) =>
+      r.id === currentId ? { ...r, components: [...components] } : r,
+    ),
+  };
+}
+
+/** Every response id referenced by a button or select option, at any depth. */
+function collectReferencedIds(components: ComponentDef[], out: Set<string> = new Set()): Set<string> {
+  for (const comp of components || []) {
+    const c = comp as any;
+    if (c.action === "reply" && typeof c.target === "string") out.add(c.target);
+    for (const btn of c.buttons || []) {
+      if (btn.action === "reply" && typeof btn.target === "string") out.add(btn.target);
+    }
+    if (c.select) {
+      for (const opt of c.select.options || []) {
+        if (opt.action === "reply" && typeof opt.target === "string") out.add(opt.target);
+      }
+    }
+    if (c.accessory?.action === "reply" && typeof c.accessory.target === "string") {
+      out.add(c.accessory.target);
+    }
+    if (Array.isArray(c.components)) collectReferencedIds(c.components, out);
+  }
+  return out;
+}
+
 // ─────────────────────────────────────────────────────────────────────────
+
+function parseMode(raw: string | null): BuilderMode {
+  if (raw === "greeting" || raw === "board") return raw;
+  return "guide";
+}
 
 export default function BuilderPage() {
   const { guildId } = useParams<{ guildId: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const initialMode: BuilderMode = searchParams.get("mode") === "welcome" ? "welcome" : "guide";
+  const initialMode: BuilderMode = parseMode(searchParams.get("mode"));
 
   const [mode, setMode] = useState<BuilderMode>(initialMode);
   const [components, setComponents] = useState<ComponentDef[]>([]);
@@ -381,12 +447,21 @@ export default function BuilderPage() {
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const { toasts, push: pushToast, dismiss: dismissToast } = useToast();
-  const [savedSigs, setSavedSigs] = useState<{ guide: string; welcome: string }>({ guide: "", welcome: "" });
+  const [boardResponses, setBoardResponses] = useState<BoardResponseDraft[]>([]);
+  const [boardMain, setBoardMain] = useState<ComponentDef[]>([]);
+  const [boardCurrentId, setBoardCurrentId] = useState<string>(BOARD_MAIN_ID);
+  const [boardPosted, setBoardPosted] = useState<{ channel_id: string | null } | null>(null);
+  const [savedSigs, setSavedSigs] = useState<{ guide: string; greeting: string; board: string }>({
+    guide: "",
+    greeting: "",
+    board: "",
+  });
   const [loading, setLoading] = useState(true);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [simulating, setSimulating] = useState(false);
   const [simPageId, setSimPageId] = useState<string | null>(null);
   const [simBreadcrumbs, setSimBreadcrumbs] = useState<string[]>([]);
+  const [simResponseId, setSimResponseId] = useState<string | null>(null);
   const [showDocs, setShowDocs] = useState(false);
   const [pendingNav, setPendingNav] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -398,7 +473,8 @@ export default function BuilderPage() {
 
   // Local caches - hold full working state (with _ids) so toggling never hits DB
   const guideCacheRef = useRef<GuideCache>({ pages: [], currentPageId: null });
-  const welcomeCacheRef = useRef<WelcomeCache>({ components: [] });
+  const greetingCacheRef = useRef<GreetingCache>({ components: [] });
+  const boardCacheRef = useRef<BoardCache>({ main: [], responses: [], currentId: BOARD_MAIN_ID });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -462,8 +538,8 @@ export default function BuilderPage() {
   useEffect(() => {
     if (!guildId) return;
     setLoading(true);
-    Promise.all([api.getGuide(guildId), api.getWelcome(guildId), api.guilds(), api.getChannels(guildId).catch(() => []), api.getRoles(guildId).catch(() => [])])
-      .then(([guideRes, welcomeRes, allGuilds, channelsRes, rolesRes]) => {
+    Promise.all([api.getGuide(guildId), api.getGreeting(guildId), api.getBoard(guildId).catch(() => ({ board_data: null, posted: null })), api.guilds(), api.getChannels(guildId).catch(() => []), api.getRoles(guildId).catch(() => [])])
+      .then(([guideRes, greetingRes, boardRes, allGuilds, channelsRes, rolesRes]) => {
         setChannels(channelsRes);
         setRoles(rolesRes);
         setGuild(allGuilds.find((g) => g.id === guildId) ?? null);
@@ -479,23 +555,45 @@ export default function BuilderPage() {
           };
         }
 
-        // Hydrate welcome cache
-        if (welcomeRes.welcome_data) {
-          welcomeCacheRef.current = {
-            components: addIds(welcomeRes.welcome_data.components || []),
-            accentColor: welcomeRes.welcome_data.accent_color as string | undefined,
+        // Hydrate greeting cache
+        if (greetingRes.greeting_data) {
+          greetingCacheRef.current = {
+            components: addIds(greetingRes.greeting_data.components || []),
+            accentColor: greetingRes.greeting_data.accent_color as string | undefined,
           };
         }
+
+        // Hydrate board cache
+        if (boardRes.board_data) {
+          boardCacheRef.current = {
+            main: addIds(boardRes.board_data.components || []),
+            responses: (boardRes.board_data.responses || []).map((r) => ({
+              ...r,
+              components: addIds(r.components || []),
+            })),
+            currentId: BOARD_MAIN_ID,
+            accentColor: boardRes.board_data.accent_color as string | undefined,
+          };
+        }
+        setBoardPosted(boardRes.posted);
 
         // Hydrate the guide page-tree state so the tree is ready when toggling modes
         const gc = guideCacheRef.current;
         setPages(gc.pages);
         setCurrentPageId(gc.currentPageId);
+        // Hydrate the board state so its list is ready when toggling modes
+        const bc = boardCacheRef.current;
+        setBoardMain(bc.main);
+        setBoardResponses(bc.responses);
+        setBoardCurrentId(bc.currentId);
         // Load the requested mode into the active editor
-        const wc = welcomeCacheRef.current;
-        if (initialMode === "welcome") {
+        const wc = greetingCacheRef.current;
+        if (initialMode === "greeting") {
           setComponents([...wc.components]);
           setAccentColor(wc.accentColor);
+        } else if (initialMode === "board") {
+          setComponents([...bc.main]);
+          setAccentColor(bc.accentColor);
         } else {
           setAccentColor(gc.accentColor);
           if (gc.currentPageId) {
@@ -506,7 +604,8 @@ export default function BuilderPage() {
         // Seed saved signatures from loaded data so initial state is "clean"
         setSavedSigs({
           guide: JSON.stringify(buildGuideData(gc.pages, gc.accentColor)),
-          welcome: JSON.stringify(buildWelcomeData(wc.components, wc.accentColor)),
+          greeting: JSON.stringify(buildGreetingData(wc.components, wc.accentColor)),
+          board: JSON.stringify(buildBoardData(bc.main, bc.responses, bc.accentColor)),
         });
       })
       .catch(() => navigate("/dashboard"))
@@ -525,10 +624,13 @@ export default function BuilderPage() {
         }));
       }
       guideCacheRef.current = { pages: p, currentPageId, accentColor };
+    } else if (mode === "board") {
+      const folded = foldBoard(boardMain, boardResponses, boardCurrentId, components);
+      boardCacheRef.current = { ...folded, currentId: boardCurrentId, accentColor };
     } else {
-      welcomeCacheRef.current = { components: [...components], accentColor };
+      greetingCacheRef.current = { components: [...components], accentColor };
     }
-  }, [mode, pages, currentPageId, components, accentColor]);
+  }, [mode, pages, currentPageId, components, accentColor, boardMain, boardResponses, boardCurrentId]);
 
   // ── Mode switch (cache only, no DB) ────────────────────────────────────
 
@@ -551,8 +653,21 @@ export default function BuilderPage() {
         } else {
           setComponents([]);
         }
+      } else if (newMode === "board") {
+        const bc = boardCacheRef.current;
+        setBoardMain(bc.main);
+        setBoardResponses(bc.responses);
+        setBoardCurrentId(bc.currentId);
+        setAccentColor(bc.accentColor);
+        if (bc.currentId === BOARD_MAIN_ID) {
+          setComponents([...bc.main]);
+        } else {
+          const resp = bc.responses.find((r) => r.id === bc.currentId);
+          setComponents(resp ? [...resp.components] : [...bc.main]);
+          if (!resp) setBoardCurrentId(BOARD_MAIN_ID);
+        }
       } else {
-        const wc = welcomeCacheRef.current;
+        const wc = greetingCacheRef.current;
         setComponents([...wc.components]);
         setAccentColor(wc.accentColor);
       }
@@ -562,6 +677,76 @@ export default function BuilderPage() {
     },
     [mode, snapshotToCache]
   );
+
+  // ── Board response actions ─────────────────────────────────────────────
+
+  /** Switch which board target (message or response) the canvas is editing. */
+  const selectBoardTarget = useCallback(
+    (id: string) => {
+      if (id === boardCurrentId) return;
+      const folded = foldBoard(boardMain, boardResponses, boardCurrentId, components);
+      setBoardMain(folded.main);
+      setBoardResponses(folded.responses);
+
+      if (id === BOARD_MAIN_ID) {
+        setComponents([...folded.main]);
+      } else {
+        const resp = folded.responses.find((r) => r.id === id);
+        setComponents(resp ? [...resp.components] : []);
+      }
+      setBoardCurrentId(id);
+      setSelectedId(null);
+    },
+    [boardCurrentId, boardMain, boardResponses, components]
+  );
+
+  const addBoardResponse = useCallback(
+    (id: string, label: string) => {
+      const folded = foldBoard(boardMain, boardResponses, boardCurrentId, components);
+      const created: BoardResponseDraft = {
+        id,
+        label,
+        components: [{ _id: uid(), type: "text", content: `## ${label}` } as ComponentDef],
+      };
+      setBoardMain(folded.main);
+      setBoardResponses([...folded.responses, created]);
+      setBoardCurrentId(id);
+      setComponents([...created.components]);
+      setSelectedId(null);
+    },
+    [boardMain, boardResponses, boardCurrentId, components]
+  );
+
+  const deleteBoardResponse = useCallback(
+    (id: string) => {
+      const folded = foldBoard(boardMain, boardResponses, boardCurrentId, components);
+      const remaining = folded.responses.filter((r) => r.id !== id);
+      setBoardMain(folded.main);
+      setBoardResponses(remaining);
+      // Deleting the response being edited drops you back to the board message.
+      if (boardCurrentId === id) {
+        setBoardCurrentId(BOARD_MAIN_ID);
+        setComponents([...folded.main]);
+        setSelectedId(null);
+      }
+      // Any button still pointing here now fails validation, which is the point:
+      // the error names the dangling reference instead of silently breaking later.
+    },
+    [boardMain, boardResponses, boardCurrentId, components]
+  );
+
+  const renameBoardResponse = useCallback((id: string, label: string) => {
+    setBoardResponses((prev) => prev.map((r) => (r.id === id ? { ...r, label } : r)));
+  }, []);
+
+  /** Response ids something actually links to, so the list can flag orphans. */
+  const boardUsedIds = useMemo(() => {
+    if (mode !== "board") return new Set<string>();
+    const folded = foldBoard(boardMain, boardResponses, boardCurrentId, components);
+    const used = collectReferencedIds(folded.main);
+    for (const resp of folded.responses) collectReferencedIds(resp.components, used);
+    return used;
+  }, [mode, boardMain, boardResponses, boardCurrentId, components]);
 
   // ── Page tree actions ──────────────────────────────────────────────────
 
@@ -708,15 +893,22 @@ export default function BuilderPage() {
         const data = buildGuideData(pagesWithCurrent, accentColor);
         const r = validateGuideSchema(data);
         setErrors(r.valid ? [] : [r.error]);
+      } else if (mode === "board") {
+        // Validate the whole board, not just the target on screen, so a dangling
+        // reply target shows up even while editing a different response.
+        const folded = foldBoard(boardMain, boardResponses, boardCurrentId, components);
+        const data = buildBoardData(folded.main, folded.responses, accentColor);
+        const r = validateBoardSchema(data);
+        setErrors(r.valid ? [] : [r.error]);
       } else {
-        const data: WelcomeData = { components: stripIds(components) as any };
+        const data: GreetingData = { components: stripIds(components) as any };
         if (accentColor) data.accent_color = accentColor;
-        const r = validateWelcomeSchema(data);
+        const r = validateGreetingSchema(data);
         setErrors(r.valid ? [] : [r.error]);
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [components, mode, pages, currentPageId, accentColor]);
+  }, [components, mode, pages, currentPageId, accentColor, boardMain, boardResponses, boardCurrentId]);
 
   // ── DnD handlers ───────────────────────────────────────────────────────
 
@@ -806,11 +998,18 @@ export default function BuilderPage() {
     }));
   }, [mode, pages, currentPageId, components]);
 
+  /** Board state with the live edits folded in, for the preview. */
+  const latestBoard = useMemo(() => {
+    if (mode !== "board") return { main: boardMain, responses: boardResponses };
+    return foldBoard(boardMain, boardResponses, boardCurrentId, components);
+  }, [mode, boardMain, boardResponses, boardCurrentId, components]);
+
   const toggleSimulation = useCallback(() => {
     if (!simulating) {
       snapshotToCache();
       setSimPageId(null);
       setSimBreadcrumbs([]);
+      setSimResponseId(null);
     }
     setSimulating((prev) => !prev);
   }, [simulating, snapshotToCache]);
@@ -835,7 +1034,7 @@ export default function BuilderPage() {
         case "search":
           pushToast("Search requires the bot backend", "info");
           break;
-        case "welcome_action": {
+        case "greeting_action": {
           const desc = VALID_ACTIONS[action.action!]?.description || action.action;
           pushToast(`Action: ${desc}`, "info");
           break;
@@ -850,6 +1049,10 @@ export default function BuilderPage() {
           pushToast(`Would give/remove role @${r?.name || action.target}`, "info");
           break;
         }
+        case "board_reply":
+          // Show the response the way a member sees it: a private reply below.
+          setSimResponseId(action.target ?? null);
+          break;
       }
     },
     [simPageId, simBreadcrumbs, channels, roles, pushToast]
@@ -875,9 +1078,10 @@ export default function BuilderPage() {
       }
 
       // Reject oversized files before reading them into memory - mirrors the
-      // backend byte ceilings (guide 256 KB, welcome 64 KB). This is the primary
-      // guard against huge/deeply-nested "bomb" payloads.
-      const maxBytes = mode === "guide" ? MAX_GUIDE_BYTES : MAX_WELCOME_BYTES;
+      // backend byte ceilings (guide 256 KB, board 128 KB, greeting 64 KB). This
+      // is the primary guard against huge/deeply-nested "bomb" payloads.
+      const maxBytes =
+        mode === "guide" ? MAX_GUIDE_BYTES : mode === "board" ? MAX_BOARD_BYTES : MAX_GREETING_BYTES;
       if (file.size > maxBytes) {
         pushToast(`File is too large (max ${Math.floor(maxBytes / 1024)} KB for ${mode}).`, "error");
         resetInput();
@@ -926,14 +1130,43 @@ export default function BuilderPage() {
             }
             setSelectedId(null);
             pushToast(`Imported ${imported.length} pages`, "success");
-          } else {
+          } else if (mode === "board") {
             if (!data.components || !Array.isArray(data.components)) {
-              pushToast("Invalid welcome JSON - expected { components: [...] }", "error");
+              pushToast("Invalid board JSON - expected { components: [...] }", "error");
               return;
             }
-            const candidate: WelcomeData = { components: data.components };
+            const candidate: BoardData = {
+              components: data.components,
+              responses: data.responses,
+            };
             if (data.accent_color !== undefined) candidate.accent_color = data.accent_color;
-            const r = validateWelcomeSchema(candidate);
+            const r = validateBoardSchema(candidate);
+            if (!r.valid) {
+              pushToast(`Import rejected - ${r.error}`, "error");
+              return;
+            }
+            const importedMain = addIds(data.components);
+            const importedResponses: BoardResponseDraft[] = (
+              (data.responses as BoardResponse[]) || []
+            ).map((resp) => ({ ...resp, components: addIds(resp.components || []) }));
+            setBoardMain(importedMain);
+            setBoardResponses(importedResponses);
+            setBoardCurrentId(BOARD_MAIN_ID);
+            setComponents(importedMain);
+            if (data.accent_color) setAccentColor(data.accent_color as string);
+            setSelectedId(null);
+            pushToast(
+              `Imported the board and ${importedResponses.length} response(s)`,
+              "success",
+            );
+          } else {
+            if (!data.components || !Array.isArray(data.components)) {
+              pushToast("Invalid greeting JSON - expected { components: [...] }", "error");
+              return;
+            }
+            const candidate: GreetingData = { components: data.components };
+            if (data.accent_color !== undefined) candidate.accent_color = data.accent_color;
+            const r = validateGreetingSchema(candidate);
             if (!r.valid) {
               pushToast(`Import rejected - ${r.error}`, "error");
               return;
@@ -957,7 +1190,7 @@ export default function BuilderPage() {
   // ── Export JSON ────────────────────────────────────────────────────────
 
   const handleExport = useCallback(() => {
-    let data: GuideData | WelcomeData;
+    let data: GuideData | GreetingData | BoardData;
     if (mode === "guide") {
       // Fold the currently-edited page's live components back into the tree
       // (same as save()) so unsaved edits to the active page are included.
@@ -969,8 +1202,11 @@ export default function BuilderPage() {
         }));
       }
       data = buildGuideData(pagesWithCurrent, accentColor);
+    } else if (mode === "board") {
+      const folded = foldBoard(boardMain, boardResponses, boardCurrentId, components);
+      data = buildBoardData(folded.main, folded.responses, accentColor);
     } else {
-      data = buildWelcomeData(components, accentColor);
+      data = buildGreetingData(components, accentColor);
     }
 
     const json = JSON.stringify(data, null, 2);
@@ -987,7 +1223,7 @@ export default function BuilderPage() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     pushToast(`Exported ${mode} JSON`, "success");
-  }, [mode, pages, currentPageId, components, accentColor, guildId, pushToast]);
+  }, [mode, pages, currentPageId, components, accentColor, guildId, pushToast, boardMain, boardResponses, boardCurrentId]);
 
   // ── Dirty tracking ─────────────────────────────────────────────────────
 
@@ -1007,16 +1243,30 @@ export default function BuilderPage() {
     return JSON.stringify(buildGuideData(gc.pages, gc.accentColor));
   }, [loading, mode, pages, currentPageId, components, accentColor, savedSigs.guide]);
 
-  const currentWelcomeSig = useMemo(() => {
-    if (loading) return savedSigs.welcome;
-    if (mode === "welcome") {
-      return JSON.stringify(buildWelcomeData(components, accentColor));
+  const currentGreetingSig = useMemo(() => {
+    if (loading) return savedSigs.greeting;
+    if (mode === "greeting") {
+      return JSON.stringify(buildGreetingData(components, accentColor));
     }
-    const wc = welcomeCacheRef.current;
-    return JSON.stringify(buildWelcomeData(wc.components, wc.accentColor));
-  }, [loading, mode, components, accentColor, savedSigs.welcome]);
+    const wc = greetingCacheRef.current;
+    return JSON.stringify(buildGreetingData(wc.components, wc.accentColor));
+  }, [loading, mode, components, accentColor, savedSigs.greeting]);
 
-  const dirty = !loading && (currentGuideSig !== savedSigs.guide || currentWelcomeSig !== savedSigs.welcome);
+  const currentBoardSig = useMemo(() => {
+    if (loading) return savedSigs.board;
+    if (mode === "board") {
+      const folded = foldBoard(boardMain, boardResponses, boardCurrentId, components);
+      return JSON.stringify(buildBoardData(folded.main, folded.responses, accentColor));
+    }
+    const bc = boardCacheRef.current;
+    return JSON.stringify(buildBoardData(bc.main, bc.responses, bc.accentColor));
+  }, [loading, mode, components, accentColor, boardMain, boardResponses, boardCurrentId, savedSigs.board]);
+
+  const dirty =
+    !loading &&
+    (currentGuideSig !== savedSigs.guide ||
+      currentGreetingSig !== savedSigs.greeting ||
+      currentBoardSig !== savedSigs.board);
 
   useEffect(() => {
     if (!dirty) return;
@@ -1072,13 +1322,32 @@ export default function BuilderPage() {
         }
         setSavedSigs((prev) => ({ ...prev, guide: currentGuideSig }));
         pushToast("Guide saved!", "success");
+      } else if (mode === "board") {
+        const folded = foldBoard(boardMain, boardResponses, boardCurrentId, components);
+        const data = buildBoardData(folded.main, folded.responses, accentColor);
+        await api.putBoard(guildId, data);
+        setBoardMain(folded.main);
+        setBoardResponses(folded.responses);
+        boardCacheRef.current = {
+          main: folded.main,
+          responses: folded.responses,
+          currentId: boardCurrentId,
+          accentColor,
+        };
+        setSavedSigs((prev) => ({ ...prev, board: currentBoardSig }));
+        pushToast(
+          boardPosted
+            ? "Board saved! Run /board refresh to update the posted message."
+            : "Board saved! Run /board post #channel to put it up.",
+          "success",
+        );
       } else {
-        const data = buildWelcomeData(components, accentColor);
-        await api.putWelcome(guildId, data);
-        // Update welcome cache with current state
-        welcomeCacheRef.current = { components: [...components], accentColor };
-        setSavedSigs((prev) => ({ ...prev, welcome: currentWelcomeSig }));
-        pushToast("Welcome saved!", "success");
+        const data = buildGreetingData(components, accentColor);
+        await api.putGreeting(guildId, data);
+        // Update greeting cache with current state
+        greetingCacheRef.current = { components: [...components], accentColor };
+        setSavedSigs((prev) => ({ ...prev, greeting: currentGreetingSig }));
+        pushToast("Greeting saved!", "success");
       }
       setSaveState("saved");
       setTimeout(() => setSaveState((s) => (s === "saved" ? "idle" : s)), 1500);
@@ -1169,8 +1438,11 @@ export default function BuilderPage() {
             <button className={mode === "guide" ? "active" : ""} onClick={() => switchMode("guide")}>
               Guide
             </button>
-            <button className={mode === "welcome" ? "active" : ""} onClick={() => switchMode("welcome")}>
-              Welcome
+            <button className={mode === "greeting" ? "active" : ""} onClick={() => switchMode("greeting")}>
+              Greeting
+            </button>
+            <button className={mode === "board" ? "active" : ""} onClick={() => switchMode("board")}>
+              Board
             </button>
           </div>
           <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--dc-text-muted)" }}>
@@ -1243,6 +1515,17 @@ export default function BuilderPage() {
                   onUpdatePageMeta={updatePageMeta}
                 />
               )}
+              {mode === "board" && (
+                <ResponseListEditor
+                  responses={boardResponses}
+                  currentId={boardCurrentId}
+                  usedIds={boardUsedIds}
+                  onSelect={selectBoardTarget}
+                  onAdd={addBoardResponse}
+                  onDelete={deleteBoardResponse}
+                  onRename={renameBoardResponse}
+                />
+              )}
             </div>
           )}
 
@@ -1254,8 +1537,19 @@ export default function BuilderPage() {
                   ? <>Preview Mode {<span className="sim-badge">LIVE</span>}</>
                   : mode === "guide"
                     ? `Page: ${findPage(pages, currentPageId || "")?.label || "None"}`
-                    : "Welcome Message"}
+                    : mode === "board"
+                      ? boardCurrentId === BOARD_MAIN_ID
+                        ? "Board message"
+                        : `Response: ${boardResponses.find((r) => r.id === boardCurrentId)?.label || boardCurrentId}`
+                      : "Greeting Message"}
               </span>
+              {!simulating && mode === "board" && (
+                <span style={{ fontSize: 12, color: "var(--dc-text-muted)" }}>
+                  {boardPosted
+                    ? "Posted - run /board refresh after saving"
+                    : "Not posted - run /board post #channel"}
+                </span>
+              )}
               <button
                 className={`btn ${simulating ? "btn-secondary" : "btn-primary"}`}
                 onClick={toggleSimulation}
@@ -1291,6 +1585,10 @@ export default function BuilderPage() {
                     accentColor={accentColor || "#5865f2"}
                     components={components}
                     onInteract={handleSimInteraction}
+                    boardMain={latestBoard.main}
+                    boardResponses={latestBoard.responses}
+                    openResponseId={simResponseId}
+                    onCloseResponse={() => setSimResponseId(null)}
                   />
                 ) : (
                   <Canvas
@@ -1329,6 +1627,7 @@ export default function BuilderPage() {
                   pages={pages}
                   channels={channels}
                   roles={roles}
+                  boardResponses={boardResponses}
                   onChange={updateComponent}
                 />
                 <ValidationErrors errors={errors} />
@@ -1385,8 +1684,26 @@ function buildGuideData(pages: GuidePage[], accentColor?: string): GuideData {
   return result;
 }
 
-function buildWelcomeData(components: ComponentDef[], accentColor?: string): WelcomeData {
-  const data: WelcomeData = { components: stripIds(components) as any };
+function buildBoardData(
+  main: ComponentDef[],
+  responses: BoardResponseDraft[],
+  accentColor?: string,
+): BoardData {
+  const data: BoardData = { components: stripIds(main) as any };
+  if (accentColor) data.accent_color = accentColor;
+  if (responses.length > 0) {
+    data.responses = responses.map((r) => {
+      const out: BoardResponse = { id: r.id, components: stripIds(r.components) as any };
+      if (r.label) out.label = r.label;
+      if (r.accent_color !== undefined) out.accent_color = r.accent_color;
+      return out;
+    });
+  }
+  return data;
+}
+
+function buildGreetingData(components: ComponentDef[], accentColor?: string): GreetingData {
+  const data: GreetingData = { components: stripIds(components) as any };
   if (accentColor) data.accent_color = accentColor;
   return data;
 }

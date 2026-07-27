@@ -1,0 +1,33 @@
+{
+  "accent_color": "#4D0EB3",
+  "components": [
+    {
+      "type": "text",
+      "content": "# Welcome to {guild_name}\nTap below for the rules."
+    },
+    {
+      "type": "action_row",
+      "buttons": [
+        {
+          "type": "button",
+          "style": "primary",
+          "label": "Server Rules",
+          "action": "reply",
+          "target": "rules"
+        }
+      ]
+    }
+  ],
+  "responses": [
+    {
+      "id": "rules",
+      "label": "Server Rules",
+      "components": [
+        {
+          "type": "text",
+          "content": "## Rules\n1. Be respectful.\n2. Keep it appropriate.\n3. No spam."
+        }
+      ]
+    }
+  ]
+}

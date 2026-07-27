@@ -178,26 +178,63 @@ export interface GuideData {
   pages: GuidePage[];
 }
 
-// ── Welcome ──────────────────────────────────────────────────────────────
+// ── Greeting ──────────────────────────────────────────────────────────────
 
-export interface WelcomeData {
+export interface GreetingData {
   accent_color?: string | number;
   components: ComponentDef[];
 }
 
+// ── Info Board ───────────────────────────────────────────────────────────
+
+/** One named private reply a board button or dropdown option can reveal. */
+export interface BoardResponse {
+  id: string;
+  label?: string;
+  accent_color?: string | number;
+  components: ComponentDef[];
+}
+
+export interface BoardData {
+  accent_color?: string | number;
+  components: ComponentDef[];
+  responses?: BoardResponse[];
+}
+
+/** Where the board is currently posted (read-only; posting stays with the bot). */
+export interface BoardPosted {
+  channel_id: string | null;
+  message_id: string | null;
+}
+
+/** What a board button or option does. Mirrors board_actions.VALID_ACTIONS. */
+export const BOARD_ACTIONS: Record<string, { label: string; description: string }> = {
+  reply: { label: "Private reply", description: "Sends one of your responses, only the clicker sees it" },
+  channel: { label: "Jump to channel", description: "Points the clicker at a channel" },
+  role: { label: "Toggle role", description: "Gives or removes a self-assignable role" },
+};
+
 // ── Builder mode ─────────────────────────────────────────────────────────
 
-export type BuilderMode = "guide" | "welcome";
+export type BuilderMode = "guide" | "greeting" | "board";
 
 // ── Simulation action ────────────────────────────────────────────────────
 
 export interface SimulationAction {
-  type: "navigate" | "back" | "home" | "search" | "welcome_action" | "channel" | "role";
+  type:
+    | "navigate"
+    | "back"
+    | "home"
+    | "search"
+    | "greeting_action"
+    | "channel"
+    | "role"
+    | "board_reply";
   target?: string;
   action?: string;
 }
 
-// ── Welcome valid actions ────────────────────────────────────────────────
+// ── Greeting valid actions ────────────────────────────────────────────────
 
 export const VALID_ACTIONS: Record<string, { description: string }> = {
   open_guide: { description: "Opens the server guide menu" },
@@ -265,11 +302,11 @@ export interface NewMembersSection {
   enabled: boolean;
   account_age_requirement_days: number;
   auto_kick: boolean;
-  welcome_channel_id: string | null;
+  greeting_channel_id: string | null;
   whitelist_role_id: string | null;
   whitelist_enabled: boolean;
   whitelist_role_name: string;
-  welcome_message_enabled: boolean;
+  greeting_enabled: boolean;
 }
 
 export interface AnnouncementSection {

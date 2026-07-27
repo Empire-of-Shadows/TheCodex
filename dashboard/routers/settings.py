@@ -31,7 +31,7 @@ logger = get_logger("dashboard.routers.settings")
 
 router = APIRouter(tags=["settings"])
 
-# Sections the dashboard may mutate. welcome_components is intentionally
+# Sections the dashboard may mutate. greeting_components is intentionally
 # excluded - the builder route owns that field. embed is also excluded
 # from the simple settings form (managed via Discord panel for now).
 _MUTABLE_SECTIONS: frozenset[str] = frozenset({
@@ -55,8 +55,8 @@ MOD_ALLOWED_SECTIONS: frozenset[str] = frozenset()
 # does not include them) and excluded from PUT allowed-keys (so an honest
 # client can never reintroduce them).
 _SECTION_EXCLUDED_KEYS: dict[str, frozenset[str]] = {
-    # welcome_components is owned by the builder route.
-    "new_members": frozenset({"welcome_components"}),
+    # greeting_components is owned by the builder route.
+    "new_members": frozenset({"greeting_components"}),
     # tiers is the color-tier mapping; managed via the Discord /admin panel.
     "roles": frozenset({"tiers"}),
 }
@@ -69,7 +69,7 @@ _SECTION_EXCLUDED_KEYS: dict[str, frozenset[str]] = {
 _CHANNEL_ID_FIELDS: dict[str, tuple[str, ...]] = {
     "server": ("admin_channel_id",),
     "wyr": ("channel_id",),
-    "new_members": ("welcome_channel_id",),
+    "new_members": ("greeting_channel_id",),
     "announcement": ("channel_id",),
     "drops": ("channel_id",),
     "suggestions": ("channel_id",),

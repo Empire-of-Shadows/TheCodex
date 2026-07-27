@@ -3,6 +3,23 @@
 ## [Unreleased] - 2026-07-26
 
 ### Added
+- **Info boards.** You can now build a permanent information message and post it in a channel -
+  the sort of thing that usually sits pinned at the top of a welcome or info channel. The
+  difference is that its buttons and dropdown actually do something: tap **Server Rules** and the
+  rules appear just for you, without filling the channel with replies. One tidy message can hold
+  a whole handbook.
+- Everything a board button reveals is yours to write. In the new **Board** tab of the builder you
+  create named responses - Rules, Roles, FAQ, whatever your server needs - and point buttons or
+  dropdown options at them. Responses can have their own buttons leading to other responses, so
+  you can build a small branching handbook. Buttons can also send someone to a channel or hand
+  out a self-assignable role that they can tap again to remove.
+- Posting a board is `/board post #channel`. After that, edit it in the builder and run
+  `/board refresh` (or **Post / Update Board** in `/admin`) - it **updates the message already in
+  the channel** instead of posting a duplicate. `/board info` tells you where the board lives and
+  whether its layout is valid. If someone deletes the message, a refresh puts a fresh one back.
+- The **Preview** button in the Board tab lets you click through the board exactly as a member
+  would: pressing a button opens its private reply below, marked the way Discord marks a message
+  only you can see.
 - You can now sign yourself up to be pinged whenever a new **Would You Rather** question is
   posted. Every question has a **🔔 Notify Me** button, and the new `/wyr notify` command shows
   whether you're signed up with a single button to change it.
@@ -14,6 +31,15 @@
   moderator to add or remove the role.
 
 ### Changed
+- **The welcome message is now called the greeting.** With info boards arriving, "welcome" meant
+  two different things - the message sent when somebody joins, and the static message sitting in
+  the welcome channel. The join message is now the **greeting** everywhere: `/welcome test` and
+  `/welcome info` are now `/greeting test` and `/greeting info`, the builder tab reads
+  **Greeting**, and the `/admin` panel shows **Greeting Channel** and **Greeting Message Builder**.
+  Nothing you have set up changes - your existing layout, channel and on/off switch all carry over
+  as they were.
+  - One thing to know: buttons on greeting messages already sitting in your channel history will
+    stop responding after this update. New greetings work normally.
 - Server admins have a new **Notification Offer** switch (in `/admin` under WYR Settings, and on
   the dashboard) to stop the bot offering the role to people as they play. The role stays
   available through the question button and `/wyr notify` either way. For any of this to appear,
@@ -29,6 +55,12 @@
   holds nothing but action screens just shows its name instead of a meaningless total.
 - A list you had not put anything in yet (such as an empty tracker list) was being counted as
   configured. An empty list now correctly reads as still needing setup.
+- The **Docs** button in the guide and welcome builders only said "Documentation file not found".
+  The help pages had gone missing, so there was nowhere to look up what a block does or why a
+  design refused to save. All of it is back and rewritten for the builder as it works today:
+  a walkthrough of the screen, a plain-language reference for every block and its limits, the
+  full list of `{placeholders}` and where each one works, and six copy-and-paste example layouts
+  per builder, plus a list of the errors that block saving and how to clear each one.
 
 ## [Unreleased] - 2026-07-23
 

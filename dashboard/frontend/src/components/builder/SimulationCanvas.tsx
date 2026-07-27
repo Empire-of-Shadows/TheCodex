@@ -1,4 +1,5 @@
 import type {
+  BoardResponse,
   BuilderMode,
   ComponentDef,
   GuidePage,
@@ -16,6 +17,12 @@ interface Props {
   accentColor: string;
   components: ComponentDef[];
   onInteract: (action: SimulationAction) => void;
+  /** Board mode: the whole board message, regardless of which target is being edited. */
+  boardMain?: ComponentDef[];
+  boardResponses?: BoardResponse[];
+  /** Board mode: the response currently "opened" by a click, if any. */
+  openResponseId?: string | null;
+  onCloseResponse?: () => void;
 }
 
 // The Home page is the top page of the tree (lowest `order`). A bare mention,
@@ -57,6 +64,10 @@ export default function SimulationCanvas({
   accentColor,
   components,
   onInteract,
+  boardMain = [],
+  boardResponses = [],
+  openResponseId = null,
+  onCloseResponse,
 }: Props) {
   if (mode === "guide") {
     // A null simulation page means "Home" - resolve it to the top page.
@@ -81,7 +92,78 @@ export default function SimulationCanvas({
     );
   }
 
-  // Welcome mode
+  if (mode === "board") {
+    // Always preview the board message itself, even while a response is being
+    // edited - that is what members actually see in the channel.
+    const openResponse = openResponseId
+      ? boardResponses.find((r) => r.id === openResponseId)
+      : null;
+
+    return (
+      <>
+        <MessageChrome>
+          <div className="discord-preview">
+            <div className="canvas-drop-zone">
+              {boardMain.length === 0 ? (
+                <div className="canvas-empty">The board message has no components yet</div>
+              ) : (
+                boardMain.map((comp, i) => (
+                  <DiscordPreview key={comp._id || i} component={comp} onInteract={onInteract} />
+                ))
+              )}
+            </div>
+          </div>
+        </MessageChrome>
+
+        {openResponseId && (
+          <div style={{ marginTop: 12 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                fontSize: 11,
+                color: "var(--dc-text-muted)",
+                marginBottom: 4,
+              }}
+            >
+              <span>Only you can see this</span>
+              <button
+                className="btn btn-secondary"
+                style={{ fontSize: 10, padding: "1px 6px" }}
+                onClick={onCloseResponse}
+              >
+                Dismiss
+              </button>
+            </div>
+            <MessageChrome>
+              <div className="discord-preview">
+                <div className="canvas-drop-zone">
+                  {!openResponse ? (
+                    <div className="canvas-empty">
+                      No response named "{openResponseId}" - the button points at nothing.
+                    </div>
+                  ) : openResponse.components.length === 0 ? (
+                    <div className="canvas-empty">This response is empty</div>
+                  ) : (
+                    openResponse.components.map((comp, i) => (
+                      <DiscordPreview
+                        key={comp._id || i}
+                        component={comp}
+                        onInteract={onInteract}
+                      />
+                    ))
+                  )}
+                </div>
+              </div>
+            </MessageChrome>
+          </div>
+        )}
+      </>
+    );
+  }
+
+  // Greeting mode
   return (
     <MessageChrome>
       <div className="discord-preview">

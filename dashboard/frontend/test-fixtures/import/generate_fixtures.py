@@ -45,7 +45,7 @@ def write_raw(name, data, *, binary=False):
 
 
 # ── Shared valid building blocks ─────────────────────────────────────────────
-# A minimal top-level component and page/welcome that PASS validation, so fixtures
+# A minimal top-level component and page/greeting that PASS validation, so fixtures
 # that are meant to import successfully differ from the baseline only in the one
 # hostile field under test.
 
@@ -65,7 +65,7 @@ def guide(pages, **extra):
     return d
 
 
-def welcome(components, **extra):
+def greeting(components, **extra):
     d = {"components": components}
     d.update(extra)
     return d
@@ -88,10 +88,10 @@ def a_oversize():
         guide([page("Home", content_text="B" * 5000)]),
     )
 
-    # 03 — welcome text content 5000 chars (cap is 4000).
+    # 03 — greeting text content 5000 chars (cap is 4000).
     write_json(
-        "03-oversize-component-welcome.json",
-        welcome([text("C" * 5000)]),
+        "03-oversize-component-greeting.json",
+        greeting([text("C" * 5000)]),
     )
 
     # 04 — guide file padded past the 256 KB pre-parse size guard while staying
@@ -100,9 +100,9 @@ def a_oversize():
     big_pages = [page(f"Filler page {i}", content_text="x" * 4000) for i in range(80)]
     write_json("04-oversize-file-guide.json", guide(big_pages))
 
-    # 05 — welcome file padded past the 64 KB welcome size guard.
+    # 05 — greeting file padded past the 64 KB greeting size guard.
     big_components = [text("y" * 4000) for _ in range(20)]
-    write_json("05-oversize-file-welcome.json", welcome(big_components))
+    write_json("05-oversize-file-greeting.json", greeting(big_components))
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -13,8 +13,8 @@ Each file targets one guard rail on the untrusted-import path:
 ## How to use
 
 1. Run the dashboard and open a guild's **Builder**.
-2. Pick the **mode** from the table below (`guide` vs `welcome`) — the byte limit and
-   validator differ per mode. Mode = whichever editor (guide or welcome) is active.
+2. Pick the **mode** from the table below (`guide` vs `greeting`) — the byte limit and
+   validator differ per mode. Mode = whichever editor (guide or greeting) is active.
 3. Click **Import JSON** and select the fixture. The `<input accept=".json">` filter
    only narrows the OS picker, so to test the wrong-type files (group D) either type the
    name into the picker or drag the file in.
@@ -34,8 +34,8 @@ Stdlib only; re-runnable. Several files must be large or contain control charact
 they are generated rather than hand-authored. The generated files are committed so the
 directory is usable without running the script.
 
-The guide/welcome JSON fixtures below (01–17, 20–22) were verified by running them through
-the app's own `validateGuideSchema` / `validateWelcomeSchema`; the **Expected** messages
+The guide/greeting JSON fixtures below (01–17, 20–22) were verified by running them through
+the app's own `validateGuideSchema` / `validateGreetingSchema`; the **Expected** messages
 are the validators' actual output.
 
 ## Fixtures
@@ -45,9 +45,9 @@ are the validators' actual output.
 |------|------|-----------------|----------|
 | `01-oversize-title-guide.json` | guide | Rejected — *"label exceeds 100 characters."* | Page-title length cap (100) |
 | `02-oversize-content-guide.json` | guide | Rejected — *"content exceeds 4000 characters."* | Text-body length cap (4000) |
-| `03-oversize-component-welcome.json` | welcome | Rejected — *"content exceeds 4000 characters."* | Welcome-mode field cap |
+| `03-oversize-component-greeting.json` | greeting | Rejected — *"content exceeds 4000 characters."* | Greeting-mode field cap |
 | `04-oversize-file-guide.json` | guide | Rejected — *"File is too large (max 256 KB…)"* **before** parsing | Guide 256 KB size guard (file is ~327 KB) |
-| `05-oversize-file-welcome.json` | welcome | Rejected — *"File is too large (max 64 KB…)"* **before** parsing | Welcome 64 KB size guard (file is ~79 KB) |
+| `05-oversize-file-greeting.json` | greeting | Rejected — *"File is too large (max 64 KB…)"* **before** parsing | Greeting 64 KB size guard (file is ~79 KB) |
 
 ### B. Deep nesting bombs
 | File | Mode | Expected result | Verifies |

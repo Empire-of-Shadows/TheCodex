@@ -1,7 +1,7 @@
 """
-Welcome Message Renderer
+Greeting Message Renderer
 
-Converts a validated welcome_components JSON config into a discord.ui.LayoutView.
+Converts a validated greeting_components JSON config into a discord.ui.LayoutView.
 Delegates shared component building to utils.component_builders.
 """
 
@@ -11,7 +11,7 @@ import discord
 from typing import Any, Dict, Optional
 
 from Features.NewMembers.joining_responses import joining_responses
-from Features.NewMembers.welcome_actions import encode_custom_id
+from Features.NewMembers.greeting_actions import encode_custom_id
 from utils.component_builders import (
     resolve_color,
     apply_placeholders,
@@ -30,8 +30,8 @@ _STYLE_MAP = {
 _FALLBACK_AVATAR = "https://cdn.discordapp.com/embed/avatars/0.png"
 
 
-class WelcomeRenderer:
-    """Renders a JSON welcome config into a discord.ui.LayoutView."""
+class GreetingRenderer:
+    """Renders a JSON greeting config into a discord.ui.LayoutView."""
 
     @classmethod
     def render(
@@ -67,7 +67,7 @@ class WelcomeRenderer:
         return layout_view
 
     # ─────────────────────────────────────────────────────────────────────────
-    # Welcome-specific builders
+    # Greeting-specific builders
     # ─────────────────────────────────────────────────────────────────────────
 
     @classmethod
@@ -99,7 +99,7 @@ class WelcomeRenderer:
                 emoji=opt.get("emoji"),
             ))
         return discord.ui.Select(
-            custom_id="w:_select",
+            custom_id="gr:_select",
             placeholder=sel_def.get("placeholder"),
             options=options,
             min_values=sel_def.get("min_values", 1),

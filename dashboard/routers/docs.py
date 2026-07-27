@@ -10,7 +10,8 @@ router = APIRouter(tags=["docs"])
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 _BUILDER_DIRS = {
     "guide": _PROJECT_ROOT / "markdownfiles" / "guide-builder",
-    "welcome": _PROJECT_ROOT / "markdownfiles" / "welcome-builder",
+    "greeting": _PROJECT_ROOT / "markdownfiles" / "greeting-builder",
+    "board": _PROJECT_ROOT / "markdownfiles" / "board-builder",
 }
 _TOPIC_FILES = {
     "getting-started": "README.md",

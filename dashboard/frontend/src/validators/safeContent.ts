@@ -3,7 +3,7 @@
  * schema but are "not what we intend to be uploaded".
  *
  * Mirror of utils/safe_content.py (keep the two in sync). Applied to every guide
- * and welcome payload AFTER structural validation, on both the import path and the
+ * and greeting payload AFTER structural validation, on both the import path and the
  * builder's save path.
  *
  * Rejects:

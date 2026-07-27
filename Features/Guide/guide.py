@@ -489,7 +489,7 @@ class GuideManager:
 		layout.add_item(nav_row)
 		return layout
 
-	# Legacy compatibility - used by guide_mention and welcome_actions
+	# Legacy compatibility - used by guide_mention and greeting_actions
 	async def search_content(self, query: str, guild_id: int, user_id: int = None) -> List[Dict]:
 		"""Search for content. Returns list of result dicts."""
 		await self._get_guide(guild_id)  # Ensure indexed
@@ -693,7 +693,7 @@ async def get_help_menu(
 	guild: discord.Guild = None,
 	member: Union[discord.Member, discord.User] = None,
 ) -> discord.ui.LayoutView:
-	"""Get the guide's Home page. Used by welcome_actions open_guide handler."""
+	"""Get the guide's Home page. Used by greeting_actions open_guide handler."""
 	if guild_id is None:
 		raise ValueError("guild_id is required")
 	return await guide_manager.get_home_view(

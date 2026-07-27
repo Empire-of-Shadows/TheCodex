@@ -1,13 +1,13 @@
 """
-Welcome Action Registry & Dispatcher
+Greeting Action Registry & Dispatcher
 
-Named action system for welcome message component interactions.
+Named action system for greeting message component interactions.
 Replaces freeform custom_id strings with a discoverable, multi-guild-safe registry.
 """
 
 from storage.log import get_logger
 
-logger = get_logger("WelcomeActions")
+logger = get_logger("GreetingActions")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Action Registry
@@ -24,7 +24,7 @@ VALID_ACTIONS = {
     "role_info":       {"description": "Shows server roles overview",           "params": []},
 }
 
-_PREFIX = "w"
+_PREFIX = "gr"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -34,7 +34,7 @@ _PREFIX = "w"
 def encode_custom_id(action: str, params: dict | None = None) -> str:
     """Encode an action name into a Discord custom_id string.
 
-    Format: ``w:<action_name>``
+    Format: ``gr:<action_name>``
     """
     return f"{_PREFIX}:{action}"
 
@@ -291,7 +291,7 @@ _HANDLERS = {
 # Dispatcher
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def dispatch_welcome_action(interaction) -> bool:
+async def dispatch_greeting_action(interaction) -> bool:
     """Dispatch a component interaction to the matching action handler.
 
     Returns True if handled, False if the custom_id doesn't match our prefix.
@@ -318,7 +318,7 @@ async def dispatch_welcome_action(interaction) -> bool:
     try:
         await handler(interaction, params)
     except Exception as e:
-        logger.error(f"Error handling welcome action '{action_name}': {e}", exc_info=True)
+        logger.error(f"Error handling greeting action '{action_name}': {e}", exc_info=True)
         if not interaction.response.is_done():
             await interaction.response.send_message("Something went wrong. Please try again.", ephemeral=True)
 

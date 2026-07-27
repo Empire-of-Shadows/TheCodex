@@ -1,4 +1,4 @@
-# Welcome Builder - Placeholders
+# Greeting Builder - Placeholders
 
 Placeholders are short words in curly braces that the bot swaps out for real
 information about the person who just joined. Type them into your text exactly as
@@ -40,7 +40,7 @@ just sit there as literal text.
   moment. It is a nice touch, not something to build a sentence around.
 - **`{random_greeting}` already includes a mention** of the new member, so you do
   not need to add `{member}` next to it. It pulls from a large pool of themed
-  one-liners, so the welcome channel does not read the same every time.
+  one-liners, so the greeting channel does not read the same every time.
 - Preview mode fills placeholders with sample values, so you can see how long the
   finished line actually is.
 
