@@ -23,6 +23,7 @@ from Features.Board.board_schema import validate_board_schema
 from Features.Board.board_store import board_store
 from storage.log import get_logger
 from storage.settings.config_manager import get_config
+from utils.setup_notice import permission_notice_embed, setup_notice_embed
 
 logger = get_logger("Board")
 
@@ -126,20 +127,23 @@ class BoardGroup(commands.GroupCog, name="board", description="Info board comman
         doc = await board_store.get_document(interaction.guild.id)
         board_data = (doc or {}).get("board_data")
 
+        if not board_data:
+            embed = await setup_notice_embed(
+                interaction.guild,
+                what="an info board",
+                path="Info Board -> Board Builder",
+                viewer=interaction.user if isinstance(interaction.user, discord.Member) else None,
+                detail="Upload a JSON layout there, or build one in the dashboard.",
+                title="Info Board Status",
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
         embed = discord.Embed(
             title="Info Board Status",
             color=discord.Color.blue(),
             timestamp=discord.utils.utcnow(),
         )
-
-        if not board_data:
-            embed.description = (
-                "No board configured yet. Build one in the dashboard, or upload a "
-                "JSON layout from **/admin -> Info Board -> Board Builder**."
-            )
-            embed.color = discord.Color.orange()
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
 
         valid, msg = validate_board_schema(board_data)
         embed.add_field(
@@ -188,13 +192,8 @@ class BoardGroup(commands.GroupCog, name="board", description="Info board comman
         """Unified error handler for the board command group."""
         try:
             if isinstance(error, app_commands.CheckFailure):
-                embed = discord.Embed(
-                    title="Permission Denied",
-                    description=(
-                        "You don't have permission to manage the info board.\n"
-                        "Required: `Administrator` permission or a configured staff role."
-                    ),
-                    color=discord.Color.red(),
+                embed = await permission_notice_embed(
+                    interaction.guild, action="manage the info board"
                 )
             elif isinstance(error, app_commands.NoPrivateMessage):
                 embed = discord.Embed(

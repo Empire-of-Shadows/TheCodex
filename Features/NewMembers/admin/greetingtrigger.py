@@ -7,6 +7,7 @@ from Features.NewMembers.joining import guild_handler
 from Features.NewMembers.greeting_schema import validate_greeting_schema
 from storage.log import get_logger
 from storage.settings.config_manager import get_config
+from utils.setup_notice import permission_notice_embed, send_setup_notice
 
 logger = get_logger("GreetingTrigger")
 
@@ -49,6 +50,24 @@ class GreetingGroup(commands.GroupCog, name="greeting", description="Greeting sy
         self.handler = guild_handler
         logger.info("GreetingGroup initialized")
 
+    async def cog_app_command_error(
+        self, interaction: discord.Interaction, error: app_commands.AppCommandError
+    ):
+        """Explain a denied greeting command, including how the tier is granted."""
+        if not isinstance(error, app_commands.CheckFailure):
+            raise error
+
+        embed = await permission_notice_embed(
+            interaction.guild, action="use the greeting commands"
+        )
+        try:
+            if interaction.response.is_done():
+                await interaction.followup.send(embed=embed, ephemeral=True)
+            else:
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+        except discord.HTTPException as e:
+            logger.debug(f"Could not deliver greeting permission notice: {e}")
+
     @app_commands.command(name="test", description="Test the greeting message system for a member (default: you)")
     @app_commands.describe(member="Member to test the greeting message for")
     @has_greeting_permissions_app()
@@ -68,14 +87,12 @@ class GreetingGroup(commands.GroupCog, name="greeting", description="Greeting sy
         greeting_components = guild_config.new_members.get("greeting_components")
 
         if not greeting_components:
-            embed = discord.Embed(
-                title="❌ Greeting Config Validation Failed",
-                description="No greeting components configured.\nUse the greeting builder to create a config first.",
-                color=discord.Color.red(),
-                timestamp=discord.utils.utcnow()
+            await send_setup_notice(
+                interaction,
+                what="a greeting message",
+                path="New Members -> Greeting Message Builder",
+                detail="There is no greeting to test yet.",
             )
-            embed.set_footer(text=f"Tested by {interaction.user}", icon_url=interaction.user.display_avatar.url)
-            await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
         valid, msg = validate_greeting_schema(greeting_components)
@@ -144,7 +161,11 @@ class GreetingGroup(commands.GroupCog, name="greeting", description="Greeting sy
 
         embed.add_field(
             name="Greeting Channel",
-            value=greeting_channel.mention if isinstance(greeting_channel, (discord.TextChannel, discord.Thread)) else "❌ Not configured",
+            value=(
+                greeting_channel.mention
+                if isinstance(greeting_channel, (discord.TextChannel, discord.Thread))
+                else "❌ Not configured\n`/admin panel` -> **New Members -> Greeting Channel**"
+            ),
             inline=True
         )
 

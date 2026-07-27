@@ -14,6 +14,7 @@ from startup.bot import s
 from storage.log import get_logger, PerformanceLogger
 from storage.settings.collections import db_manager
 from storage.settings.config_manager import get_config, get_guild_config_manager
+from utils.setup_notice import send_setup_notice
 
 # Load environment variables
 load_dotenv()
@@ -345,6 +346,18 @@ class WYRCommandGroup(app_commands.Group):
 
                 if not top_users:
                     logger.info("No WYR voting data available for leaderboard")
+                    # No votes on a server with no WYR channel means questions were
+                    # never switched on, so point at setup instead of implying
+                    # nobody has voted.
+                    guild_config = await get_config(interaction.guild_id)
+                    if not guild_config.wyr.get("channel_id"):
+                        await send_setup_notice(
+                            interaction,
+                            what="Would You Rather",
+                            path="WYR Settings -> WYR Channel",
+                            detail="No questions have been posted, so there is nothing to rank yet.",
+                        )
+                        return
                     await interaction.response.send_message("No voting data available yet!")
                     return
 

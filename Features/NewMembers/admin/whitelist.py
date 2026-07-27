@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from storage.settings.collections import db_manager
 from storage.log import get_logger
 from storage.settings.config_manager import get_config
+from utils.setup_notice import permission_notice_embed
 
 logger = get_logger("WhitelistManager")
 
@@ -141,6 +142,35 @@ class WhitelistGroup(commands.GroupCog, name="whitelist", description="Manage me
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         logger.info("WhitelistGroup initialized")
+
+    async def cog_app_command_error(
+        self, interaction: discord.Interaction, error: app_commands.AppCommandError
+    ):
+        """Explain a denied whitelist command instead of a bare "unavailable".
+
+        Mutations are admin-tier and reads are admin-or-mod, so the notice names
+        which one was missing and where the tier is granted.
+        """
+        if not isinstance(error, app_commands.CheckFailure):
+            raise error
+
+        command = getattr(interaction.command, "name", "")
+        admin_only = command in ("add", "remove")
+        embed = await permission_notice_embed(
+            interaction.guild,
+            action=(
+                "change the screening whitelist" if admin_only
+                else "view the screening whitelist"
+            ),
+            admin_only=admin_only,
+        )
+        try:
+            if interaction.response.is_done():
+                await interaction.followup.send(embed=embed, ephemeral=True)
+            else:
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+        except discord.HTTPException as e:
+            logger.debug(f"Could not deliver whitelist permission notice: {e}")
 
     async def _ensure_whitelist_role(self, guild: discord.Guild) -> discord.Role:
         """Ensure the whitelist role exists, create if needed."""

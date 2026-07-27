@@ -27,6 +27,7 @@ import discord
 from storage.log import get_logger
 from storage.settings.collections import db_manager
 from storage.settings.config_manager import get_config
+from utils.setup_notice import setup_notice_text
 
 logger = get_logger("WYRNotify")
 
@@ -41,10 +42,17 @@ _PROMPT_COOLDOWN = timedelta(hours=20)
 SUBSCRIBE_LABEL = "🔔 Notify Me"
 UNSUBSCRIBE_LABEL = "🔕 Turn Off Pings"
 
-_NOT_AVAILABLE = (
-    "WYR notifications are not set up in this server right now. "
-    "A server admin can turn them on with the **WYR Ping Role** setting."
-)
+async def _not_available(
+    guild: discord.Guild | None,
+    viewer: discord.Member | None = None,
+) -> str:
+    """The "notifications aren't available here" text, with setup directions."""
+    return await setup_notice_text(
+        guild,
+        what="Would You Rather notifications",
+        path="WYR Settings -> WYR Ping Role",
+        viewer=viewer,
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -240,7 +248,7 @@ async def apply_subscription(interaction: discord.Interaction, *, subscribe: boo
 
     role = await get_notify_role(guild)
     if role is None:
-        await _reply(interaction, _NOT_AVAILABLE, None)
+        await _reply(interaction, await _not_available(guild, member), None)
         return
 
     already_has = role in member.roles
@@ -374,7 +382,9 @@ class NotifyButton(discord.ui.Button):
 
         role = await get_notify_role(guild)
         if role is None:
-            await interaction.response.send_message(_NOT_AVAILABLE, ephemeral=True)
+            await interaction.response.send_message(
+                await _not_available(guild, member), ephemeral=True
+            )
             return
 
         if role in member.roles:
@@ -390,9 +400,10 @@ class NotifyButton(discord.ui.Button):
 
 async def build_status_view(member: discord.Member) -> tuple[str, discord.ui.View | None]:
     """Message and controls describing where a member stands. Used by /wyr notify."""
-    role = await get_notify_role(getattr(member, "guild", None))
+    guild = getattr(member, "guild", None)
+    role = await get_notify_role(guild)
     if role is None:
-        return _NOT_AVAILABLE, None
+        return await _not_available(guild, member), None
 
     subscribed = role in member.roles
     if subscribed:

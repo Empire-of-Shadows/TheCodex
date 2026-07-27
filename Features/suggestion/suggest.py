@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from storage.log import get_logger, log_context, PerformanceLogger
 from storage.settings.config_manager import get_config
 from storage.settings.collections import db_manager
+from utils.setup_notice import send_setup_notice
 
 logger = get_logger("Suggestion")
 
@@ -854,6 +855,17 @@ class SuggestionCog(commands.Cog):
 
         if not results:
             logger.info(f"Search returned no results for user {interaction.user.id}")
+            # An empty result on a server that never set a channel is a setup gap,
+            # not a failed search - say which one it is.
+            guild_config = await get_config(interaction.guild.id)
+            if not guild_config.suggestions["channel_id"]:
+                await send_setup_notice(
+                    interaction,
+                    what="suggestions",
+                    path="Suggestions -> Suggestion Channel",
+                    detail="There is nothing to search yet.",
+                )
+                return
             await interaction.followup.send("No suggestions found matching your criteria.")
             return
 
@@ -949,6 +961,11 @@ class SuggestionCog(commands.Cog):
                 )
                 return
 
+            # Fail early rather than after the duplicate-check dialog, so nobody
+            # works through "Submit Anyway" only to learn there is nowhere to post.
+            if await self._require_suggestions_channel(interaction) is None:
+                return
+
             # Check for similar suggestions within this guild
             similar_suggestions = await self.db_manager.search_suggestions(suggestion_text[:50], limit=3, guild_id=interaction.guild.id)
             if similar_suggestions:
@@ -985,6 +1002,32 @@ class SuggestionCog(commands.Cog):
                 logger.info(f"No similar suggestions found for user {user.id}'s submission, proceeding directly")
                 await self._create_suggestion_post(interaction, suggestion_text, anonymous, category)
 
+    async def _require_suggestions_channel(self, interaction: discord.Interaction):
+        """Return the guild's suggestions channel, or None after telling the member why not.
+
+        Checked before a suggestion is stored so an unconfigured server never
+        accumulates suggestions that were never posted anywhere.
+        """
+        guild_config = await get_config(interaction.guild.id)
+        channel = self.bot.get_channel(guild_config.suggestions["channel_id"])
+        if channel:
+            return channel
+
+        logger.warning(
+            f"Suggestion by {interaction.user.id} blocked - no usable suggestions "
+            f"channel in guild {interaction.guild.id}"
+        )
+        await send_setup_notice(
+            interaction,
+            what="a suggestions channel",
+            path="Suggestions -> Suggestion Channel",
+            detail=(
+                "Your suggestion was not submitted, because there is nowhere to post "
+                "it yet. Nothing was lost - send it again once the channel is set."
+            ),
+        )
+        return None
+
     async def _create_suggestion_post(self, interaction: discord.Interaction,
                                       suggestion_text: str, anonymous: bool, category: str):
         """Create the actual suggestion post"""
@@ -995,6 +1038,13 @@ class SuggestionCog(commands.Cog):
             try:
                 # Get per-guild config for channel IDs
                 guild_config = await get_config(interaction.guild.id)
+
+                # Resolve the destination BEFORE writing anything. Creating the
+                # record first would leave an orphaned suggestion in the database
+                # with no post to vote on whenever the channel is unset or gone.
+                suggestions_channel = await self._require_suggestions_channel(interaction)
+                if suggestions_channel is None:
+                    return
 
                 # Create suggestion in database
                 suggestion_id = await self.db_manager.create_suggestion(
@@ -1048,17 +1098,9 @@ class SuggestionCog(commands.Cog):
                 admin_embed.add_field(name="User ID", value=f"{user.id}", inline=False)
                 admin_embed.set_footer(text=f"Suggested by {user}", icon_url=user_avatar_url)
 
-                # Get channels from guild config
-                suggestions_channel = self.bot.get_channel(guild_config.suggestions["channel_id"])
+                # Optional mirror of the suggestion for staff; absent on a server
+                # that has not set an admin channel.
                 admin_channel = self.bot.get_channel(guild_config.server["admin_channel_id"])
-
-                if not suggestions_channel:
-                    logger.error("Suggestions channel not found")
-                    await interaction.followup.send(
-                        "❌ Suggestions channel not available.",
-                        ephemeral=True
-                    )
-                    return
 
                 # Create suggestion view
                 view = SuggestionView(suggestion_id, self.db_manager)

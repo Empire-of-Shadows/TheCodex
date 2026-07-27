@@ -1,5 +1,36 @@
 # Changelog
 
+## [Unreleased] - 2026-07-27
+
+### Changed
+- **Commands now tell you how to switch a feature on instead of looking broken.** Before a server
+  is set up, things like `/wyr notify`, `/suggest`, `/drop`, `/embed create`, `/board info` and
+  mentioning the bot for the guide all came back with a dead end - "not available", "no colors",
+  or just an empty list that looked like nothing had happened. Each of them now says plainly that
+  the feature has not been set up yet and names the exact place to do it, for example
+  `/admin panel` -> **Suggestions -> Suggestion Channel**.
+- Those messages also say **who** can do it. On a brand new server the only people who can open the
+  admin panel are the server owner and anyone with Manage Server, so the notice names the owner
+  rather than telling everyone else to run a command they cannot use. The owner is pointed at
+  **Role Configuration -> Panel Access Roles** so they can hand panel access to their staff and
+  stop being the only person who can set anything up.
+- If you already have panel access, the same messages address you directly and tell you that you
+  can fix it yourself right now.
+- Being told "you can't use this" is more useful too. `/board`, `/whitelist` and `/greeting`
+  previously answered with a bare "Command Unavailable". They now explain which staff role is
+  needed, and if no staff roles exist yet they say so, instead of implying you were denied.
+- An empty result no longer pretends to be an answer. `/drop` with no drops channel, an empty
+  `/wyr leaderboard` on a server that never turned WYR on, and `/suggest-search` where suggestions
+  were never set up now say the feature is not switched on rather than "nothing found".
+
+### Fixed
+- Submitting a suggestion on a server with no suggestions channel used to save your suggestion and
+  then fail, leaving it stored with nowhere to vote on it. The bot now checks there is somewhere to
+  post **before** taking your suggestion, and tells you to send it again once the channel is set,
+  so nothing gets quietly swallowed.
+- You also find out about a missing suggestions channel straight away, rather than after working
+  through the "similar suggestions found" prompt.
+
 ## [Unreleased] - 2026-07-26
 
 ### Added

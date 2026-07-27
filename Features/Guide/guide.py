@@ -23,6 +23,7 @@ from Features.Guide.guide_actions import (
 	decode_select_value,
 	CUSTOM_ID_SEARCH,
 )
+from utils.setup_notice import setup_notice_text
 
 logger = get_logger("Guide")
 
@@ -353,10 +354,18 @@ class GuideManager:
 		guide_data = await self._get_guide(guild_id)
 		pages = guide_data.get("pages", [])
 		if not pages:
-			# No pages authored yet - show a friendly empty state.
+			# No pages authored yet - show a friendly empty state, plus directions
+			# so whoever triggered it knows the guide is unwritten, not broken.
+			hint = await setup_notice_text(
+				guild,
+				what="a server guide",
+				path="Guide -> Guide JSON Builder",
+				viewer=member if isinstance(member, discord.Member) else None,
+			)
 			return GuideRenderer.render_empty(
 				guide_data,
 				interaction=interaction, guild=guild, member=member,
+				setup_hint=hint,
 			)
 
 		self.navigation.reset(guild_id, user_id)

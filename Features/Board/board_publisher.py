@@ -88,8 +88,9 @@ async def load_valid_board(guild_id: int) -> tuple[Optional[Dict[str, Any]], Opt
     board_data = await board_store.get_board(guild_id)
     if not board_data:
         return None, (
-            "This server has no info board yet. Build one in the dashboard, or "
-            "upload a JSON layout from the Board Builder."
+            "This server has no info board yet.\n\n"
+            "**Set it up:** `/admin panel` -> **Info Board -> Board Builder** and "
+            "upload a JSON layout, or build one in the dashboard."
         )
 
     valid, msg = validate_board_schema(board_data)

@@ -15,6 +15,7 @@ from admin.actions.drops_actions import DropsActions
 from storage.settings.config_manager import get_config
 from storage.settings.collections import db_manager
 from storage.log import get_logger
+from utils.setup_notice import send_setup_notice, setup_notice_text
 
 from .drop_views import (
     build_drops_browse_view,
@@ -64,6 +65,19 @@ class DropCog(commands.Cog):
             start = browse_page[0] * DROPS_PER_PAGE
             page_drops = sent[start : start + DROPS_PER_PAGE]
 
+            # An empty list on a server with no drops channel means drops were
+            # never turned on, not that none were released. Explain which.
+            setup_hint = ""
+            if not page_drops:
+                guild_config = await get_config(guild_id)
+                if not guild_config.drops.get("channel_id"):
+                    setup_hint = await setup_notice_text(
+                        interaction.guild,
+                        what="Prime Gaming drops",
+                        path="Updates & Drops -> Drops Channel",
+                        viewer=interaction.user if isinstance(interaction.user, discord.Member) else None,
+                    )
+
             layout = build_drops_browse_view(
                 drops=page_drops,
                 page=browse_page[0],
@@ -73,6 +87,7 @@ class DropCog(commands.Cog):
                 on_next=on_browse_next,
                 on_test=on_test if is_manager else None,
                 on_unsent=on_show_unsent if is_manager else None,
+                setup_hint=setup_hint,
             )
 
             if target_interaction:
@@ -101,8 +116,11 @@ class DropCog(commands.Cog):
 
             guild_config = await get_config(guild_id)
             if not guild_config.drops.get("channel_id"):
-                await btn_interaction.followup.send(
-                    "No drops channel configured for this server.", ephemeral=True
+                await send_setup_notice(
+                    btn_interaction,
+                    what="a drops channel",
+                    path="Updates & Drops -> Drops Channel",
+                    detail="There is nowhere to post drops yet.",
                 )
                 return
 

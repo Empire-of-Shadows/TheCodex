@@ -154,16 +154,24 @@ class GuideRenderer:
 		interaction: Optional[discord.Interaction] = None,
 		guild: Optional[discord.Guild] = None,
 		member: Optional[Union[discord.Member, discord.User]] = None,
+		setup_hint: str = "",
 	) -> discord.ui.LayoutView:
-		"""Render a friendly placeholder when the guide has no pages yet."""
+		"""Render a friendly placeholder when the guide has no pages yet.
+
+		``setup_hint`` carries the "here is how to fix this" text, built by the
+		caller (it needs an async config read, which this renderer cannot do).
+		"""
 		layout = discord.ui.LayoutView(timeout=600.0)
 
 		accent_color = resolve_color(guide_data.get("accent_color", "#4D0EB3"))
 
 		container = discord.ui.Container(
 			discord.ui.TextDisplay("## 📖 Server Guide"),
-			discord.ui.TextDisplay("This guide doesn't have any pages yet. Check back soon!"),
+			discord.ui.TextDisplay("This guide doesn't have any pages yet."),
 		)
+		if setup_hint:
+			container.add_item(discord.ui.Separator())
+			container.add_item(discord.ui.TextDisplay(setup_hint))
 		container.accent_colour = accent_color
 		layout.add_item(container)
 

@@ -11,6 +11,7 @@ from Features.ce_utilities.helpers.embed import EditEmbedModal
 from Features.ce_utilities.helpers.embed_modal import EmbedModal, get_max_description_length, get_allowed_colors, get_default_color
 from storage.log import get_logger, log_context, log_performance
 from storage.settings.config_manager import get_config
+from utils.setup_notice import send_setup_notice, setup_notice_embed
 
 logger = get_logger("CreateEmbed")
 
@@ -108,9 +109,18 @@ async def _build_colors_embed(guild_id: int, user_roles: Set[int]) -> discord.Em
     return embed
 
 
-async def _build_features_embed(guild_id: int, user_roles: Set[int]) -> discord.Embed:
+async def _build_features_embed(
+    guild_id: int,
+    user_roles: Set[int],
+    *,
+    guild: Optional[discord.Guild] = None,
+    viewer: Optional[discord.Member] = None,
+) -> discord.Embed:
     """
     Build an embed showing available features for the user (per-guild).
+
+    guild/viewer are only needed for the "nothing configured yet" branch, which
+    renders a setup notice instead of a feature list.
     """
     feature_access = await embed_config.get_feature_access(guild_id)
     user_features = {
@@ -140,9 +150,26 @@ async def _build_features_embed(guild_id: int, user_roles: Set[int]) -> discord.
 
     if features_text:
         embed.description += "\n\n" + "\n".join(features_text)
-    else:
-        embed.description = "No features available for your role."
+        embed.set_footer(text="Upgrade your role to unlock more features!")
+        return embed
 
+    # Nothing available: on a configured server that means "your role is too low",
+    # but on a fresh one it means nobody has mapped roles to tiers yet. Say so and
+    # point at the panel rather than telling the member to chase a role upgrade.
+    if not feature_access:
+        return await setup_notice_embed(
+            guild,
+            what="embed features",
+            path="Embed Settings -> Feature Access",
+            viewer=viewer,
+            detail=(
+                "Nothing has been assigned to any role yet, so no one can use the "
+                "embed builder."
+            ),
+            title="Available Features",
+        )
+
+    embed.description = "No features available for your role."
     embed.set_footer(text="Upgrade your role to unlock more features!")
     return embed
 
@@ -165,6 +192,37 @@ class EmbedGroup(commands.GroupCog, name="embed", description="Create and edit e
     def cog_unload(self) -> None:
         logger.info("Unloading EmbedGroup cog")
         self.cleanup_cache.cancel()
+
+    async def cog_app_command_error(
+        self, interaction: discord.Interaction, error: app_commands.AppCommandError
+    ):
+        """Turn a failed embed-permission check into a message that explains the fix.
+
+        Without this the global handler answers a bare "Command Unavailable", which
+        on a fresh server is misleading - nothing is wrong, embed access simply has
+        not been handed to any role yet.
+        """
+        if not isinstance(error, app_commands.CheckFailure):
+            raise error
+
+        embed = await setup_notice_embed(
+            interaction.guild,
+            what="embed access for your roles",
+            path="Embed Settings -> Role Tier Mapping",
+            viewer=interaction.user if isinstance(interaction.user, discord.Member) else None,
+            detail=(
+                "Embed commands are opened up per role. Yours has not been given "
+                "access yet."
+            ),
+            title="Embed Access Required",
+        )
+        try:
+            if interaction.response.is_done():
+                await interaction.followup.send(embed=embed, ephemeral=True)
+            else:
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+        except discord.HTTPException as e:
+            logger.debug(f"Could not deliver embed permission notice: {e}")
 
     @tasks.loop(minutes=10)
     async def cleanup_cache(self):
@@ -215,8 +273,15 @@ class EmbedGroup(commands.GroupCog, name="embed", description="Create and edit e
             try:
                 _embed_config = await get_config(guild_id)
                 if not _embed_config.embed.get("enabled", False):
-                    await interaction.response.send_message(
-                        "Embed creation is not enabled on this server.", ephemeral=True
+                    await send_setup_notice(
+                        interaction,
+                        what="embed creation",
+                        path="Embed Settings -> Role Tier Mapping",
+                        detail=(
+                            "Embeds unlock once at least one role is mapped to a tier, "
+                            "which is what decides who can build embeds and how long "
+                            "their descriptions can be."
+                        ),
                     )
                     return
 
@@ -253,7 +318,17 @@ class EmbedGroup(commands.GroupCog, name="embed", description="Create and edit e
 
             allowed_colors = await get_allowed_colors(guild_id, user_roles)
             if not allowed_colors:
-                await interaction.response.send_message("❌ You do not have access to any colors.", ephemeral=True)
+                await send_setup_notice(
+                    interaction,
+                    what="embed colors",
+                    path="Embed Settings -> Color Tiers",
+                    detail=(
+                        "No colors are available to your roles yet. Colors are handed "
+                        "out per tier, so a tier needs roles mapped to it and a palette "
+                        "assigned."
+                    ),
+                    title="No Colors Available",
+                )
                 return
 
             embed = await _build_colors_embed(guild_id, user_roles)
@@ -271,7 +346,9 @@ class EmbedGroup(commands.GroupCog, name="embed", description="Create and edit e
             user_roles = {role.id for role in interaction.user.roles}
             guild_id = interaction.guild.id
 
-            embed = await _build_features_embed(guild_id, user_roles)
+            embed = await _build_features_embed(
+                guild_id, user_roles, guild=interaction.guild, viewer=interaction.user
+            )
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
     # /embed edit

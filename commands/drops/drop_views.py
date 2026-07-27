@@ -67,15 +67,21 @@ def build_drops_browse_view(
     on_next: Callable[[discord.Interaction], Awaitable[None]],
     on_test: Callable[[discord.Interaction], Awaitable[None]] | None = None,
     on_unsent: Callable[[discord.Interaction], Awaitable[None]] | None = None,
+    setup_hint: str = "",
 ) -> discord.ui.LayoutView:
-    """Build the main browse panel with paginated sent drops."""
+    """Build the main browse panel with paginated sent drops.
+
+    ``setup_hint`` is shown in place of the bare empty state when the server has
+    no drops channel yet, so "nothing here" reads as "not switched on" rather
+    than "nothing was released".
+    """
     unique_id = create_unique_id()
     builder = AdminLayoutBuilder()
 
     builder.add_header("## Prime Gaming Drops")
 
     if not drops:
-        builder.add_text("No sent drops found.")
+        builder.add_text(setup_hint or "No sent drops found.")
     else:
         entries = []
         for drop in drops:
