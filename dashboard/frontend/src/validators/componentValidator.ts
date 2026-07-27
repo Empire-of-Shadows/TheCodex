@@ -1,9 +1,10 @@
 /**
  * Client-side component validators - port of utils/component_validators.py
  *
- * Error messages use human-readable paths:
- *   - Arrow (→) separates path segments: "Container #1 → Text #2"
- *   - Dash (-) separates path from error: "Button #1 - label must be a non-empty string."
+ * Error messages use human-readable paths, in plain ASCII so they read the same
+ * everywhere and match the Python original character for character:
+ *   - "->" separates path segments: "Container #1 -> Text #2"
+ *   - " - " separates the path from the error: "Button #1 - label must be a non-empty string."
  */
 
 export interface ValidationResult {
@@ -155,7 +156,7 @@ export function validateStringSelect(
     return { valid: false, error: `${prefix} - options has ${options.length} items; max is 25.` };
   }
   for (let i = 0; i < options.length; i++) {
-    const optPfx = `${prefix} → ${optionLabel(options[i], i)}`;
+    const optPfx = `${prefix} -> ${optionLabel(options[i], i)}`;
     const r = optionValidator
       ? optionValidator(options[i] as Record<string, unknown>, optPfx)
       : validateSelectOptionStructure(options[i], optPfx);
@@ -186,7 +187,7 @@ export function validateSection(
   }
   for (let i = 0; i < content.length; i++) {
     const item = content[i] as Record<string, unknown>;
-    const itemPrefix = `${prefix} → Text #${i + 1}`;
+    const itemPrefix = `${prefix} -> Text #${i + 1}`;
     if (typeof item !== "object" || item === null || item.type !== "text") {
       return { valid: false, error: `${itemPrefix} - must be a text component.` };
     }
@@ -198,10 +199,10 @@ export function validateSection(
     return { valid: false, error: `${prefix} - accessory is required.` };
   }
   if (typeof accessory !== "object") {
-    return { valid: false, error: `${prefix} → Accessory - must be an object.` };
+    return { valid: false, error: `${prefix} -> Accessory - must be an object.` };
   }
   const acc = accessory as Record<string, unknown>;
-  const accPrefix = `${prefix} → Accessory`;
+  const accPrefix = `${prefix} -> Accessory`;
   if (acc.type === "thumbnail") return validateThumbnail(acc, accPrefix);
   if (acc.type === "button") {
     return actionValidator
@@ -220,13 +221,16 @@ export function validateActionRow(
   const hasButtons = "buttons" in comp;
   const hasSelect = "select" in comp;
   if (hasButtons && hasSelect) {
-    return { valid: false, error: `${prefix} - cannot have both "buttons" and "select".` };
+    return {
+      valid: false,
+      error: `${prefix} - cannot have both "buttons" and "select"; they are mutually exclusive.`,
+    };
   }
   if (!hasButtons && !hasSelect) {
     return { valid: false, error: `${prefix} - must have either "buttons" or "select".` };
   }
   if (hasSelect) {
-    const selectPrefix = `${prefix} → Select menu`;
+    const selectPrefix = `${prefix} -> Select menu`;
     return selectValidator
       ? selectValidator(comp.select as Record<string, unknown>, selectPrefix)
       : validateStringSelect(comp.select, selectPrefix);
@@ -239,7 +243,7 @@ export function validateActionRow(
     return { valid: false, error: `${prefix} - buttons has ${buttons.length} items; max is 5.` };
   }
   for (let i = 0; i < buttons.length; i++) {
-    const btnPfx = `${prefix} → ${buttonLabel(buttons[i], i)}`;
+    const btnPfx = `${prefix} -> ${buttonLabel(buttons[i], i)}`;
     const r = actionValidator
       ? actionValidator(buttons[i] as Record<string, unknown>, btnPfx)
       : validateButtonStructure(buttons[i] as Record<string, unknown>, btnPfx);
@@ -258,7 +262,7 @@ export function validateMediaGallery(comp: Record<string, unknown>, prefix: stri
   }
   for (let i = 0; i < items.length; i++) {
     const item = items[i] as Record<string, unknown>;
-    const itemPrefix = `${prefix} → Image #${i + 1}`;
+    const itemPrefix = `${prefix} -> Image #${i + 1}`;
     if (typeof item !== "object" || item === null) {
       return { valid: false, error: `${itemPrefix} - must be an object.` };
     }
@@ -299,7 +303,7 @@ export function validateContainer(
   const allowed = new Set(["separator", "text", "section", "action_row", "media_gallery"]);
   for (let i = 0; i < components.length; i++) {
     const child = components[i] as Record<string, unknown>;
-    const childPrefix = `${prefix} → ${componentLabel(child, i)}`;
+    const childPrefix = `${prefix} -> ${componentLabel(child, i)}`;
     if (typeof child !== "object" || child === null) {
       return { valid: false, error: `${childPrefix} - must be an object.` };
     }

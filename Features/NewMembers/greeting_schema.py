@@ -76,47 +76,47 @@ def validate_greeting_schema(data: Any) -> Tuple[bool, str]:
 def _validate_greeting_button(comp: dict, prefix: str) -> Tuple[bool, str]:
     """Validate a button with greeting-specific action semantics."""
     if not isinstance(comp, dict):
-        return False, f"{prefix} \u2014 must be an object."
+        return False, f"{prefix} - must be an object."
     style = comp.get("style")
     if style not in _VALID_BUTTON_STYLES:
         return False, (
-            f"{prefix} \u2014 style \"{style}\" is invalid. "
+            f"{prefix} - style \"{style}\" is invalid. "
             f"Valid styles: {', '.join(sorted(_VALID_BUTTON_STYLES))}."
         )
     label = comp.get("label")
     if not isinstance(label, str) or not label:
-        return False, f"{prefix} \u2014 label must be a non-empty string."
+        return False, f"{prefix} - label must be a non-empty string."
     if len(label) > 80:
-        return False, f"{prefix} \u2014 label exceeds 80 characters."
+        return False, f"{prefix} - label exceeds 80 characters."
 
     if style == "link":
         url = comp.get("url")
         if not isinstance(url, str) or not url.startswith("https://"):
-            return False, f"{prefix} \u2014 url is required for link buttons and must start with https://."
+            return False, f"{prefix} - url is required for link buttons and must start with https://."
         if "action" in comp:
-            return False, f"{prefix} \u2014 link buttons must not have \"action\"."
+            return False, f"{prefix} - link buttons must not have \"action\"."
         if "custom_id" in comp:
-            return False, f"{prefix} \u2014 link buttons must not have \"custom_id\"."
+            return False, f"{prefix} - link buttons must not have \"custom_id\"."
     else:
         # Non-link buttons use named actions
         if "custom_id" in comp:
             return False, (
-                f"{prefix} \u2014 has \"custom_id\" \u2014 use \"action\" instead. "
+                f"{prefix} - has \"custom_id\" - use \"action\" instead. "
                 f"Valid actions: {', '.join(sorted(VALID_ACTIONS))}."
             )
         action = comp.get("action")
         if not isinstance(action, str) or not action:
-            return False, f"{prefix} \u2014 action is required for non-link buttons."
+            return False, f"{prefix} - action is required for non-link buttons."
         if action not in VALID_ACTIONS:
             return False, (
-                f"{prefix} \u2014 action \"{action}\" is not a valid action. "
+                f"{prefix} - action \"{action}\" is not a valid action. "
                 f"Valid actions: {', '.join(sorted(VALID_ACTIONS))}."
             )
         encoded = encode_custom_id(action, comp.get("params"))
         if len(encoded) > 100:
-            return False, f"{prefix} \u2014 encoded custom_id exceeds 100 characters."
+            return False, f"{prefix} - encoded custom_id exceeds 100 characters."
         if "url" in comp:
-            return False, f"{prefix} \u2014 non-link buttons must not have \"url\"."
+            return False, f"{prefix} - non-link buttons must not have \"url\"."
 
     return True, ""
 
@@ -129,32 +129,32 @@ def _validate_greeting_select(comp: Any, prefix: str) -> Tuple[bool, str]:
 
 def _validate_greeting_select_option(opt: Any, prefix: str) -> Tuple[bool, str]:
     if not isinstance(opt, dict):
-        return False, f"{prefix} \u2014 must be an object."
+        return False, f"{prefix} - must be an object."
 
     label = opt.get("label")
     if not isinstance(label, str) or not label:
-        return False, f"{prefix} \u2014 label must be a non-empty string."
+        return False, f"{prefix} - label must be a non-empty string."
     if len(label) > 100:
-        return False, f"{prefix} \u2014 label exceeds 100 characters."
+        return False, f"{prefix} - label exceeds 100 characters."
 
     action = opt.get("action")
     if not isinstance(action, str) or not action:
-        return False, f"{prefix} \u2014 action is required."
+        return False, f"{prefix} - action is required."
     if action not in VALID_ACTIONS:
         return False, (
-            f"{prefix} \u2014 action \"{action}\" is not a valid action. "
+            f"{prefix} - action \"{action}\" is not a valid action. "
             f"Valid actions: {', '.join(sorted(VALID_ACTIONS))}."
         )
 
     description = opt.get("description")
     if description is not None:
         if not isinstance(description, str):
-            return False, f"{prefix} \u2014 description must be a string."
+            return False, f"{prefix} - description must be a string."
         if len(description) > 100:
-            return False, f"{prefix} \u2014 description exceeds 100 characters."
+            return False, f"{prefix} - description exceeds 100 characters."
 
     emoji = opt.get("emoji")
     if emoji is not None and not isinstance(emoji, str):
-        return False, f"{prefix} \u2014 emoji must be a string."
+        return False, f"{prefix} - emoji must be a string."
 
     return True, ""

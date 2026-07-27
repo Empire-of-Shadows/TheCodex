@@ -2,7 +2,7 @@
  * Guide schema validator - port of Features/Guide/guide_schema.py
  *
  * Error messages use human-readable paths:
- *   Page "Getting Started" → Action Row #1 → Button "Click Here" - target is required for navigate buttons.
+ *   Page "Getting Started" -> Action Row #1 -> Button "Click Here" - target is required for navigate buttons.
  */
 
 import {
@@ -81,7 +81,7 @@ function validatePages(
   }
   for (let i = 0; i < pages.length; i++) {
     const pageName = pageLabel(pages[i], i);
-    const pagePrefix = prefix ? `${prefix} → ${pageName}` : pageName;
+    const pagePrefix = prefix ? `${prefix} -> ${pageName}` : pageName;
     const r = validatePage(pages[i], pagePrefix, allIds, navigateTargets, depth);
     if (!r.valid) return r;
   }
@@ -152,7 +152,7 @@ function validatePage(
       const actionVal: ActionValidator = (comp, pfx) => validateGuideButton(comp, pfx, navigateTargets);
       const selectVal: ActionValidator = (comp, pfx) => validateGuideSelect(comp, pfx, navigateTargets);
       const r = validateComponentsList(content.components, actionVal, selectVal);
-      if (!r.valid) return { valid: false, error: `${prefix} → ${r.error}` };
+      if (!r.valid) return { valid: false, error: `${prefix} -> ${r.error}` };
     }
   }
 

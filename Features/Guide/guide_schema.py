@@ -6,7 +6,7 @@ Delegates component validation to the shared component_validators module.
 Guide-specific button actions: "navigate", "channel", "role" with "target".
 
 Error messages use human-readable paths:
-  Page "Getting Started" → Action Row #1 → Button "Click Here" - target is required for navigate buttons.
+  Page "Getting Started" -> Action Row #1 -> Button "Click Here" - target is required for navigate buttons.
 """
 
 import json
@@ -153,11 +153,11 @@ def _validate_pages(
 ) -> Tuple[bool, str]:
 	if depth > _MAX_DEPTH:
 		ctx = prefix or "Pages"
-		return False, f"{ctx} \u2014 page nesting exceeds maximum depth of {_MAX_DEPTH}."
+		return False, f"{ctx} - page nesting exceeds maximum depth of {_MAX_DEPTH}."
 
 	for i, page in enumerate(pages):
 		page_name = _page_label(page, i)
-		page_prefix = f"{prefix} \u2192 {page_name}" if prefix else page_name
+		page_prefix = f"{prefix} -> {page_name}" if prefix else page_name
 		ok, msg = _validate_page(page, page_prefix, all_ids, navigate_targets, depth)
 		if not ok:
 			return False, msg
@@ -173,24 +173,24 @@ def _validate_page(
 	depth: int,
 ) -> Tuple[bool, str]:
 	if not isinstance(page, dict):
-		return False, f"{prefix} \u2014 must be an object."
+		return False, f"{prefix} - must be an object."
 
 	# label (required)
 	label = page.get("label")
 	if not isinstance(label, str) or not label:
-		return False, f"{prefix} \u2014 label must be a non-empty string."
+		return False, f"{prefix} - label must be a non-empty string."
 	if len(label) > _MAX_LABEL:
-		return False, f"{prefix} \u2014 label exceeds {_MAX_LABEL} characters."
+		return False, f"{prefix} - label exceeds {_MAX_LABEL} characters."
 
 	# id (optional, auto-generated)
 	page_id = page.get("id")
 	if page_id is not None:
 		if not isinstance(page_id, str) or not page_id:
-			return False, f"{prefix} \u2014 id must be a non-empty string."
+			return False, f"{prefix} - id must be a non-empty string."
 		if len(page_id) > 100:
-			return False, f"{prefix} \u2014 id exceeds 100 characters."
+			return False, f"{prefix} - id exceeds 100 characters."
 		if page_id in all_ids:
-			return False, f"{prefix} \u2014 id \"{page_id}\" is duplicated. Page IDs must be unique."
+			return False, f"{prefix} - id \"{page_id}\" is duplicated. Page IDs must be unique."
 		all_ids.add(page_id)
 	else:
 		# Generate and register
@@ -206,25 +206,25 @@ def _validate_page(
 	desc = page.get("description")
 	if desc is not None:
 		if not isinstance(desc, str):
-			return False, f"{prefix} \u2014 description must be a string."
+			return False, f"{prefix} - description must be a string."
 		if len(desc) > _MAX_DESCRIPTION:
-			return False, f"{prefix} \u2014 description exceeds {_MAX_DESCRIPTION} characters."
+			return False, f"{prefix} - description exceeds {_MAX_DESCRIPTION} characters."
 
 	# icon (optional)
 	icon = page.get("icon")
 	if icon is not None and not isinstance(icon, str):
-		return False, f"{prefix} \u2014 icon must be a string."
+		return False, f"{prefix} - icon must be a string."
 
 	# order (optional)
 	order = page.get("order")
 	if order is not None and not isinstance(order, int):
-		return False, f"{prefix} \u2014 order must be an integer."
+		return False, f"{prefix} - order must be an integer."
 
 	# content (optional)
 	content = page.get("content")
 	if content is not None:
 		if not isinstance(content, dict):
-			return False, f"{prefix} \u2014 content must be an object."
+			return False, f"{prefix} - content must be an object."
 		components = content.get("components")
 		if components is not None:
 			ok, msg = validate_components_list(
@@ -233,22 +233,22 @@ def _validate_page(
 				select_validator=lambda comp, pfx: _validate_guide_select(comp, pfx, navigate_targets),
 			)
 			if not ok:
-				return False, f"{prefix} \u2192 {msg}"
+				return False, f"{prefix} -> {msg}"
 
 	# children (optional)
 	children = page.get("children")
 	if children is not None:
 		if not isinstance(children, list):
-			return False, f"{prefix} \u2014 children must be an array."
+			return False, f"{prefix} - children must be an array."
 		if len(children) > 25:
-			return False, f"{prefix} \u2014 children has {len(children)} items; max is 25."
+			return False, f"{prefix} - children has {len(children)} items; max is 25."
 		ok, msg = _validate_pages(children, prefix, all_ids, navigate_targets, depth + 1)
 		if not ok:
 			return False, msg
 
 	# Must have content or children (or both)
 	if content is None and children is None:
-		return False, f"{prefix} \u2014 must have \"content\", \"children\", or both."
+		return False, f"{prefix} - must have \"content\", \"children\", or both."
 
 	return True, ""
 
@@ -260,35 +260,35 @@ def _validate_page(
 def _validate_guide_button(comp: dict, prefix: str, navigate_targets: list) -> Tuple[bool, str]:
 	"""Validate a button in guide context. Supports navigate, channel, role actions + link buttons."""
 	if not isinstance(comp, dict):
-		return False, f"{prefix} \u2014 must be an object."
+		return False, f"{prefix} - must be an object."
 	style = comp.get("style")
 	if style not in _VALID_BUTTON_STYLES:
 		return False, (
-			f"{prefix} \u2014 style \"{style}\" is invalid. "
+			f"{prefix} - style \"{style}\" is invalid. "
 			f"Valid styles: {', '.join(sorted(_VALID_BUTTON_STYLES))}."
 		)
 	label = comp.get("label")
 	if not isinstance(label, str) or not label:
-		return False, f"{prefix} \u2014 label must be a non-empty string."
+		return False, f"{prefix} - label must be a non-empty string."
 	if len(label) > 80:
-		return False, f"{prefix} \u2014 label exceeds 80 characters."
+		return False, f"{prefix} - label exceeds 80 characters."
 
 	if style == "link":
 		url = comp.get("url")
 		if not isinstance(url, str) or not url.startswith("https://"):
-			return False, f"{prefix} \u2014 url is required for link buttons and must start with https://."
+			return False, f"{prefix} - url is required for link buttons and must start with https://."
 	else:
 		action = comp.get("action")
 		if not isinstance(action, str) or not action:
-			return False, f"{prefix} \u2014 action is required for non-link buttons."
+			return False, f"{prefix} - action is required for non-link buttons."
 		if action not in _VALID_GUIDE_ACTIONS:
 			return False, (
-				f"{prefix} \u2014 action \"{action}\" is not valid. "
+				f"{prefix} - action \"{action}\" is not valid. "
 				f"Guide buttons support: {', '.join(sorted(_VALID_GUIDE_ACTIONS))}."
 			)
 		target = comp.get("target")
 		if not isinstance(target, str) or not target:
-			return False, f"{prefix} \u2014 target is required for {action} buttons."
+			return False, f"{prefix} - target is required for {action} buttons."
 		if action == "navigate":
 			navigate_targets.append(target)
 
@@ -306,36 +306,36 @@ def _validate_guide_select(comp: Any, prefix: str, navigate_targets: list) -> Tu
 
 def _validate_guide_select_option(opt: Any, prefix: str, navigate_targets: list) -> Tuple[bool, str]:
 	if not isinstance(opt, dict):
-		return False, f"{prefix} \u2014 must be an object."
+		return False, f"{prefix} - must be an object."
 
 	label = opt.get("label")
 	if not isinstance(label, str) or not label:
-		return False, f"{prefix} \u2014 label must be a non-empty string."
+		return False, f"{prefix} - label must be a non-empty string."
 	if len(label) > 100:
-		return False, f"{prefix} \u2014 label exceeds 100 characters."
+		return False, f"{prefix} - label exceeds 100 characters."
 
 	action = opt.get("action")
 	if action not in _VALID_GUIDE_ACTIONS:
 		return False, (
-			f"{prefix} \u2014 action \"{action}\" is not valid. "
+			f"{prefix} - action \"{action}\" is not valid. "
 			f"Guide select options support: {', '.join(sorted(_VALID_GUIDE_ACTIONS))}."
 		)
 
 	target = opt.get("target")
 	if not isinstance(target, str) or not target:
-		return False, f"{prefix} \u2014 target is required for {action} options."
+		return False, f"{prefix} - target is required for {action} options."
 	if action == "navigate":
 		navigate_targets.append(target)
 
 	description = opt.get("description")
 	if description is not None:
 		if not isinstance(description, str):
-			return False, f"{prefix} \u2014 description must be a string."
+			return False, f"{prefix} - description must be a string."
 		if len(description) > 100:
-			return False, f"{prefix} \u2014 description exceeds 100 characters."
+			return False, f"{prefix} - description exceeds 100 characters."
 
 	emoji = opt.get("emoji")
 	if emoji is not None and not isinstance(emoji, str):
-		return False, f"{prefix} \u2014 emoji must be a string."
+		return False, f"{prefix} - emoji must be a string."
 
 	return True, ""

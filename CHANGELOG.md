@@ -47,6 +47,10 @@
   hand it out.
 
 ### Fixed
+- Builder error messages were punctuated inconsistently - the same message could mix three
+  different dash and arrow characters depending on which part of the check produced it, and the
+  wording did not always match between the live editor and the message you got on save. They now
+  read the same everywhere: `Container #1 -> Button "Rules" - label must be a non-empty string.`
 - The `/admin` panel's setup progress was counting things you cannot actually configure. Screens
   like **View Status**, **Export** and **Update Status** were being added to each category's
   "X of Y configured" total, so a category could never read as finished no matter how much you
