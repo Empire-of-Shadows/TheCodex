@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from storage.settings.collections import db_manager
 from storage.log import get_logger
 from storage.settings.config_manager import get_config
-from utils.setup_notice import permission_notice_embed
+from admin.setup_notice import permission_notice_embed
 
 logger = get_logger("WhitelistManager")
 

@@ -15,7 +15,7 @@ from admin.actions.drops_actions import DropsActions
 from storage.settings.config_manager import get_config
 from storage.settings.collections import db_manager
 from storage.log import get_logger
-from utils.setup_notice import send_setup_notice, setup_notice_text
+from admin.setup_notice import send_setup_notice, setup_notice_text
 
 from .drop_views import (
     build_drops_browse_view,

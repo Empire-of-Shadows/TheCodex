@@ -23,7 +23,7 @@ from Features.Guide.guide_actions import (
 	decode_select_value,
 	CUSTOM_ID_SEARCH,
 )
-from utils.setup_notice import setup_notice_text
+from admin.setup_notice import setup_notice_text
 
 logger = get_logger("Guide")
 

@@ -27,7 +27,7 @@ import discord
 from storage.log import get_logger
 from storage.settings.collections import db_manager
 from storage.settings.config_manager import get_config
-from utils.setup_notice import setup_notice_text
+from admin.setup_notice import setup_notice_text
 
 logger = get_logger("WYRNotify")
 

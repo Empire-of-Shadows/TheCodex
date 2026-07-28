@@ -14,7 +14,7 @@ from startup.bot import s
 from storage.log import get_logger, PerformanceLogger
 from storage.settings.collections import db_manager
 from storage.settings.config_manager import get_config, get_guild_config_manager
-from utils.setup_notice import send_setup_notice
+from admin.setup_notice import send_setup_notice
 
 # Load environment variables
 load_dotenv()

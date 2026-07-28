@@ -87,7 +87,11 @@ here is what `--check` reports as drift, and a file here the master lacks is `[O
 
 **Adopt engine services, do not re-roll them.** Codex uses the engine `AuditLog` and `SetupGate`
 (its old hand-rolled `AuditLogger` / `SetupGatekeeper` are gone); `setup_gatekeeper.py` in the admin
-seam is a thin wrapper that delegates to the engine `SetupGate`. When adding a structured setting to
+seam is a thin wrapper that delegates to the engine `SetupGate`. Every "this is not configured yet"
+and "you do not have the tier" message comes from the engine `admin/setup_notice.py`
+(`setup_notice_text` / `setup_notice_embed` / `send_setup_notice` / `permission_notice_embed`) - do
+not hand-write one. It names the panel breadcrumb AND who can actually open the panel, which on a
+fresh guild is only the owner and Manage Server holders. When adding a structured setting to
 `config_manager`, remember its `from_dict` whitelist is fixed-key - a new subkey must be whitelisted
 or it silently drops on reload. All config writes (bot and dashboard) are surgical dotted `$set` of
 changed keys only; never write the whole document.

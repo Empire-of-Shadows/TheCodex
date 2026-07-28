@@ -7,7 +7,7 @@ from Features.NewMembers.joining import guild_handler
 from Features.NewMembers.greeting_schema import validate_greeting_schema
 from storage.log import get_logger
 from storage.settings.config_manager import get_config
-from utils.setup_notice import permission_notice_embed, send_setup_notice
+from admin.setup_notice import permission_notice_embed, send_setup_notice
 
 logger = get_logger("GreetingTrigger")
 

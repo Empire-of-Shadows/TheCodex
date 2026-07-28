@@ -23,7 +23,7 @@ from Features.Board.board_schema import validate_board_schema
 from Features.Board.board_store import board_store
 from storage.log import get_logger
 from storage.settings.config_manager import get_config
-from utils.setup_notice import permission_notice_embed, setup_notice_embed
+from admin.setup_notice import permission_notice_embed, setup_notice_embed
 
 logger = get_logger("Board")
 

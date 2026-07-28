@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from storage.log import get_logger, log_context, PerformanceLogger
 from storage.settings.config_manager import get_config
 from storage.settings.collections import db_manager
-from utils.setup_notice import send_setup_notice
+from admin.setup_notice import send_setup_notice
 
 logger = get_logger("Suggestion")
 
