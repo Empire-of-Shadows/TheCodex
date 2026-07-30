@@ -84,7 +84,6 @@ def _default_roles() -> Dict[str, Any]:
     return {
         "admin_role_ids": [],
         "mod_role_ids": [],
-        "tiers": {},
     }
 
 
@@ -186,7 +185,6 @@ def _default_embed() -> Dict[str, Any]:
         "default_color": None,
         "role_tier": {},
         "description_limits": {"default_limit": 500, "limits": {}},
-        "color_tiers": {},
         "feature_access": {},
     }
 
@@ -317,7 +315,6 @@ class GuildConfig:
         roles = _merge_unknown_keys({
             "admin_role_ids": _as_int_id_list(stored.get("admin_role_ids")),
             "mod_role_ids": _as_int_id_list(stored.get("mod_role_ids")),
-            "tiers": stored.get("tiers", {}),
         }, stored)
 
         # ── server ─────────────────────────────────────────────────────
@@ -423,7 +420,6 @@ class GuildConfig:
             "default_color": stored.get("default_color"),
             "role_tier": stored.get("role_tier", {}),
             "description_limits": stored.get("description_limits", {"default_limit": 500, "limits": {}}),
-            "color_tiers": stored.get("color_tiers", {}),
             "feature_access": stored.get("feature_access", {}),
         }
         embed = _merge_unknown_keys(embed, stored)
@@ -461,8 +457,22 @@ class GuildConfig:
         return self.is_admin_role(role_id) or self.is_moderator_role(role_id)
 
     def get_all_tier_role_ids(self) -> List[int]:
-        """Get list of all configured tier role IDs."""
-        return [int(k) for k in self.roles["tiers"].keys()]
+        """Every role id that Role Tier Mapping assigns to at least one tier.
+
+        Reads ``embed.role_tier`` - the mapping the admin panel actually writes
+        (``{role_id_str: [tier_name, ...]}``). This used to read ``roles.tiers``, a
+        vestigial field from an older schema generation that nothing has written since
+        the v2 collapse, so it always returned an empty list: members granted embed
+        access purely through Role Tier Mapping silently failed the
+        ``has_embed_permissions`` check. Removed from stored docs by migration m12.
+        """
+        out: List[int] = []
+        for key in (self.embed.get("role_tier") or {}):
+            try:
+                out.append(int(key))
+            except (TypeError, ValueError):
+                logger.warning(f"Skipping non-numeric role_tier key: {key!r}")
+        return out
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -737,10 +747,6 @@ class GuildConfigManager:
     async def embed_description_limits(self, guild_id: int) -> Dict[str, Any]:
         config = await self.get_config(guild_id)
         return config.embed.get("description_limits", {"default_limit": 500, "limits": {}})
-
-    async def embed_color_tiers(self, guild_id: int) -> Dict[str, Dict[str, str]]:
-        config = await self.get_config(guild_id)
-        return config.embed.get("color_tiers", {})
 
     async def embed_feature_access(self, guild_id: int) -> Dict[str, list]:
         config = await self.get_config(guild_id)

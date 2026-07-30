@@ -61,3 +61,41 @@ next snapshot cycle overwrites them - snapshots upsert-replace per entity, so th
 
 Both touch production data: dry-run first, verify counts, then `--apply` from where the
 normal replica-set connection reaches the primary.
+
+## 3. Dead tier fields  (`m12_drop_dead_tier_fields`)  -  PENDING
+
+From the 2026-07-29 admin-panel placeholder audit
+([`.docs/TheCodex/ADMIN_PANEL_PLACEHOLDERS.md`](../../../.docs/TheCodex/ADMIN_PANEL_PLACEHOLDERS.md)).
+`$unset`s two GuildConfig fields that nothing writes and nothing current reads:
+
+| Field | Why it is dead |
+|---|---|
+| `roles.tiers` | Vestigial role->tier map from a pre-v2-collapse generation. |
+| `embed.color_tiers` | Old per-tier `{name: hex}` dict, superseded by the Color Set collections. |
+
+**`roles.tiers` carried a live bug, fixed in the same change.**
+`GuildConfig.get_all_tier_role_ids()` read it, and that is the third branch of
+`has_embed_permissions` in `Features/ce_utilities/create_embed.py`. Nothing had written
+`roles.tiers` since the v2 collapse, so it was always `{}` and the branch could never pass:
+members granted embed access purely through the admin panel's **Role Tier Mapping** failed
+the check and only got in if they also held an admin or mod role. The accessor now reads
+`embed.role_tier`, which is what the panel actually writes.
+
+**Code that ships with this migration** (deploy together - `from_dict` uses
+`_merge_unknown_keys`, so a stored key survives in memory until it is `$unset`, and the
+defaults would otherwise write `{}` back on the next `save_config`):
+
+- `storage/settings/config_manager.py` - `get_all_tier_role_ids()` repointed at
+  `embed.role_tier`; both keys dropped from `_default_roles()` / `_default_embed()` and from
+  `from_dict`; the unused `GuildConfigManager.embed_color_tiers()` accessor removed.
+- `admin/actions/embed_config_actions.py` - the five dead `embed.color_tiers` accessors
+  (`get_color_tiers`, `set_tier_colors`, `add_color`, `remove_color`, `remove_tier`) removed;
+  all had zero callers.
+
+**No data is carried across.** The Color Set collections have been the live source of member
+colors for some time, so anything still in `embed.color_tiers` is a pre-supersession
+leftover. The dry run prints every NON-EMPTY value it is about to drop so you can eyeball
+this before committing.
+
+**Runbook:** dry-run, read the non-empty report, then `--apply` and deploy the code in the
+same window.

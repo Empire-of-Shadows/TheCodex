@@ -1,5 +1,70 @@
 # Changelog
 
+## [Unreleased] - 2026-07-29
+
+### Fixed
+- **Color Tiers in the admin panel now actually opens.** Picking **Embed Settings -> Color Tiers**
+  used to show a short description and a Back button and nothing else, so there was no way to set
+  up member colors from Discord at all. It now opens the full Color Sets manager.
+- The first time you open it, it asks you to pick a **server default color** - one color everybody
+  on the server can always use. Once that is saved, the server is stocked with eight ready-made
+  palettes (Common through Legendary, plus Celestial, Nature and Prism) so there is something to
+  work with straight away instead of an empty list.
+- From there you can create your own palettes, add and remove colors by name, and hand a palette
+  out either to a **tier** (everyone at that rank gets it) or directly to a **role** (for staff and
+  other special cases). You can also change the server default color at any time, and delete a
+  whole palette behind a confirmation step so it cannot happen by accident.
+- Small guards so the setup cannot end up in a broken state: a palette always keeps at least one
+  color, a palette can only belong to one tier at a time, and colors you have already added are
+  skipped rather than duplicated. If a color code cannot be read, the bot now tells you which
+  lines it could not understand instead of silently dropping them.
+
+- **The whole Trackers section of the admin panel now works.** Both **Tag Tracker** and
+  **Boost Tracker** used to open to a description and a Back button with no controls, so neither
+  could be set up from Discord at all.
+- **Tag Tracker** now lets you switch it on or off, pick the role to hand out, and set the server
+  tag to watch for. There is also a **Detect Tag** button that reads your server's tag straight
+  from Discord so you do not have to type it in and risk a typo - it tells you what it found, or
+  says plainly if your server has no tag set.
+- **Boost Tracker** now lets you switch it on or off and choose the channel where boosts get
+  logged.
+- Neither tracker will let you switch it on before it can actually work. Tag Tracker asks for both
+  a role and a tag first, and Boost Tracker asks for a log channel, instead of turning on and
+  then quietly doing nothing.
+- The panel also checks the bot can do the job before saving. If the role you picked sits above
+  the bot in the role list, or the bot cannot post in the channel you picked, it now says so and
+  explains how to fix it rather than accepting the setting and failing later.
+
+- **Updates & Drops can be set up from the admin panel now too.** **Drops Channel**,
+  **Tracked Channels** and **Manager Role** were the last three entries that opened to nothing.
+  With these done, every entry in the admin panel leads somewhere real.
+- **Drops Channel** lets you pick where the daily Prime Gaming post goes, and switch the whole
+  feature on or off. The on/off button only appears once a channel is chosen, so you cannot
+  switch it on and then wonder why nothing is posting.
+- **Tracked Channels** lets you set the channel watched for each of the Updates, Free and Prime
+  categories, and there is now a **Clear** button for each one so a channel you tracked by
+  mistake can be removed rather than only re-pointed.
+- **Manager Role** lets you name one role that can manage drops with `/drop`, alongside admins.
+  It can be cleared again to go back to admins only.
+- As with the trackers, the panel checks the bot can actually see and post in a channel before
+  accepting it, and explains what to fix if not.
+
+- **Members given embed access by tier can now actually use `/embed create`.** If you granted
+  a role access through **Embed Settings -> Role Tier Mapping**, that on its own was never
+  enough - the command still turned people away unless they also held an admin or mod role.
+  The permission check was looking at an old, empty setting instead of the tier mapping the
+  panel writes. Tier-based access now works the way the panel has always said it does.
+
+- **Every feature section can now show you its current setup at a glance.** **WYR**,
+  **Announcements** and **Trackers** were missing the **View Status** entry that New Members,
+  Drops, Suggestions and Info Board already had. All of them have one now, and moderators can
+  read it without being able to change anything. The Trackers one also shows how many people
+  are currently boosting and how many boost events have been recorded.
+
+### Fixed (small things)
+- A warning shown when a tier has no roles assigned used a dash style the rest of the bot does
+  not use, and said "won't" where the surrounding text spells it out. Reworded for consistency.
+
 ## [Unreleased] - 2026-07-27
 
 ### Changed

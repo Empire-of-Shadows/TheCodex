@@ -5,8 +5,11 @@ All read/write goes through storage.config_manager (GuildConfigManager).
 All embed settings live inside config.embed on the GuildConfig dataclass:
   embed.role_tier          - role-to-tier mapping
   embed.description_limits - default_limit, limits, tier_limits
-  embed.color_tiers        - tier → {name: hex_str}
-  embed.feature_access     - feature → [tier_names]
+  embed.feature_access     - feature -> [tier_names]
+
+Member-selectable colors are NOT here: they live in the Color Set collections
+(``admin/actions/color_set_actions.py``). The old ``embed.color_tiers`` dict this module
+used to manage was superseded by that system and is removed by migration m12.
 """
 
 from typing import Any, Dict, List, Optional
@@ -197,58 +200,6 @@ class EmbedConfigActions:
         limits_data = dict(config.embed.get("description_limits", EmbedConfigActions._DL_DEFAULT))
         limits_data.get("tier_limits", {}).pop(tier_name, None)
         config.embed["description_limits"] = limits_data
-        return await gcm.save_config(config)
-
-    # ── Color Tiers ──────────────────────────────────────────────────
-
-    @staticmethod
-    async def get_color_tiers(guild_id: int) -> Dict[str, Dict[str, str]]:
-        """Get all color tiers for a guild (raw hex strings)."""
-        gcm = await _get_gcm()
-        config = await gcm.get_config(guild_id)
-        return config.embed.get("color_tiers", {})
-
-    @staticmethod
-    async def set_tier_colors(guild_id: int, tier: str, colors_dict: Dict[str, str]) -> bool:
-        """Set all colors for a tier at once."""
-        gcm = await _get_gcm()
-        config = await gcm.get_config(guild_id)
-        tiers = dict(config.embed.get("color_tiers", {}))
-        tiers[tier] = colors_dict
-        config.embed["color_tiers"] = tiers
-        return await gcm.save_config(config)
-
-    @staticmethod
-    async def add_color(guild_id: int, tier: str, name: str, hex_value: str) -> bool:
-        """Add a single color to a tier."""
-        gcm = await _get_gcm()
-        config = await gcm.get_config(guild_id)
-        tiers = dict(config.embed.get("color_tiers", {}))
-        tiers.setdefault(tier, {})[name.lower()] = hex_value
-        config.embed["color_tiers"] = tiers
-        return await gcm.save_config(config)
-
-    @staticmethod
-    async def remove_color(guild_id: int, tier: str, name: str) -> bool:
-        """Remove a single color from a tier."""
-        gcm = await _get_gcm()
-        config = await gcm.get_config(guild_id)
-        tiers = dict(config.embed.get("color_tiers", {}))
-        if tier in tiers:
-            tiers[tier].pop(name.lower(), None)
-            if not tiers[tier]:
-                del tiers[tier]
-        config.embed["color_tiers"] = tiers
-        return await gcm.save_config(config)
-
-    @staticmethod
-    async def remove_tier(guild_id: int, tier: str) -> bool:
-        """Remove an entire color tier."""
-        gcm = await _get_gcm()
-        config = await gcm.get_config(guild_id)
-        tiers = dict(config.embed.get("color_tiers", {}))
-        tiers.pop(tier, None)
-        config.embed["color_tiers"] = tiers
         return await gcm.save_config(config)
 
     # ── Feature Access ───────────────────────────────────────────────

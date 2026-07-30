@@ -16,6 +16,9 @@ from ..views.panel_engine import PanelNode
 from ..views.embed_views import TIER_NAMES, TIER_LABELS, FEATURE_OPTIONS
 from ..views.drops_views import format_drops_status
 from ..views.new_member_views import format_new_member_status
+from ..views.wyr_views import format_wyr_status
+from ..views.announcement_views import format_announcement_status
+from ..views.tracker_views import format_tracker_status
 from ..actions.structure import info_action
 from ..actions.features import panel_roles_pair
 from .panel_branding import PANEL_TITLE, PANEL_DESCRIPTION
@@ -32,7 +35,11 @@ from ..bot_specific.codex.suggestions import (
 )
 from ..actions.guide_actions import GuideActions
 from ..actions.drops_actions import DropsActions
-from ..actions.color_set_actions import ColorSetActions
+from ..actions.tracker_actions import TrackerActions
+from ..actions.color_set_nodes import build_color_tiers_node
+from ..actions.tracker_nodes import build_boost_tracker_node, build_tag_tracker_node
+from ..actions.drops_nodes import build_drops_channel_node, build_drops_tracker_node
+from ..actions.config.leaves import role_leaf
 from ..actions.board_actions import (
     BoardActions,
     build_board_publish_node,
@@ -298,8 +305,8 @@ async def _warn_unconfigured_feature_tiers(interaction, guild_id: int, selected_
     count = len(unconfigured)
     names = ", ".join(f"**{t}**" for t in unconfigured)
     await interaction.followup.send(
-        f"\u26a0\ufe0f {names} {'has' if count == 1 else 'have'} no roles assigned yet \u2014 "
-        f"{'that tier' if count == 1 else 'those tiers'} won\u2019t grant access to this feature "
+        f"\u26a0\ufe0f {names} {'has' if count == 1 else 'have'} no roles assigned yet - "
+        f"{'that tier' if count == 1 else 'those tiers'} will not grant access to this feature "
         "until roles are configured in **Role Tier Mapping**.",
         ephemeral=True,
     )
@@ -1053,56 +1060,38 @@ ADMIN_ROLES_CONFIG = _PANEL_ROLE_NODES["admin_roles"]
 MOD_ROLES_CONFIG = _PANEL_ROLE_NODES["mod_roles"]
 
 
-# ── Status / bespoke stubs (handler-driven; dashboard summary only) ──────────
+# ── Drops manager role ───────────────────────────────────────────────────────
 #
-# These subcategories dispatch to bespoke `_show_*` handlers in admin_cog
-# rather than the engine's _navigate_to. They appear here so the dashboard
-# tree can list them with a label, description, and lock state. Kind="menu"
-# with no children → dashboard renders "Not configured".
+# A plain single-role setting, so it needs no bespoke flow - the engine's role_leaf
+# factory wires it straight onto the config path and gives Clear for free.
+#
+# No `requires_role_manage`: the bot only checks whether a member holds this role
+# (DropsActions.has_drops_management), it never assigns it, so it neither needs
+# Manage Roles nor has to outrank it.
+#
+# NOTE: there are no label-only `_stub()` nodes left. A `kind="menu"` PanelNode with no
+# children is a DEAD END in Discord - the engine's _show_menu renders its description and
+# a Back button and nothing else - so do not reintroduce one to "reserve" a panel slot.
+# See .docs/TheCodex/ADMIN_PANEL_PLACEHOLDERS.md.
 
-def _stub(key: str, label: str, description: str = "") -> PanelNode:
-    return PanelNode(key=key, label=label, kind="menu", description=description)
-
-
-async def _color_tiers_summary_values(guild_id: int) -> list:
-    """Return a non-empty marker list when Color Tiers is configured.
-
-    Considered configured if a server default color is set OR any color sets exist.
-    """
-    out: list = []
-    try:
-        default_color = await ColorSetActions.get_default_color(guild_id)
-        if default_color is not None:
-            out.append("default_color")
-    except Exception:
-        pass
-    try:
-        sets = await ColorSetActions.list_color_sets(guild_id)
-        if sets:
-            out.append(f"sets:{len(sets)}")
-    except Exception:
-        pass
-    return out
-
-
-COLOR_TIERS_STUB = PanelNode(
-    key="color_tiers",
-    label="Color Tiers",
-    kind="menu",
-    description="Manage per-guild color palettes.",
-    get_values=_color_tiers_summary_values,
+DROPS_MANAGER_ROLE_CONFIG = role_leaf(
+    "drops_manager_role",
+    "drops.manager_role_id",
+    label="Manager Role",
+    description=(
+        "Role allowed to manage drops with `/drop`, alongside admins and anyone with "
+        "Administrator. Leave empty to keep `/drop` management to admins only."
+    ),
 )
-TAG_TRACKER_STUB = _stub("tag_tracker", "Tag Tracker", "Configure server tag tracking.")
-BOOST_TRACKER_STUB = _stub("boost_tracker", "Boost Tracker", "Configure boost log channel.")
-DROPS_CHANNEL_STUB = _stub("drops_channel", "Drops Channel", "Channel for daily Prime Gaming drops.")
-DROPS_TRACKER_STUB = _stub("drops_tracker", "Tracked Channels", "Channels tracked for stats.")
-DROPS_MANAGER_STUB = _stub("drops_manager_role", "Manager Role", "Role allowed to manage drops via /drop.")
 
 
-# ── Drops / New Members "View Status" (wired read-only stats) ─────────────────
+# ── "View Status" entries (read-only, mod-visible) ────────────────────────────
 #
-# Unlike the config-echo stubs above, these render live stats the top-level
-# overview does not surface, so they are real `action` nodes via `info_action`.
+# These surface live state the top-level overview does not - full config echo plus
+# stats - so each is a real `action` node built from the shared `info_action` factory.
+# Every group that has a status view gets one; the formatter lives beside its feature's
+# other views and returns a markdown body, and `info_action` wraps it with the header
+# and Back button.
 
 async def _render_new_member_status(cog, guild, ctx) -> str:
     overview = await NewMemberActions.get_overview(guild.id)
@@ -1112,6 +1101,21 @@ async def _render_new_member_status(cog, guild, ctx) -> str:
 async def _render_drops_status(cog, guild, ctx) -> str:
     overview = await DropsActions.get_overview(guild.id)
     return format_drops_status(overview, guild)
+
+
+async def _render_wyr_status(cog, guild, ctx) -> str:
+    overview = await WYRConfigActions.get_overview(guild.id)
+    return format_wyr_status(overview, guild)
+
+
+async def _render_announcement_status(cog, guild, ctx) -> str:
+    overview = await AnnouncementActions.get_overview(guild.id)
+    return format_announcement_status(overview, guild)
+
+
+async def _render_tracker_status(cog, guild, ctx) -> str:
+    overview = await TrackerActions.get_overview(guild.id)
+    return format_tracker_status(overview, guild)
 
 
 NM_STATUS_NODE = info_action(
@@ -1126,6 +1130,27 @@ DROPS_STATUS_NODE = info_action(
     label="View Status",
     description="View drops configuration and stats.",
     render=_render_drops_status,
+    mod_allowed=True,
+)
+WYR_STATUS_NODE = info_action(
+    key="wyr_status",
+    label="View Status",
+    description="View Would You Rather configuration.",
+    render=_render_wyr_status,
+    mod_allowed=True,
+)
+ANN_STATUS_NODE = info_action(
+    key="ann_status",
+    label="View Status",
+    description="View announcement thread configuration.",
+    render=_render_announcement_status,
+    mod_allowed=True,
+)
+TRACKER_STATUS_NODE = info_action(
+    key="tracker_status",
+    label="View Status",
+    description="View tracker configuration and boost stats.",
+    render=_render_tracker_status,
     mod_allowed=True,
 )
 
@@ -1160,7 +1185,7 @@ _EMBED_SETTINGS_GROUP = PanelNode(
     children={
         "role_tiers": ROLE_TIER_CONFIG,
         "description_limits": DESCRIPTION_LIMITS_CONFIG,
-        "color_tiers": COLOR_TIERS_STUB,
+        "color_tiers": build_color_tiers_node(),
         "feature_access": FEATURE_ACCESS_CONFIG,
     },
 )
@@ -1179,6 +1204,7 @@ _WYR_SETTINGS_GROUP = PanelNode(
         "wyr_category": WYR_CATEGORY_CONFIG,
         "wyr_thread": WYR_THREAD_CONFIG,
         "wyr_cleanup": WYR_CLEANUP_CONFIG,
+        "wyr_status": WYR_STATUS_NODE,
     },
 )
 
@@ -1204,8 +1230,9 @@ _TRACKERS_GROUP = PanelNode(
     description="Configure boost tracker and tag tracker.",
     category_group="feature",
     children={
-        "tag_tracker": TAG_TRACKER_STUB,
-        "boost_tracker": BOOST_TRACKER_STUB,
+        "tag_tracker": build_tag_tracker_node(),
+        "boost_tracker": build_boost_tracker_node(),
+        "tracker_status": TRACKER_STATUS_NODE,
     },
 )
 
@@ -1216,10 +1243,10 @@ _UPDATES_DROPS_GROUP = PanelNode(
     description="Configure drops channel and tracked channels.",
     category_group="feature",
     children={
-        "drops_channel": DROPS_CHANNEL_STUB,
+        "drops_channel": build_drops_channel_node(),
         "drops_schedule": DROPS_SCHEDULE_CONFIG,
-        "drops_tracker": DROPS_TRACKER_STUB,
-        "drops_manager_role": DROPS_MANAGER_STUB,
+        "drops_tracker": build_drops_tracker_node(),
+        "drops_manager_role": DROPS_MANAGER_ROLE_CONFIG,
         "drops_status": DROPS_STATUS_NODE,
     },
 )
@@ -1233,6 +1260,7 @@ _ANNOUNCEMENTS_GROUP = PanelNode(
     children={
         "ann_channel": ANN_CHANNEL_CONFIG,
         "ann_settings": ANN_SETTINGS_CONFIG,
+        "ann_status": ANN_STATUS_NODE,
     },
 )
 

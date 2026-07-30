@@ -53,6 +53,25 @@ class TrackerActions:
         config.tag_tracker["server_tag"] = tag
         return await manager.save_config(config)
 
+    @staticmethod
+    async def fetch_server_tag(bot, guild_id: int) -> str | None:
+        """Read the guild's current clan ("server") tag straight from Discord.
+
+        Returns the tag string, or None when the guild has no clan tag set or the
+        lookup fails. Nothing is saved - the caller decides whether to store it.
+
+        The tag is not exposed on discord.py's Guild model, so this goes to the raw
+        HTTP route, the same way ``Features/trackers/tag/tag_tracker.py`` does when it
+        auto-syncs the tag on ``on_guild_update``.
+        """
+        try:
+            data = await bot.http.get_guild(guild_id)
+        except Exception as e:
+            logger.error(f"fetch_server_tag failed for guild {guild_id}: {e}", exc_info=True)
+            return None
+        clan = data.get("clan")
+        return clan.get("tag") if clan else None
+
     # -- Boost Tracker Read -------------------------------------------------
 
     @staticmethod

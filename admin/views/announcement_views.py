@@ -1,30 +1,31 @@
 """
-Announcement Config Views using Discord Components v2.
+Announcement Config Views.
 
-Status view for the Announcement configuration panel.
-All other Announcement panels are handled by the generic panel engine (panel_configs.py).
+Status formatter for the Announcement configuration panel. Every announcement editor is
+handled by the generic panel engine (see the announcement nodes in panel_configs.py), so
+this module holds only the read-only status body.
 """
 
-from typing import Dict, Any
+from typing import Any, Dict
 
 import discord
-
-from .base import AdminLayoutBuilder, readonly_container
 
 # Archive option labels used by the status view
 _ARCHIVE_LABELS = {60: "1 Hour", 1440: "1 Day", 4320: "3 Days", 10080: "1 Week"}
 
 
-def build_announcement_status_view(stats: Dict[str, Any], guild: discord.Guild) -> discord.ui.LayoutView:
-    """Build a read-only status overview of announcement configuration."""
-    builder = AdminLayoutBuilder()
+def format_announcement_status(overview: Dict[str, Any], guild: discord.Guild) -> str:
+    """Format a read-only status overview of announcement configuration as markdown.
 
-    channel_id = stats.get("channel_id")
-    thread_auto_create = stats.get("thread_auto_create", True)
-    thread_name_format = stats.get("thread_name_format", "")
-    archive_duration = stats.get("thread_auto_archive_duration", 1440)
-    welcome_message = stats.get("thread_welcome_message", "")
-    auto_delete = stats.get("auto_delete_threads", True)
+    Consumed by the shared ``info_action`` node (see ``panel_configs.py``), which renders
+    the header and Back button around this body.
+    """
+    channel_id = overview.get("channel_id")
+    thread_auto_create = overview.get("thread_auto_create", True)
+    thread_name_format = overview.get("thread_name_format", "")
+    archive_duration = overview.get("thread_auto_archive_duration", 1440)
+    welcome_message = overview.get("thread_welcome_message", "")
+    auto_delete = overview.get("auto_delete_threads", True)
 
     archive_label = _ARCHIVE_LABELS.get(archive_duration, f"{archive_duration} min")
 
@@ -34,17 +35,14 @@ def build_announcement_status_view(stats: Dict[str, Any], guild: discord.Guild) 
     else:
         channel_display = "Not configured"
 
-    builder.add_header("## Announcement Configuration Status")
-    builder.add_item(readonly_container(
-        discord.ui.TextDisplay(
-            f"**Server:** {guild.name}\n"
-            f"**Channel:** {channel_display}\n"
-            f"**Thread Auto-Create:** {'Enabled' if thread_auto_create else 'Disabled'}\n"
-            f"**Thread Name Format:** `{thread_name_format}`\n"
-            f"**Welcome Message:** {welcome_message[:100]}{'...' if len(welcome_message) > 100 else ''}\n"
-            f"**Auto-Archive:** {archive_label}\n"
-            f"**Auto-Delete Threads:** {'Enabled' if auto_delete else 'Disabled'}"
-        ),
-    ))
+    welcome_display = f"{welcome_message[:100]}{'...' if len(welcome_message) > 100 else ''}"
 
-    return builder.build()
+    return (
+        f"**Server:** {guild.name}\n"
+        f"**Channel:** {channel_display}\n"
+        f"**Thread Auto-Create:** {'Enabled' if thread_auto_create else 'Disabled'}\n"
+        f"**Thread Name Format:** `{thread_name_format}`\n"
+        f"**Welcome Message:** {welcome_display}\n"
+        f"**Auto-Archive:** {archive_label}\n"
+        f"**Auto-Delete Threads:** {'Enabled' if auto_delete else 'Disabled'}"
+    )

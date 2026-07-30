@@ -392,6 +392,52 @@ class ColorSetActions:
         logger.info(f"Seeded {created} default color sets for guild {guild_id}")
         return created
 
+    @staticmethod
+    async def is_seeded(guild_id: int) -> bool:
+        """Whether this guild's default color sets have already been seeded."""
+        try:
+            from storage.settings.config_manager import get_config
+            config = await get_config(guild_id)
+            return bool(config.color_tiers_seeded)
+        except Exception as e:
+            logger.error(f"is_seeded failed for guild {guild_id}: {e}", exc_info=True)
+            # Report "already seeded" on error so a read failure can never cause
+            # duplicate sets to be created.
+            return True
+
+    @staticmethod
+    async def _mark_seeded(guild_id: int) -> bool:
+        """Record that this guild's default color sets have been seeded."""
+        try:
+            from storage.settings.config_manager import get_guild_config_manager
+            manager = await get_guild_config_manager()
+            config = await manager.get_config(guild_id)
+            config.color_tiers_seeded = True
+            return await manager.save_config(config)
+        except Exception as e:
+            logger.error(f"_mark_seeded failed for guild {guild_id}: {e}", exc_info=True)
+            return False
+
+    @staticmethod
+    async def ensure_seeded(guild_id: int) -> int:
+        """Seed the default color sets once per guild. Returns the number created.
+
+        Idempotent in two ways: the ``color_tiers_seeded`` config flag short-circuits
+        repeat calls, and a guild that already has sets is marked seeded WITHOUT
+        creating any - so a guild whose sets predate this flag is never duplicated.
+        """
+        if await ColorSetActions.is_seeded(guild_id):
+            return 0
+
+        if await ColorSetActions.list_color_sets(guild_id):
+            await ColorSetActions._mark_seeded(guild_id)
+            return 0
+
+        default_color = await ColorSetActions.get_default_color(guild_id)
+        created = await ColorSetActions.seed_default_sets(guild_id, default_color)
+        await ColorSetActions._mark_seeded(guild_id)
+        return created
+
     # ── Convenience ────────────────────────────────────────────────────────────
 
     @staticmethod

@@ -210,13 +210,12 @@ def build_boost_tracker_settings_view(
     return builder.build()
 
 
-def build_tracker_status_view(
-    overview: Dict[str, Any],
-    guild: discord.Guild,
-) -> discord.ui.LayoutView:
-    """Build a read-only status overview of both trackers."""
-    builder = AdminLayoutBuilder()
+def format_tracker_status(overview: Dict[str, Any], guild: discord.Guild) -> str:
+    """Format a read-only status overview of both trackers as markdown.
 
+    Consumed by the shared ``info_action`` node (see ``panel_configs.py``), which renders
+    the header and Back button around this body.
+    """
     # Tag tracker info
     tt_enabled = overview.get("tag_tracker_enabled", False)
     tt_role_id = overview.get("tag_tracker_role_id")
@@ -239,9 +238,7 @@ def build_tracker_status_view(
 
     boost_stats = overview.get("boost_stats", {})
 
-    builder.add_header("## Tracker Status")
-
-    builder.add_item(readonly_container(discord.ui.TextDisplay(
+    return (
         f"**Server:** {guild.name}\n\n"
         f"**Tag Tracker:**\n"
         f"- Status: {'Enabled' if tt_enabled else 'Disabled'}\n"
@@ -252,6 +249,4 @@ def build_tracker_status_view(
         f"- Log Channel: {bt_channel_display}\n"
         f"- Active Boosters: {boost_stats.get('active_boosters', 0)}\n"
         f"- Total Boost Events: {boost_stats.get('total_events', 0)}"
-    )))
-
-    return builder.build()
+    )

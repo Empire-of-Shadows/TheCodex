@@ -57,7 +57,12 @@ MOD_ALLOWED_SECTIONS: frozenset[str] = frozenset()
 _SECTION_EXCLUDED_KEYS: dict[str, frozenset[str]] = {
     # greeting_components is owned by the builder route.
     "new_members": frozenset({"greeting_components"}),
-    # tiers is the color-tier mapping; managed via the Discord /admin panel.
+    # tiers is a dead pre-v2-collapse field that nothing reads or writes. Kept in the
+    # exclusion list only so a stored doc that still carries it (until migration m12
+    # `$unset`s it) cannot be echoed back and re-saved by the dashboard. The comment that
+    # used to be here claimed the Discord panel managed it - it never did. The live
+    # role-to-tier mapping is `embed.role_tier` (Embed Settings -> Role Tier Mapping),
+    # and `embed` is excluded from this form wholesale.
     "roles": frozenset({"tiers"}),
 }
 

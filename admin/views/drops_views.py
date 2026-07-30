@@ -144,6 +144,30 @@ def build_drops_tracker_view(
         ch_row.add_item(ch_select)
         editor_items.append(ch_row)
 
+    # One "Clear" button per category that currently has a channel. Without these
+    # a category could be re-pointed but never emptied again, and `on_remove` had
+    # no way to fire at all.
+    clear_row = discord.ui.ActionRow()
+    for category in TRACKER_CATEGORIES:
+        if not tracker_channels.get(category):
+            continue
+        clear_btn = discord.ui.Button(
+            label=f"Clear {category}",
+            style=discord.ButtonStyle.danger,
+            custom_id=cid("editor", "remove", f"drops_tracker_{category.lower()}"),
+        )
+
+        def _make_remove_callback(cat: str):
+            async def remove_callback(interaction: discord.Interaction):
+                await on_remove(interaction, cat)
+            return remove_callback
+
+        clear_btn.callback = _make_remove_callback(category)
+        clear_row.add_item(clear_btn)
+
+    if len(clear_row.children) > 0:
+        editor_items.append(clear_row)
+
     builder.add_item(editable_container(*editor_items))
 
     done_btn = discord.ui.Button(
