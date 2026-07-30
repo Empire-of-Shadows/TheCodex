@@ -54,6 +54,26 @@ async def drops_channel_summary_values(guild_id: int) -> list:
     return [str(channel_id)] if channel_id else []
 
 
+async def drops_channel_summary_text(guild_id: int) -> str:
+    """One-line summary for the Updates & Drops menu and the overview detail.
+
+    An ``action`` node has no generic value the engine can render, so it supplies its
+    own text. Returns an engine "unset" string when nothing is set, or the category
+    badge would count it as configured.
+    """
+    try:
+        s = await DropsActions.get_drops_settings(guild_id)
+    except Exception:
+        logger.debug("drops_channel summary text failed", exc_info=True)
+        return "Not configured"
+
+    channel_id = s.get("drops_channel_id")
+    if not channel_id:
+        return "Not configured"
+    state = "On" if s.get("drops_enabled") else "Off"
+    return f"{state}, <#{channel_id}>"
+
+
 class _DropsChannelFlow(PanelFlow):
     node_key = "drops_channel"
     audit_section = "updates_drops"
@@ -130,6 +150,8 @@ def build_drops_channel_node() -> PanelNode:
         description="Channel for daily Prime Gaming drops posts.",
         on_run=_on_run,
         get_values=drops_channel_summary_values,
+        summary_builder=drops_channel_summary_text,
+        counts_as_setting=True,
         required_channel_perms=DROPS_CHANNEL_PERMS,
         mod_allowed=False,
     )
@@ -147,6 +169,23 @@ async def drops_tracker_summary_values(guild_id: int) -> list:
         return []
     tracked = s.get("drops_tracker_channels") or {}
     return [cat for cat in TRACKER_CATEGORIES if tracked.get(cat)]
+
+
+async def drops_tracker_summary_text(guild_id: int) -> str:
+    """One-line summary showing how many of the three categories are tracked."""
+    try:
+        s = await DropsActions.get_drops_settings(guild_id)
+    except Exception:
+        logger.debug("drops_tracker summary text failed", exc_info=True)
+        return "Not configured"
+
+    tracked = s.get("drops_tracker_channels") or {}
+    names = [cat for cat in TRACKER_CATEGORIES if tracked.get(cat)]
+    if not names:
+        return "Not configured"
+    if len(names) == len(TRACKER_CATEGORIES):
+        return f"All {len(names)} tracked"
+    return f"{len(names)} of {len(TRACKER_CATEGORIES)} tracked ({', '.join(names)})"
 
 
 class _DropsTrackerFlow(PanelFlow):
@@ -236,6 +275,8 @@ def build_drops_tracker_node() -> PanelNode:
         description="Channels watched for drops statistics.",
         on_run=_on_run,
         get_values=drops_tracker_summary_values,
+        summary_builder=drops_tracker_summary_text,
+        counts_as_setting=True,
         mod_allowed=False,
     )
     return node

@@ -74,7 +74,9 @@ async def color_tiers_summary_values(guild_id: int) -> list:
     """Return a non-empty marker list when Color Tiers is configured.
 
     Considered configured if a server default color is set OR any color sets exist.
-    Feeds the parent menu's summary line via ``PanelNode.get_values``.
+    Drives the "configured" side of the parent menu's progress badge via
+    ``PanelNode.get_values``; the human-readable text comes from
+    ``color_tiers_summary_text`` below.
     """
     out: list = []
     try:
@@ -89,6 +91,29 @@ async def color_tiers_summary_values(guild_id: int) -> list:
     except Exception:
         logger.debug("color_tiers summary: set listing failed", exc_info=True)
     return out
+
+
+async def color_tiers_summary_text(guild_id: int) -> str:
+    """One-line summary for the Embed Settings menu and the overview detail.
+
+    An ``action`` node has no generic value the engine can render, so it supplies its
+    own text via ``PanelNode.summary_builder``. Must return one of the engine's
+    "unset" strings when nothing is configured, or the category badge counts it as done.
+    """
+    try:
+        default_color = await ColorSetActions.get_default_color(guild_id)
+        sets = await ColorSetActions.list_color_sets(guild_id)
+    except Exception:
+        logger.debug("color_tiers summary text failed", exc_info=True)
+        return "Not configured"
+
+    if default_color is None and not sets:
+        return "Not configured"
+    parts = []
+    if default_color is not None:
+        parts.append(f"default {color_int_to_hex(default_color)}")
+    parts.append(f"{len(sets)} set(s)" if sets else "no sets yet")
+    return ", ".join(parts)
 
 
 class _ColorTiersFlow(PanelFlow):
@@ -523,6 +548,9 @@ def build_color_tiers_node() -> PanelNode:
         description=NODE_DESCRIPTION,
         on_run=_on_run,
         get_values=color_tiers_summary_values,
+        summary_builder=color_tiers_summary_text,
+        # A bespoke settings editor, not a one-shot action - count it in the badge.
+        counts_as_setting=True,
         mod_allowed=False,
     )
     return node

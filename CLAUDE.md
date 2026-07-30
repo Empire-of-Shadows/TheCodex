@@ -1,55 +1,25 @@
 # CLAUDE.md
 
-Guidance for Claude Code (claude.ai/code) when working in this repository.
+Guidance for Claude Code when working in TheCodex (`codex`).
 
-## Project Overview
+This file deliberately does **not** restate what you can read from the repo - there is no
+directory tour, no entry-point walkthrough, no changelog format block. Read the code for
+those. What is here is the stuff that is expensive or impossible to discover by reading:
+ownership boundaries, invariants, and the specific things that have already gone wrong.
 
-**TheCodex** (`codex`) is the Empire of Shadows **knowledge base + new-member screening** bot,
-with several community features layered on top. It is part of the larger Empire of Shadows
-ecosystem (see the monorepo root `../../CLAUDE.md` and the engine masters in `../../EmpireSystems/`).
+Root `../../CLAUDE.md` holds the ecosystem-wide rules (no gambling, hyphen-minus only,
+changelog mandate, migrations over fresh starts, no compat shims). They apply here.
 
-Despite the name, **TheCodex does not use an LLM** - its knowledge base is RapidFuzz fuzzy
-search over curated markdown, not the Claude API. Feature areas (mostly under `Features/`):
+## The one thing the name gets wrong
 
-- **Guide / knowledge base** (`Features/Guide/`) - fuzzy-searchable FAQ / guide content.
-- **New-member screening** (`Features/NewMembers/`) - account-age gate, whitelist, screening DMs.
-- **Suggestions** (`Features/suggestion/` + `/suggest`) - community suggestions with voting.
-- **Would You Rather** (`Features/daily/`) - daily WYR posts, stats, leaderboard.
-- **Prime Gaming drops** (`commands/drops/`, `Features/updates-drops/`) - the `/drop` browser.
-- Plus announcements, trackers, and embed / utility tools.
+**TheCodex does not use an LLM.** Its knowledge base is RapidFuzz fuzzy search over curated
+markdown. Do not reach for the Claude API here.
 
-- **Entry point:** `Codex.py` - loads `docker/.env` (+ `.env.local` override) ->
-  `setup_application_logging` (loguru) -> signal handlers -> `DatabaseManager` init -> health
-  endpoint (**port 50010**) -> `bot.start` raced against a shutdown event -> idempotent `on_ready`
-  (guarded by `_init_done`): Database Attachment (`attach_databases`) -> Cog Loading -> Command
-  Sync -> Status Setup. On reconnect it only refreshes presence.
-- **Bot construction** (`startup/bot.py`): `command_prefix=commands.when_mentioned` (slash-only,
-  no text prefix) with a safe `allowed_mentions` default (everyone / roles off, users on).
-  `load_cogs` survives only as a **mention-only owner command**, not a prefix command.
-- **Run locally:** `python Codex.py`  ·  **Docker:** `docker/codex.sh` (joins `obsidian_grid`;
-  `--local` builds from the working tree instead of cloning from GitHub).
+## Engine distribution: vendored, never edit the copy
 
-## Engine distribution: vendored, not installed
-
-Both shared engines are **vendored copies** living in this repo. Codex does NOT pip-install
-`EmpireSystems`; there is no engine entry in `requirements.txt`.
-
-| Master | Vendored into | Owner |
-|---|---|---|
-| `../../EmpireSystems/storage_engine/` | `storage/` (imported as `storage`) | master |
-| `../../EmpireSystems/admin_engine/` | `admin/` (at the repo root) | master |
-| `../../EmpireSystems/admin_engine/bot_specific/codex/` | `admin/bot_specific/codex/` | master, codex only |
-| - | `storage/settings/`, `admin/settings/`, `admin/actions/` (its `__init__.py` + bot action modules) | **codex** (the seam) |
-
-Files carrying a `# VENDORED ... DO NOT EDIT HERE` banner are generated. **Never edit them.**
-Edit the master in `../../EmpireSystems/` and re-run the sync tool; drift is caught by `--check`.
-
-Codex, like relay, is on the **root-`admin/` + `settings/`-seam layout** and the loguru `log/`
-engine (it imports `from storage.log import ...`), so both engines sync with no `--scope` or
-`LEGACY_LOGGING` restriction. The other four bots are still on the flat `commands/admin/` layout,
-and `sync_admin_engine.py` refuses to vendor the engine across layouts.
-
-### Syncing
+Both shared engines are **vendored copies**; codex does not pip-install `EmpireSystems`.
+Files with a `# VENDORED ... DO NOT EDIT HERE` banner are generated - edit the master in
+`../../EmpireSystems/` and re-run the sync tool. `--check` gates drift:
 
 ```bash
 # from the monorepo root
@@ -57,114 +27,135 @@ python EmpireSystems/tools/sync_admin_engine.py   --check --bot codex
 python EmpireSystems/tools/sync_storage_engine.py --check --bot codex
 ```
 
-## Layout
+**The seam** (codex's to hand-edit inside the engine dirs) is exactly:
+`storage/settings/`, `admin/settings/`, and the bot-owned modules in `admin/actions/` and
+`admin/views/`. Everything else under `storage/` and `admin/` is generated, including the
+master-owned `admin/bot_specific/codex/` subtree (edit that at
+`EmpireSystems/admin_engine/bot_specific/codex/`; a file here the master lacks is `[ORPHAN]`).
 
-| Path | What it is |
-|---|---|
-| `Codex.py` | Main entrypoint (bot-named, PascalCase). |
-| `startup/` | `bot.py` (instance / intents / token, `when_mentioned` + `allowed_mentions`), `sync.py` (auto-discovery cog loader + `attach_databases()`; `COG_DIRECTORIES = ["./commands", "./admin", "./Features"]`), `phases.py` (startup metrics / summary). Canonical ecosystem startup package. |
-| `commands/` | Codex slash-command cogs: `drops/` (the `/drop` Prime Gaming browser) and `status/`. |
-| `Features/` | Where most of codex's domain lives, as feature packages each owning its cogs + stores: `Guide/` (knowledge base), `NewMembers/` (screening + whitelist), `suggestion/`, `daily/` (WYR), `announcements/`, `trackers/`, `updates-drops/`, `ce_utilities/`, plus `error_handler.py`. Any `.py` defining `async def setup(bot)` auto-loads. |
-| `admin/` | **Vendored `admin_engine`** (the shared `/admin` panel), at the repo root. Seam = `admin/settings/` (`bindings.py`, `panel_configs.py` = the MAIN_PANEL tree, `panel_branding.py`, `setup_gatekeeper.py`) **plus** `admin/actions/` (a MIXED dir: the vendored engine action subpackages `collections/ config/ data/ discord_objects/ features/ structure/`, and codex's bot-owned `__init__.py` + action modules `new_member_actions.py`, `wyr_actions.py`, `guide_actions.py`, `drops_actions.py`, `announcement_actions.py`, `tracker_actions.py`, `embed_config_actions.py`, `color_set_actions.py`). `admin/admin_cog.py` is the only `def setup(...)` under `admin/`. Tier resolution delegates to the engine resolver via `bindings.resolve_panel_role`. |
-| `admin/bot_specific/codex/suggestions/` | The Suggestions admin feature - **master-owned**, authored in `../../EmpireSystems/admin_engine/bot_specific/codex/suggestions/` and vendored to codex only. |
-| `storage/` | **Vendored `storage_engine`**. Seam = `storage/settings/` in the **consolidated** shape: `bindings.py`, `collections.py` (collection registry + the concrete `db_manager`), and `config_manager.py` (the typed guild-config layer). This is the ecosystem's blessed seam shape; relay is still on the older `define_collections` / `manager` trio. |
-| `dashboard/` | FastAPI backend (`routers/`, `services/`, `auth/`) + React / Vite SPA (`frontend/`). Standalone process; shares the cross-bot SSO session store. Health / dashboard on `:54010`. |
-| `migrations/` | Idempotent, dry-run-first migration scripts over **real production data** (see Development Status). |
-| `defaults/`, `markdownfiles/`, `memory/` | Codex content: default panel payloads, knowledge-base markdown, guide JSON. |
-| `docker/` | Dockerfile(s), docker-compose, `.env(.local)`, `codex.sh`. |
+**Two MIXED directories** - the banner is the only reliable signal, so check it before editing:
 
-## What is and isn't yours
+| Dir | Vendored | Bot-owned |
+|---|---|---|
+| `admin/actions/` | the subpackages `collections/ config/ data/ discord_objects/ features/ structure/` | `__init__.py`, `*_actions.py`, `*_nodes.py`, `panel_flow.py` |
+| `admin/views/` | `__init__.py`, `base.py`, `panel_engine.py`, `panel_views.py` | the per-feature view modules |
 
-Only the **seam** is codex's to hand-edit inside the engine dirs: `storage/settings/`,
-`admin/settings/`, and `admin/actions/` (its `__init__.py` + bot-owned `*_actions.py` modules).
-Everything else under `storage/` and `admin/` is generated - the engine (from `ENGINE_FILES`) and
-the master-owned `admin/bot_specific/codex/` subtree. Codex's own feature / domain code lives
-OUTSIDE the engine dirs, under `Features/` and `commands/`.
-
-To change the Suggestions admin feature, edit the **master** at
-`../../EmpireSystems/admin_engine/bot_specific/codex/suggestions/` and re-vendor - editing the copy
-here is what `--check` reports as drift, and a file here the master lacks is `[ORPHAN]`.
+**Changing an engine master is a 7-repo operation.** `EmpireSystems/` is its **own git repo**,
+and all **6** bots vendor the admin engine on the same `settings` layout - so a master edit means
+`sync_admin_engine.py` (no `--check`) plus a commit in EmpireSystems *and* in every bot repo
+whose vendored copy changed. Prefer **additive, opt-in-defaulted** changes so no other bot's
+behavior moves, and prove it: diff old-rule vs new-rule over each bot's `MAIN_PANEL` rather than
+assuming.
 
 **Adopt engine services, do not re-roll them.** Codex uses the engine `AuditLog` and `SetupGate`
-(its old hand-rolled `AuditLogger` / `SetupGatekeeper` are gone); `setup_gatekeeper.py` in the admin
-seam is a thin wrapper that delegates to the engine `SetupGate`. Every "this is not configured yet"
-and "you do not have the tier" message comes from the engine `admin/setup_notice.py`
-(`setup_notice_text` / `setup_notice_embed` / `send_setup_notice` / `permission_notice_embed`) - do
-not hand-write one. It names the panel breadcrumb AND who can actually open the panel, which on a
-fresh guild is only the owner and Manage Server holders. When adding a structured setting to
-`config_manager`, remember its `from_dict` whitelist is fixed-key - a new subkey must be whitelisted
-or it silently drops on reload. All config writes (bot and dashboard) are surgical dotted `$set` of
-changed keys only; never write the whole document.
+(the old hand-rolled `AuditLogger` / `SetupGatekeeper` are gone). Every "not configured yet" and
+"you do not have the tier" message comes from `admin/setup_notice.py` - do not hand-write one; it
+names the panel breadcrumb *and* who can actually open the panel, which on a fresh guild is only
+the owner and Manage Server holders.
 
-## Where codex differs from relay (the two reference bots)
+## Gotchas - things that have already tripped us up
 
-Both are on the same layout, but a few deliberate choices differ - keep them in mind:
+### Admin panel / PanelNode
 
-- **Storage seam shape:** codex is **consolidated** (`bindings` + `collections` + `config_manager`);
-  relay is on the trio (`bindings` + `define_collections` + `manager`). Codex's shape is the target.
-- **Panel branding:** codex keeps a separate `admin/settings/panel_branding.py`; relay inlines the
-  same strings in `bindings.py`. Either is valid - the engine reads branding only through the
-  bindings seam, never by importing `panel_branding.py`.
-- **IDs:** codex stores **integer** guild / user IDs in most collections (WYR is the string-ID
-  exception). The ecosystem standard is string IDs; the normalization is scheduled but not yet run
-  - see `migrations/PENDING.md`. Do not assume string IDs when writing codex queries today.
-- **Domain code home:** codex's per-feature logic lives in `Features/` and `commands/` (there is no
-  `storage/bot_specific/codex/`), unlike relay's master-owned `storage/bot_specific/relay/<feature>/`.
+- **A childless `kind="menu"` node is a dead end.** It renders its description and a Back button
+  and nothing else - no controls, no error. Six panel entries shipped like this as label-only
+  "reserved slots"; see `.docs/TheCodex/ADMIN_PANEL_PLACEHOLDERS.md`. Never create one.
+- **`kind="action"` covers two unrelated things.** Stateless one-shots (View Status, Export,
+  Publish, Reset) *and* bespoke settings editors that own real config. A stateful one needs
+  **three** things or it half-works:
+  `get_values` (so "configured" is decidable), `summary_builder` (or its summary line renders
+  **blank**), and `counts_as_setting=True` (or the category's "N of M configured" badge silently
+  ignores it - and a category built entirely from such nodes shows *no badge at all*).
+  A `summary_builder`'s empty state **must** return one of the engine's `_UNSET_SUMMARIES`
+  strings (`"Not configured"` / `"Not set"` / `"Not assigned"` / `"Empty"`) or the badge
+  over-counts.
+- **`action` nodes do not get the engine's permission pre-checks** that `role_select` /
+  `channel_select` leaves get for free. Declare `requires_role_manage` /
+  `required_channel_perms` and call `check_role_permissions` / `check_channel_permissions`
+  yourself, or the setting saves and then fails silently at runtime.
+- **Render bespoke flows through `cog._rebind_session_view(ctx.session, layout)`.** A freshly
+  built `LayoutView` otherwise loses the panel's author lock and runs on its own 300s timeout
+  instead of the session's shared idle timer. (The vendored `info_action` and the suggestion
+  nodes do not do this - do not take them as the example.)
+- **Modal submits: respond with `modal_interaction.response.edit_message(...)`.** UPDATE_MESSAGE
+  is legal because every panel modal opens from a component on message 2. Do **not** copy
+  `_handle_inline_modal`'s pattern of deferring the modal interaction and then calling
+  `edit_original_response` on the component interaction whose response was already consumed by
+  `send_modal` - the engine wraps that call in `try/except HTTPException`, which suggests it does
+  not reliably land.
+- **One response per interaction.** To both refresh a screen and explain something, spend the
+  response on the re-render and deliver the explanation as a `followup`.
+- `admin/actions/panel_flow.py` (`PanelFlow`) exists so you do not re-derive the six points
+  above. Subclass it for any new bespoke action flow.
 
-## Changelog Requirements
+### Storage / config
 
-**IMPORTANT**: When making any user-facing changes, you MUST update `CHANGELOG.md` using plain language that community members can understand.
+- **Stored IDs are STRINGS, everywhere.** Migrations m4-m10 ran 2026-07-21; every `guild_id` /
+  `user_id` / snowflake in every collection is a string today (verified against production).
+  Querying with an `int` matches nothing, silently. In *memory*, `from_dict` coerces the role
+  lists back to `int` for comparisons against discord.py's int ids - storage is string, memory is
+  whatever the consumer needs.
+- **`from_dict` is NOT a fixed-key whitelist.** Every section runs through
+  `_merge_unknown_keys`, which preserves stored subkeys the dataclass does not model, so
+  load -> save is lossless and a new subkey needs no whitelisting to survive. The corollary is
+  the one that bites: a field you *delete from the code* still round-trips from storage until a
+  migration `$unset`s it.
+- **`save_config` is only surgical when the config carries `_loaded_snapshot`.** It diffs against
+  what you loaded and writes just the changed leaves. A hand-constructed `GuildConfig` has no
+  snapshot and falls back to a **full write of every top-level section** - so always mutate a
+  config you got from `get_config` / `manager.get_config`.
 
-### What to Document
-- New guides, FAQ answers, or shortcuts
-- Changes to how search or navigation works
-- Bug fixes that affect people asking the bot questions
-- Changes to commands or settings
+### Auditing dead code
 
-### How to Write Changelog Entries
-Write entries as if explaining to a server member, not a programmer:
-- **DO**: "The guide now understands more ways of asking the same question"
-- **DON'T**: "Lowered the RapidFuzz match threshold and added query normalization"
+- **"Nothing writes it" does not mean "nothing reads it".** `roles.tiers` had no writers since
+  the v2 collapse, so it looked like dead data - but `GuildConfig.get_all_tier_role_ids()` still
+  read it, and that is a branch of the `/embed create` permission check. It returned `{}` forever,
+  so tier-granted embed access silently never worked for anyone. A field with a live reader and no
+  writer is **more** dangerous than one with neither, because the read returns a default that
+  looks like a legitimate empty answer. When you find an unwritten field, grep its readers before
+  calling it dead.
 
-- **DO**: "Added a shortcut so typing `rules` jumps straight to the server rules"
-- **DON'T**: "Registered a new entry in the shortcut map"
+### Testing panel work
 
-- **DO**: "Fixed broken back-navigation when browsing nested guide sections"
-- **DON'T**: "Fixed breadcrumb stack pop on nested section traversal"
+Panel flows can be verified offline, with no Discord and no Mongo, and this catches the bug class
+that actually occurs. Fake the cog (`_send_or_edit`, `_rebind_session_view`, `_check_cooldown`,
+`_audit`, `_invalidate_guild_caches`, `_navigate_to`) and the interaction (asserting one response
+each), stub the `*Actions` class in memory, then **drive the real component callbacks off the
+built `LayoutView`** rather than only calling flow methods - the `interaction.data` -> handler
+boundary is where callback-arity, payload-shape and closure late-binding bugs hide. Importing
+`admin.settings.panel_configs` needs `MONGO_URI` set to any value.
 
-### Changelog Format
-```markdown
-## [Unreleased] - [Date]
+## Production data
 
-### Added
-- Brief, plain-language description of new feature
+Codex has **real users and real data**. Schema changes ship an idempotent migration under
+`migrations/scripts/` (`_common.py` is the harness): dry-run by default, `--apply` to write,
+re-runnable as a no-op. Run the dry run, read its report, then apply. Never "drop the collection
+and start fresh". Once code stops reading a field, `$unset` it via migration rather than leaving
+orphaned data. Prefer migrating documents over carrying long-term `from_dict()` legacy handling;
+`migrations/scripts/_guildconfig_v2.py` keeps the pre-collapse schema frozen for reference.
+Pending work is tracked in `migrations/PENDING.md`.
 
-### Changed
-- What changed and how it affects users
+## Changelog
 
-### Fixed
-- What was broken and that it's now working
-```
+Mandatory for user-facing changes, written for a community member and not a programmer. The
+style is the part that needs judgment:
 
-## Development Status
+- **DO** "The guide now understands more ways of asking the same question"
+  **DON'T** "Lowered the RapidFuzz match threshold and added query normalization"
+- **DO** "Added a shortcut so typing `rules` jumps straight to the server rules"
+  **DON'T** "Registered a new entry in the shortcut map"
+- **DO** "Fixed broken back-navigation when browsing nested guide sections"
+  **DON'T** "Fixed breadcrumb stack pop on nested section traversal"
 
-This project has real users and production data. Schema and storage changes MUST preserve that data:
+## Non-obvious conventions
 
-- **Migrations, not fresh starts**: when the data structure changes, ship an idempotent migration under `migrations/scripts/` that transforms existing documents. Never "drop the collection and start fresh". Each script is standalone and dry-run by default (`python -m migrations.scripts.<name>`), applying writes only with `--apply`, and loads Mongo creds from the bot's local env (`docker/.env` then `.env.local`). See `_common.py` for the shared harness.
-- **Remove old fields via migration**: once the code stops reading a field, a migration should `$unset` it from stored documents so no orphaned data lingers.
-- **Migrate the data, keep the code clean**: prefer bringing documents to the current schema over carrying long-term `from_dict()` legacy-generation handling or field-rename fallbacks in the live code (a short read-time fallback is acceptable only as a bridge while a migration rolls out). The pre-collapse conversion logic is preserved frozen in `migrations/scripts/_guildconfig_v2.py` for reference.
-- **Runbook**: run the dry-run first, confirm the reported changes, then re-run with `--apply`. Migrations are idempotent, so re-running after apply is a no-op.
-
-## Conventions
-
-- Slash commands + UI components (Components v2) only; no prefix commands. `when_mentioned`
-  construction with a safe `allowed_mentions` default.
-- Async / await throughout; structured logging via the vendored loguru `storage.log`
-  (`setup_application_logging`); graceful shutdown via signal handlers.
-- MongoDB via the vendored `storage_engine` `db_manager`; typed guild config through
-  `storage/settings/config_manager.py` with surgical dotted `$set` writes only.
-- Health endpoint on `:50010`; dashboard on `:54010`. All services share the external
-  `obsidian_grid` Docker network.
-- Hard rules (root `CLAUDE.md`): no gambling; hyphen-minus only (no em / en dashes); CHANGELOG.md in
-  community language; migrations (not fresh starts) for production data; no compat shims without
-  sanction.
+- Slash commands and Components v2 only. `startup/bot.py` builds the bot with
+  `when_mentioned`, so there is no text prefix; `load_cogs` survives only as a mention-only
+  owner command.
+- Health endpoint `:50010`, dashboard `:54010`, shared external `obsidian_grid` Docker network.
+- Codex's per-feature logic lives in `Features/` and `commands/`. There is no
+  `storage/bot_specific/codex/` - unlike relay, whose feature code is master-owned under
+  `storage/bot_specific/relay/<feature>/`.
+- Codex is the reference for the **consolidated** storage seam (`bindings` + `collections` +
+  `config_manager`); relay is still on the older `define_collections` / `manager` trio. Codex's
+  shape is the target, so copy from here, not from there.

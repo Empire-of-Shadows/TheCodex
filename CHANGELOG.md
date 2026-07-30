@@ -61,6 +61,13 @@
   read it without being able to change anything. The Trackers one also shows how many people
   are currently boosting and how many boost events have been recorded.
 
+- **The admin panel counts the newly-added settings again.** Sections show a "3 of 5 configured"
+  style progress note, and the settings added above were being left out of it: **Trackers** had
+  no progress note at all, while **Updates & Drops** and **Embed Settings** undercounted. Those
+  entries also showed a blank space where their current setting should be. All of them now show
+  their progress and a short summary of what is set, for example "On, tag EoS, role set" for the
+  Tag Tracker or "2 of 3 tracked (Free, Prime)" for the drops channels.
+
 ### Fixed (small things)
 - A warning shown when a tier has no roles assigned used a dash style the rest of the bot does
   not use, and said "won't" where the surrounding text spells it out. Reworded for consistency.

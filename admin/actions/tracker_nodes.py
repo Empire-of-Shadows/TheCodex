@@ -54,6 +54,31 @@ async def tag_tracker_summary_values(guild_id: int) -> list:
     return out
 
 
+async def tag_tracker_summary_text(guild_id: int) -> str:
+    """One-line summary for the Trackers menu and the overview detail.
+
+    An ``action`` node has no generic value the engine can render, so it supplies its
+    own text. Returns an engine "unset" string when nothing is set, or the category
+    badge would count it as configured.
+    """
+    try:
+        s = await TrackerActions.get_tag_tracker_settings(guild_id)
+    except Exception:
+        logger.debug("tag_tracker summary text failed", exc_info=True)
+        return "Not configured"
+
+    tag = s.get("tag_tracker_server_tag")
+    has_role = bool(s.get("tag_tracker_role_id"))
+    if not tag and not has_role:
+        return "Not configured"
+
+    state = "On" if s.get("tag_tracker_enabled") else "Off"
+    parts = [state]
+    parts.append(f"tag {tag}" if tag else "no tag")
+    parts.append("role set" if has_role else "no role")
+    return ", ".join(parts)
+
+
 class _TagTrackerFlow(PanelFlow):
     node_key = "tag_tracker"
     audit_section = "trackers"
@@ -198,6 +223,8 @@ def build_tag_tracker_node() -> PanelNode:
         description="Track members using the server tag and give them a role.",
         on_run=_on_run,
         get_values=tag_tracker_summary_values,
+        summary_builder=tag_tracker_summary_text,
+        counts_as_setting=True,
         requires_role_manage=True,
         mod_allowed=False,
     )
@@ -215,6 +242,21 @@ async def boost_tracker_summary_values(guild_id: int) -> list:
         return []
     channel_id = s.get("boost_log_channel_id")
     return [str(channel_id)] if channel_id else []
+
+
+async def boost_tracker_summary_text(guild_id: int) -> str:
+    """One-line summary for the Trackers menu and the overview detail."""
+    try:
+        s = await TrackerActions.get_boost_tracker_settings(guild_id)
+    except Exception:
+        logger.debug("boost_tracker summary text failed", exc_info=True)
+        return "Not configured"
+
+    channel_id = s.get("boost_log_channel_id")
+    if not channel_id:
+        return "Not configured"
+    state = "On" if s.get("boost_enabled") else "Off"
+    return f"{state}, <#{channel_id}>"
 
 
 class _BoostTrackerFlow(PanelFlow):
@@ -290,6 +332,8 @@ def build_boost_tracker_node() -> PanelNode:
         description="Log server boosts to a channel.",
         on_run=_on_run,
         get_values=boost_tracker_summary_values,
+        summary_builder=boost_tracker_summary_text,
+        counts_as_setting=True,
         required_channel_perms=_BOOST_CHANNEL_PERMS,
         mod_allowed=False,
     )

@@ -202,6 +202,21 @@ class PanelNode:
     # Async description override: async (guild) -> str, resolved at render time.
     async_description: Optional[Callable] = None
 
+    # Opt-in override for progress counting (the "N of M configured" category badge).
+    # None = infer from ``kind`` (see ``_counts_toward_progress``), which is right for
+    # every node whose kind already implies whether it holds a value.
+    #
+    # Set True on a ``kind="action"`` node that is really a bespoke SETTINGS EDITOR
+    # owning stored config (codex's Color Tiers / Tag Tracker / Boost Tracker / Drops
+    # Channel / Tracked Channels), so it is counted like any other setting. Such a node
+    # should also supply ``get_values`` (so "configured" can be determined) and normally
+    # ``summary_builder`` (so the summary line reads as text rather than blank).
+    #
+    # Leave unset on the stateless one-shot actions the kind was designed for - View
+    # Status, Export, Publish, Reset, Purge, premium activation - which have no stored
+    # value and must not inflate the badge. Set False to force-exclude any node.
+    counts_as_setting: Optional[bool] = None
+
 
 @dataclass
 class ActionContext:
@@ -847,7 +862,15 @@ def _counts_toward_progress(node: PanelNode) -> bool:
     Read-only screens and one-shot commands (kind="action" - View Status,
     Export, Reset, Purge) have no stored value, so they can never read as
     configured and must not inflate the category badge.
+
+    A node can override the kind-based inference with ``counts_as_setting``. That
+    exists because ``kind="action"`` covers two unrelated things: stateless one-shots
+    (correctly excluded) and bespoke settings editors that own real stored config
+    (which must be counted, or a category built entirely from them shows no badge at
+    all while its settings are plainly configurable).
     """
+    if node.counts_as_setting is not None:
+        return node.counts_as_setting
     if node.kind == "action":
         return False
     if node.kind == "menu":

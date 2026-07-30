@@ -1965,6 +1965,20 @@ class AdminCog(commands.Cog):
         self, node: PanelNode, guild_id: int, guild: discord.Guild,
     ) -> str:
         """Produce a guild-aware summary string for a single leaf node."""
+        # A custom summary_builder wins here as it does in _gather_summaries, so the
+        # overview (message 1) and the category menu (message 2) describe a node the
+        # same way. This also decides "configured" for the category badge, which tests
+        # the returned string against _UNSET_SUMMARIES - so a node whose value is not
+        # renderable by the generic branches below (a bespoke action editor) needs its
+        # builder honored here or it reads as unset no matter how it is configured.
+        if node.summary_builder:
+            try:
+                text = await node.summary_builder(guild_id)
+            except Exception:
+                text = None
+            if text is not None:
+                return text
+
         if node.kind == "paginated_list":
             count = await self._paginated_list_count(node, guild_id)
             return f"{count} item(s)" if count else "Empty"
