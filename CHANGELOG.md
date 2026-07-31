@@ -3,6 +3,12 @@
 ## [Unreleased] - 2026-07-29
 
 ### Fixed
+- **The builder preview now shows spacing the way Discord actually will.** If you left an
+  empty line between two paragraphs, the preview closed the gap up and showed them stacked
+  together - then the real message in Discord had the empty line after all. Text that looked
+  right while you were writing it came out looking stretched. The preview now leaves the same
+  gap Discord does, so what you see while building is what members see.
+
 - **Color Tiers in the admin panel now actually opens.** Picking **Embed Settings -> Color Tiers**
   used to show a short description and a Back button and nothing else, so there was no way to set
   up member colors from Discord at all. It now opens the full Color Sets manager.

@@ -1142,6 +1142,15 @@ a:focus-visible {
 .dc-text ul, .dc-text ol { padding-left: 24px; margin: 4px 0; }
 .dc-text li { margin: 2px 0; }
 
+/* Paragraph spacing - the preview must not under-report what Discord will show.
+   The global `* { margin: 0 }` reset zeroes <p>, and remark turns a blank line in
+   the source into a paragraph BREAK (two <p>) while a single newline becomes a
+   <br>. With no margin the two render identically, so authors saw a tight layout
+   here and a gappy one in Discord. Discord renders a blank line as exactly one
+   empty line, so consecutive paragraphs get one line-height of separation. */
+.dc-text p { margin: 0; }
+.dc-text p + p { margin-top: 1.375em; }
+
 .dc-subtext {
   font-size: 12px;
   line-height: 1.3;
