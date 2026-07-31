@@ -40,6 +40,7 @@ from ..actions.color_set_nodes import build_color_tiers_node
 from ..actions.tracker_nodes import build_boost_tracker_node, build_tag_tracker_node
 from ..actions.drops_nodes import build_drops_channel_node, build_drops_tracker_node
 from ..actions.config.leaves import role_leaf
+from ..actions.data import timezone_options as tz_opts
 from ..actions.board_actions import (
     BoardActions,
     build_board_publish_node,
@@ -486,17 +487,34 @@ DESCRIPTION_LIMITS_CONFIG = PanelNode(
 
 # ── WYR option constants ──────────────────────────────────────────────────────
 
-_WYR_TIMEZONE_OPTIONS = [
-    ("America/New_York", "US Eastern"),
-    ("America/Chicago", "US Central"),
-    ("America/Denver", "US Mountain"),
-    ("America/Los_Angeles", "US Pacific"),
-    ("Europe/London", "UK / GMT"),
-    ("Europe/Paris", "Central Europe"),
-    ("Europe/Berlin", "Germany"),
-    ("Asia/Tokyo", "Japan"),
-    ("Australia/Sydney", "Australia Eastern"),
-]
+def _tz_line(tz: str, index: int) -> str:
+    """Display line for a timezone on the (paginated) city step."""
+    return f"- {tz_opts.pretty_zone(tz)}  ({tz_opts.offset_label(tz)})"
+
+
+def _tz_option_label(tz: str, index: int) -> str:
+    """<=100-char Select label for a timezone."""
+    return f"{tz_opts.pretty_zone(tz)} - {tz_opts.offset_label(tz)}"[:100]
+
+
+def _timezone_node(key: str, description: str, getter, setter) -> PanelNode:
+    """Two-step timezone picker: pick a region, then a city within it."""
+    return PanelNode(
+        key=key,
+        label="Timezone",
+        kind="grouped_paginated_select",
+        description=description,
+        get_values=getter,
+        set_values=setter,
+        group_get_groups=tz_opts.get_regions,
+        group_get_items=tz_opts.get_zones,
+        list_format_line=_tz_line,
+        list_item_option_label=_tz_option_label,
+        list_item_value=lambda tz: tz,
+        list_action_label="Select",
+        list_page_size=25,
+        is_customized=_value_diverges(getter, "America/Chicago"),
+    )
 
 _WYR_ARCHIVE_OPTIONS = [
     ("60", "1 Hour"),
@@ -615,17 +633,11 @@ WYR_SCHEDULE_CONFIG = PanelNode(
             min_values=1,
             max_values=1,
         ),
-        "wyr_timezone": PanelNode(
-            key="wyr_timezone",
-            label="Timezone",
-            kind="option_select",
-            description="Timezone used when interpreting the post hour/minute.",
-            options=_WYR_TIMEZONE_OPTIONS,
-            get_values=WYRConfigActions.get_schedule_timezone,
-            set_values=WYRConfigActions.set_schedule_timezone,
-            is_customized=_value_diverges(WYRConfigActions.get_schedule_timezone, "America/Chicago"),
-            min_values=1,
-            max_values=1,
+        "wyr_timezone": _timezone_node(
+            "wyr_timezone",
+            "Timezone used when interpreting the post hour/minute - choose a region, then a city.",
+            WYRConfigActions.get_schedule_timezone,
+            WYRConfigActions.set_schedule_timezone,
         ),
     },
 )
@@ -737,17 +749,11 @@ DROPS_SCHEDULE_CONFIG = PanelNode(
             min_values=1,
             max_values=1,
         ),
-        "drops_timezone": PanelNode(
-            key="drops_timezone",
-            label="Timezone",
-            kind="option_select",
-            description="Timezone used when interpreting the post hour/minute.",
-            options=_WYR_TIMEZONE_OPTIONS,
-            get_values=DropsActions.get_schedule_timezone,
-            set_values=DropsActions.set_schedule_timezone,
-            is_customized=_value_diverges(DropsActions.get_schedule_timezone, "America/Chicago"),
-            min_values=1,
-            max_values=1,
+        "drops_timezone": _timezone_node(
+            "drops_timezone",
+            "Timezone used when interpreting the post hour/minute - choose a region, then a city.",
+            DropsActions.get_schedule_timezone,
+            DropsActions.set_schedule_timezone,
         ),
     },
 )

@@ -3,6 +3,14 @@
 ## [Unreleased] - 2026-07-29
 
 ### Fixed
+- **You can pick your actual timezone again for scheduled posts.** The Timezone setting for both
+  Would You Rather and Prime Drops only offered nine choices, so if your server was not in one of
+  those nine the closest you could get was "near enough". It is back to the two-step picker: choose
+  a region first (Americas, Europe, Asia, Africa, Australia, Pacific and so on), then page through
+  the cities in it and pick yours - for example Americas, then Chicago. Each city shows its current
+  UTC offset next to it so you can confirm you have the right one. Posts land at the hour you set
+  in your own local time, daylight saving included.
+
 - **The builder preview now shows spacing the way Discord actually will.** If you left an
   empty line between two paragraphs, the preview closed the gap up and showed them stacked
   together - then the real message in Discord had the empty line after all. Text that looked
