@@ -62,7 +62,17 @@ next snapshot cycle overwrites them - snapshots upsert-replace per entity, so th
 Both touch production data: dry-run first, verify counts, then `--apply` from where the
 normal replica-set connection reaches the primary.
 
-## 3. Dead tier fields  (`m12_drop_dead_tier_fields`)  -  PENDING
+## 3. Dead tier fields  (`m12_drop_dead_tier_fields`)  -  NOTHING TO DO (verified 2026-08-01)
+
+> **Dry-run against production reports a no-op.** `Settings.GuildConfig` holds 2 documents;
+> **0** carry `roles.tiers` and **0** carry `embed.color_tiers`. Neither field was ever
+> persisted - they existed only as in-memory defaults, and the code that produced those
+> defaults was removed before any `save_config` wrote them down. There is no orphaned data
+> to drop, so `--apply` would match nothing.
+>
+> The script is kept rather than deleted: it is idempotent, it costs nothing to leave in
+> place, and it documents why the two fields are gone. **No action is required.** The rest
+> of this section is the original analysis and stays for the record.
 
 From the 2026-07-29 admin-panel placeholder audit
 ([`.docs/TheCodex/ADMIN_PANEL_PLACEHOLDERS.md`](../../../.docs/TheCodex/ADMIN_PANEL_PLACEHOLDERS.md)).
@@ -98,4 +108,5 @@ leftover. The dry run prints every NON-EMPTY value it is about to drop so you ca
 this before committing.
 
 **Runbook:** dry-run, read the non-empty report, then `--apply` and deploy the code in the
-same window.
+same window. *(Superseded 2026-08-01 - the dry run found nothing to remove. The code half
+is already deployed; there is no data half to run.)*
