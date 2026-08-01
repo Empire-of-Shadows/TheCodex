@@ -1,5 +1,35 @@
 # Changelog
 
+## [Unreleased] - 2026-08-01
+
+### Changed
+- **The bot now asks Discord for far less than it used to.** TheCodex was subscribed to a broad
+  default set of server events, most of which it never did anything with - reactions, emoji and
+  sticker changes, voice activity, typing, invites, webhooks, integrations, bans, scheduled events
+  and automod. It now asks only for the four it actually uses. Nothing you can see changes; the
+  bot simply stops being told about things it was ignoring anyway.
+
+### Fixed
+- **The privacy policy was wrong about how your suggestions reach us.** It said the bot reads your
+  messages and stores the text when it is part of a submission. That is not what happens.
+  Suggestions are typed into a pop-up form, and that form's contents are what get stored - the bot
+  is not reading your messages to find them. Would-You-Rather was described the same wrong way; all
+  that is stored there is which of the two options you picked, and the questions come from a
+  question bank we write rather than from members.
+- **It also never explained what the bot does read.** TheCodex can see message text, and the policy
+  now says exactly where that is used and that none of it is kept: the words you type after
+  mentioning the bot become a search of the guide, an announcement's text is used to name the
+  discussion thread opened underneath it, and posts in channels set up for drop tracking are only
+  counted. None of that text is written down anywhere.
+
+### Changed
+- **The policy you agree to when you sign in now covers every Empire of Shadows service.** One
+  login signs you in to all of the bot dashboards, but the login screen only ever pointed at
+  TheCodex's own privacy policy, which does not describe what the other bots do with your data.
+  Signing in now points you to a single combined Empire of Shadows privacy policy covering every
+  bot, dashboard and tool. TheCodex's own privacy page has not gone anywhere - it is linked from
+  the same line and from the footer, and still holds the detail specific to this bot.
+
 ## [Unreleased] - 2026-07-29
 
 ### Fixed

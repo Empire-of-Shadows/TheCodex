@@ -4,7 +4,7 @@ import { api } from "../api/client";
 import type { User } from "../api/types";
 import AppHeader from "../components/AppHeader";
 
-const EFFECTIVE_DATE = "June 8, 2026";
+const EFFECTIVE_DATE = "August 1, 2026";
 
 export default function PrivacyPolicyPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -33,9 +33,10 @@ export default function PrivacyPolicyPage() {
           <p>
             This policy explains what data TheCodex ("the bot", "we", "us") collects when you use
             the bot or the web dashboard, how we use it, and the choices you have. TheCodex is part
-            of the Empire of Shadows ecosystem and is designed to work in any Discord server. To
-            power features such as suggestions and polls, the bot uses Discord's <strong>Message
-            Content</strong> intent - see "Information we collect" below for exactly what is kept.
+            of the Empire of Shadows ecosystem and is designed to work in any Discord server. The
+            bot has Discord's <strong>Message Content</strong> intent enabled so it can read the
+            words you type after mentioning it, but it does not store the text of your messages -
+            see "Information we collect" below for exactly what is kept.
           </p>
         </section>
 
@@ -48,12 +49,14 @@ export default function PrivacyPolicyPage() {
               your permissions in them, which we use for access control.
             </li>
             <li>
-              <strong>Suggestion text and votes:</strong> when you submit a suggestion, the bot
-              reads and <strong>stores the text you write</strong> together with its votes and
-              status, so it can be reviewed and displayed.
+              <strong>Suggestion text and votes:</strong> the title, description and details you
+              type into the suggestion form are <strong>stored</strong> along with the suggestion's
+              votes and status, so it can be reviewed and displayed. This text comes from the form
+              you fill in, not from reading your messages.
             </li>
             <li>
-              <strong>Would-You-Rather votes</strong> you cast, with the related poll content.
+              <strong>Would-You-Rather votes:</strong> which of the two options you picked, and the
+              running totals. The questions come from a question bank we write, not from members.
             </li>
             <li><strong>Server-boost records</strong> for the servers you boost.</li>
             <li>
@@ -68,9 +71,11 @@ export default function PrivacyPolicyPage() {
             <li><strong>A session cookie</strong> that keeps you signed in to the dashboard.</li>
           </ul>
           <p className="muted">
-            Tag-tracker status is read live from your Discord roles and is not stored. Message
-            content is only read and stored when it is part of a submission you make (such as a
-            suggestion); the bot does not archive general chat history.
+            Tag-tracker status is read live from your Discord roles and is not stored. The bot reads
+            message text in three places and stores none of it: the words after a mention of the bot
+            become a search query for the guide, an announcement's text is used to name the
+            discussion thread opened under it, and posts in channels set up for drop tracking are
+            counted without their text being examined. The bot does not archive chat history.
           </p>
         </section>
 
