@@ -3,8 +3,9 @@
 Two clients: ``_client`` (MONGO_URI) holds Codex's own data (Guide, Settings, Daily,
 Suggestions, ServerData); ``_shared_client`` (SHARED_SESSIONS_URI) holds the shared
 cross-bot session store (WebSessions.SharedSessions + WebSessions.OAuthStates), kept on
-its own client so the SSO store can live on a separate Mongo. SHARED_SESSIONS_URI defaults
-to MONGO_URI, so an un-split deployment behaves exactly as before.
+its own client so the SSO store can live on a separate Mongo. SHARED_SESSIONS_URI is
+required and has no fallback - see the note in ``config.py`` for why inheriting MONGO_URI
+was the wrong default here.
 """
 
 from pymongo import AsyncMongoClient
@@ -21,8 +22,8 @@ async def connect():
         raise RuntimeError("MONGO_URI environment variable is required")
     _client = AsyncMongoClient(MONGO_URI)
     await _client.admin.command("ping")
-    # Dedicated client for the shared cross-bot session store (defaults to the same
-    # Mongo as MONGO_URI unless SHARED_SESSIONS_URI splits it out).
+    # Dedicated client for the shared cross-bot session store. Its URI is validated at
+    # import time in config.py, so it is always explicitly set by the time we get here.
     _shared_client = AsyncMongoClient(SHARED_SESSIONS_URI)
     await _shared_client.admin.command("ping")
 

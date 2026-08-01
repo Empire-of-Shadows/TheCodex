@@ -25,10 +25,13 @@ DISCORD_API_BASE = "https://discord.com/api/v10"
 
 # MongoDB - codex's own data.
 MONGO_URI = os.getenv("MONGO_URI", "")
-# Shared cross-bot session store (WebSessions DB). A dedicated URI/client keeps the
-# shared SSO store separate from codex's own data (matching relay); defaults to
-# MONGO_URI so a deployment that hasn't split them yet keeps working.
-SHARED_SESSIONS_URI = os.getenv("SHARED_SESSIONS_URI", "") or MONGO_URI
+# Shared cross-bot session store (WebSessions DB), on its own URI/client so the SSO
+# store can live on a different Mongo than codex's own data - which is what every
+# other dashboard does. Required, with NO fallback to MONGO_URI: codex's database is
+# currently also the host of the shared store, so a fallback would look correct right
+# up until either side moved, at which point codex would quietly keep its own private
+# session store and a login here would stop being valid anywhere else.
+SHARED_SESSIONS_URI = os.getenv("SHARED_SESSIONS_URI", "")
 
 # Session signing (itsdangerous URLSafeTimedSerializer key)
 SECRET_KEY = os.getenv("DASHBOARD_SECRET_KEY", "")
@@ -100,14 +103,16 @@ TRUSTED_PROXY_IPS = frozenset(
 def _validate_config() -> None:
     """Fail fast on missing/misconfigured environment rather than 500ing later.
 
-    The dashboard cannot function without the bot token (live guild checks) and
-    the Mongo URI. In production, the Secure cookie flag and CORS origin also
-    depend on ENVIRONMENT/BASE_URL being set correctly - a silent wrong default
-    there is a security regression.
+    The dashboard cannot function without the bot token (live guild checks), the
+    Mongo URI, and the shared-session URI that makes single sign-on work across the
+    fleet. In production, the Secure cookie flag and CORS origin also depend on
+    ENVIRONMENT/BASE_URL being set correctly - a silent wrong default there is a
+    security regression.
     """
     required = {
         "DISCORD_TOKEN": BOT_TOKEN,
         "MONGO_URI": MONGO_URI,
+        "SHARED_SESSIONS_URI": SHARED_SESSIONS_URI,
     }
     missing = [name for name, val in required.items() if not val]
     if missing:
