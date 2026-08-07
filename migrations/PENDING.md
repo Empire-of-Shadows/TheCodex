@@ -111,7 +111,7 @@ this before committing.
 same window. *(Superseded 2026-08-01 - the dry run found nothing to remove. The code half
 is already deployed; there is no data half to run.)*
 
-## 4. Retired moderator tier  (`m13_drop_mod_role_ids`)  -  NOT YET RUN
+## 4. Retired moderator tier  (`m13_drop_mod_role_ids`)  -  APPLIED 2026-08-06
 
 From the owner ruling of 2026-08-04: admin surfaces are **admin-only fleet-wide**. There is
 no Mod tier - a former mod-role holder cannot open, view, or write anything on the admin
@@ -148,3 +148,8 @@ prints every non-empty list so the admin can re-grant Panel Access by hand where
 
 **Runbook:** dry-run, capture the non-empty report (the role ids are not recoverable from
 the document afterwards), then `--apply` and deploy the code in the same window.
+
+*(Applied 2026-08-06 with the bot down, before the admin-only deploy: matched=2 modified=2,
+verify 0 remaining. Both guilds had ONE delegated mod role, captured from the dry run:
+guild `1265120128295632926` role `1365522726206443550`, guild `1497083403453989007` role
+`1497083403856777347`. Re-grant Panel Access Roles by hand where intended.)*

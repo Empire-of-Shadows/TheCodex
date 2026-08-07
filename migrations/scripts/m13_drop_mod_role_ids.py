@@ -36,6 +36,10 @@ rollback - re-deploying the previous build restores ``mod_role_ids: []`` as a de
 the Mod tier resolves to empty. The role ids themselves are not recoverable from the
 document once applied, which is why the dry run prints them: capture that output before
 running --apply if you want a record.
+
+APPLIED against production 2026-08-06 (bot down): matched=2 modified=2, verify 0
+remaining. The two dropped lists are recorded in migrations/PENDING.md section 4.
+Re-running is a no-op.
 """
 
 from __future__ import annotations
