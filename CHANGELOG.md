@@ -1,5 +1,37 @@
 # Changelog
 
+## [Unreleased] - 2026-08-05
+
+### Added
+- **Create roles and channels straight from the picker.** Every role and channel picker in the
+  admin panel now carries a Create button: type a name and the new role or channel is created and
+  selected in one step, without leaving the panel. The button first checks that the bot itself is
+  allowed to create it and tells you which permission is missing instead of failing afterwards.
+  Text channel names follow Discord's rules (lowercase letters, digits and dashes), and a rejected
+  name comes back with a Try Again button that keeps what you typed.
+- **Pick a category when creating a channel.** The Create Channel button in the admin panel now
+  lets you choose which category the new channel goes under - or leave the picker empty to create
+  it at the top of the channel list. If something goes wrong, Try Again keeps both the name you
+  typed and the category you picked.
+
+### Changed
+- **The panel now refuses roles that would not actually work.** The pickers that decide who can
+  open the admin panel no longer accept @everyone or roles managed by an integration (bot roles,
+  booster roles) - membership of those is outside the server's control, so allowing them would
+  open the panel wider than intended. Regular admin roles still work, including ones that sit
+  above the bot. Every refusal explains itself.
+
+## [Unreleased] - 2026-08-02
+
+### Added
+- **There is now a `/help` menu.** Run `/help` and you get a browsable panel covering
+  everything the bot can do, one category at a time: the server guide and info board,
+  suggestions, Would You Rather, boosts and Prime Gaming drops, and embed building. Each
+  page lists the commands it covers and what they take. Pick a category from the dropdown
+  to switch pages, and there is a button straight through to the web dashboard. Only you
+  can see it. If you can manage the server you also get an Admin page covering the admin
+  panel, the board, greeting, whitelist and Would You Rather staff commands.
+
 ## [Unreleased] - 2026-08-01
 
 ### Changed
