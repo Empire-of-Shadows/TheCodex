@@ -7,7 +7,6 @@ export interface User extends SessionUser {
   username: string;
   discriminator: string;
   can_access_admin_any: boolean;
-  can_access_mod_any: boolean;
   can_access_settings_any: boolean;
 }
 
@@ -271,11 +270,11 @@ export interface AuditLogResponse {
 
 // ── Settings ─────────────────────────────────────────────────────────────
 
-export type PanelRole = "admin" | "mod" | "none";
+// The admin panel and dashboard are admin-only fleet-wide - there is no Mod tier.
+export type PanelRole = "admin" | "none";
 
 export interface RolesSection {
   admin_role_ids: string[];
-  mod_role_ids: string[];
   tiers?: Record<string, unknown>;
 }
 
@@ -372,5 +371,4 @@ export interface SettingsResponse {
   config: GuildSettings;
   defaults: GuildSettings;
   panel_role: PanelRole;
-  mod_allowed_sections: string[];
 }

@@ -28,12 +28,11 @@ def has_greeting_permissions_app():
         # Get guild config for dynamic role checks
         guild_config = await get_config(interaction.guild.id)
 
-        # Check for admin or moderator roles from config
+        # Check for configured Panel Access roles from config
         user_role_ids = {role.id for role in getattr(user, "roles", [])}
         admin_set = set(guild_config.roles["admin_role_ids"])
-        mod_set = set(guild_config.roles["mod_role_ids"])
 
-        return bool(user_role_ids & (admin_set | mod_set))
+        return bool(user_role_ids & admin_set)
 
     return app_commands.check(predicate)
 
@@ -185,11 +184,9 @@ class GreetingGroup(commands.GroupCog, name="greeting", description="Greeting sy
         role_mentions = ["• `Administrator` permission"]
         for role_id in guild_config.roles["admin_role_ids"]:
             role_mentions.append(f"• <@&{role_id}>")
-        for role_id in guild_config.roles["mod_role_ids"]:
-            role_mentions.append(f"• <@&{role_id}>")
 
         if len(role_mentions) == 1:
-            role_mentions.append("• *No staff roles configured*")
+            role_mentions.append("• *No Panel Access roles configured*")
 
         embed.add_field(
             name="Required Permissions",

@@ -1,5 +1,21 @@
 # Changelog
 
+## [Unreleased] - 2026-08-06
+
+### Changed
+- **The separate moderator access level is gone.** The admin panel and the web dashboard now
+  need **Manage Server** or a **Panel Access** role - there is no longer a lesser "mod" tier that
+  could open them with a limited view. Anyone who was reaching the panel or the dashboard through
+  a Mod Access role will find they no longer can; give them a Panel Access role if you want them
+  to keep getting in, and remember that grants full access. The same applies to the staff-only
+  commands: the info board, the greeting commands, and the whitelist (including `/whitelist list`
+  and `/whitelist check`, which mods could previously view) are all admin-only now.
+- **The Mod Access Roles picker has been removed** from both the admin panel and the dashboard,
+  and any roles you had listed there no longer grant anything.
+- **"Role Configuration" is now just "Panel Access Roles".** With only one setting left inside it,
+  the extra menu step was pointless - picking it from the panel's main list opens the role picker
+  straight away instead of a menu holding a single entry.
+
 ## [Unreleased] - 2026-08-05
 
 ### Added

@@ -17,42 +17,12 @@ WHITELIST_ROLE_COLOR = discord.Color.blue()
 ACCOUNT_AGE_REQUIREMENT_DAYS = 90  # Must match the age check in joining.py
 
 
-def has_whitelist_permissions_app():
-    """App command check for whitelist *read* access (list/check).
-
-    Admins and mods both qualify; mutations use the stricter admin-only check
-    below.
-    """
-    async def predicate(interaction: discord.Interaction) -> bool:
-        if not interaction.guild:
-            return False
-
-        user = interaction.user
-
-        # Check if user has administrator permission
-        perms = getattr(user, "guild_permissions", None)
-        if perms and perms.administrator:
-            return True
-
-        # Get guild config for dynamic role checks
-        guild_config = await get_config(interaction.guild.id)
-
-        # Check for admin or moderator roles from config
-        user_role_ids = {role.id for role in getattr(user, "roles", [])}
-        admin_set = set(guild_config.roles["admin_role_ids"])
-        mod_set = set(guild_config.roles["mod_role_ids"])
-
-        return bool(user_role_ids & (admin_set | mod_set))
-
-    return app_commands.check(predicate)
-
-
 def has_whitelist_admin_app():
-    """App command check for whitelist *mutation* (add/remove).
+    """App command check for every whitelist command (read and mutation).
 
-    Stricter than has_whitelist_permissions_app: per the ecosystem convention
-    mod-tier is read-only, so only administrators (or configured admin roles)
-    may change the screening whitelist.
+    Admin-only: Administrator permission or a configured Panel Access role.
+    There is no moderator tier, so viewing and changing the screening whitelist
+    are gated the same way.
     """
     async def predicate(interaction: discord.Interaction) -> bool:
         if not interaction.guild:
@@ -148,21 +118,20 @@ class WhitelistGroup(commands.GroupCog, name="whitelist", description="Manage me
     ):
         """Explain a denied whitelist command instead of a bare "unavailable".
 
-        Mutations are admin-tier and reads are admin-or-mod, so the notice names
-        which one was missing and where the tier is granted.
+        Every whitelist command is admin-tier, so the notice names the Panel
+        Access role and where it is granted; only the verb differs between a
+        mutation and a read.
         """
         if not isinstance(error, app_commands.CheckFailure):
             raise error
 
         command = getattr(interaction.command, "name", "")
-        admin_only = command in ("add", "remove")
         embed = await permission_notice_embed(
             interaction.guild,
             action=(
-                "change the screening whitelist" if admin_only
+                "change the screening whitelist" if command in ("add", "remove")
                 else "view the screening whitelist"
             ),
-            admin_only=admin_only,
         )
         try:
             if interaction.response.is_done():
@@ -507,7 +476,7 @@ class WhitelistGroup(commands.GroupCog, name="whitelist", description="Manage me
             await interaction.followup.send(embed=embed, ephemeral=True)
 
     @app_commands.command(name="list", description="List all whitelisted members")
-    @has_whitelist_permissions_app()
+    @has_whitelist_admin_app()
     @app_commands.guild_only()
     async def list_whitelist(self, interaction: discord.Interaction):
         """List all whitelisted members."""
@@ -577,7 +546,7 @@ class WhitelistGroup(commands.GroupCog, name="whitelist", description="Manage me
 
     @app_commands.command(name="check", description="Check if a member is whitelisted")
     @app_commands.describe(user="The member to check (User ID or exact username - case sensitive)")
-    @has_whitelist_permissions_app()
+    @has_whitelist_admin_app()
     @app_commands.guild_only()
     async def check(self, interaction: discord.Interaction, user: str):
         """Check if a member is whitelisted."""

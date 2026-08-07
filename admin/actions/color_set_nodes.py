@@ -551,6 +551,5 @@ def build_color_tiers_node() -> PanelNode:
         summary_builder=color_tiers_summary_text,
         # A bespoke settings editor, not a one-shot action - count it in the badge.
         counts_as_setting=True,
-        mod_allowed=False,
     )
     return node

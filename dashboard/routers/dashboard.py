@@ -23,10 +23,9 @@ _ADMIN_PROBE_LIMIT = 25
 async def me(session: dict = Depends(get_current_user)):
     """Return the current user's info plus panel-access flags.
 
-    Mirrors TheHost: probe configured panel roles across bot-present session
-    guilds. admin = MANAGE_GUILD anywhere OR an admin role anywhere; mod = a mod
-    role anywhere (`resolve_panel_role` only returns "mod" when the user is not
-    admin on that guild, so MANAGE_GUILD never grants mod).
+    Probe configured panel roles across bot-present session guilds:
+    admin = MANAGE_GUILD anywhere OR a Panel Access role anywhere. There is no
+    mod tier, so admin access is the only access.
     """
     user = session["user_data"]
     can_manage_any = any(
@@ -44,7 +43,6 @@ async def me(session: dict = Depends(get_current_user)):
     )
     roles = [r for r in results if isinstance(r, str)]
     can_access_admin_any = can_manage_any or any(r == "admin" for r in roles)
-    can_access_mod_any = any(r == "mod" for r in roles)
 
     return {
         "id": user["id"],
@@ -53,8 +51,7 @@ async def me(session: dict = Depends(get_current_user)):
         "avatar": user.get("avatar"),
         "discriminator": user.get("discriminator"),
         "can_access_admin_any": can_access_admin_any,
-        "can_access_mod_any": can_access_mod_any,
-        "can_access_settings_any": can_access_admin_any or can_access_mod_any,
+        "can_access_settings_any": can_access_admin_any,
     }
 
 
@@ -77,10 +74,10 @@ async def _guild_ids_with_config(guild_ids: list[str]) -> set[str]:
 
 @router.get("/guilds")
 async def guilds(session: dict = Depends(get_current_user)):
-    """Return guilds the user can manage as admin or mod, with bot status + role.
+    """Return guilds the user can manage, with bot status + role.
 
-    Includes every session guild where the user holds MANAGE_GUILD (admin, shown
-    even when the bot is absent so they can invite it) or a configured admin/mod
+    Includes every session guild where the user holds MANAGE_GUILD (shown even
+    when the bot is absent so they can invite it) or a configured Panel Access
     role. Each entry carries its resolved `panel_role`.
     """
     session_guilds = session.get("guilds", [])

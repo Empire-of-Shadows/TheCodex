@@ -110,3 +110,41 @@ this before committing.
 **Runbook:** dry-run, read the non-empty report, then `--apply` and deploy the code in the
 same window. *(Superseded 2026-08-01 - the dry run found nothing to remove. The code half
 is already deployed; there is no data half to run.)*
+
+## 4. Retired moderator tier  (`m13_drop_mod_role_ids`)  -  NOT YET RUN
+
+From the owner ruling of 2026-08-04: admin surfaces are **admin-only fleet-wide**. There is
+no Mod tier - a former mod-role holder cannot open, view, or write anything on the admin
+panel or the web dashboard. Codex converted 2026-08-06.
+
+`$unset`s one GuildConfig field the code no longer reads:
+
+| Field | Why it is dead |
+|---|---|
+| `roles.mod_role_ids` | The Mod Access role list. Nothing resolves the tier any more. |
+
+**Code that ships with this migration** (deploy together - `from_dict` uses
+`_merge_unknown_keys`, so a stored key survives in memory until it is `$unset`, and the
+defaults would otherwise write it back on the next `save_config`):
+
+- `admin/settings/bindings.py` - `resolve_panel_role` collapses to `"admin"` / `"none"`;
+  `MOD_ALLOWED_CATEGORIES` removed; `ROLE_ACCESS_PATH` added for the flattened node.
+- `admin/settings/panel_configs.py` - `panel_roles_pair(include_mod=False)`; the
+  single-child "Role Configuration" wrapper menu flattened to a top-level **Panel Access
+  Roles** leaf (ADMIN_PANEL_STANDARD.md 1.1); every `mod_allowed=` flag dropped.
+- `storage/settings/config_manager.py` - `mod_role_ids` out of `_default_roles()`,
+  `to_dict`, `from_dict`; `is_moderator_role` / `is_staff_role` / `has_staff_role` removed
+  (zero callers); `set_role` no longer accepts `"moderator"`.
+- Feature permission checks now admin-only: `Features/Board/board.py`,
+  `Features/ce_utilities/create_embed.py`, `Features/NewMembers/admin/whitelist.py`,
+  `Features/NewMembers/admin/greetingtrigger.py`.
+- Dashboard - `auth/panel_role.py` two-tier; `routers/settings.py` drops
+  `MOD_ALLOWED_SECTIONS`; `routers/dashboard.py` drops `can_access_mod_any`; frontend
+  `PanelRole` narrowed and every mod-tier control removed.
+
+**No access is carried across.** Mod role ids are deliberately NOT merged into
+`roles.admin_role_ids` - that would widen access, the opposite of the ruling. The dry run
+prints every non-empty list so the admin can re-grant Panel Access by hand where intended.
+
+**Runbook:** dry-run, capture the non-empty report (the role ids are not recoverable from
+the document afterwards), then `--apply` and deploy the code in the same window.

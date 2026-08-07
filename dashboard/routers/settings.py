@@ -2,8 +2,8 @@
 
 Mirrors the panel groups defined in admin/settings/panel_configs.py but
 exposes them through a single section-keyed JSON endpoint suitable for
-the web dashboard. Admin tier may edit every mutable section; mod tier
-is gated to MOD_ALLOWED_SECTIONS (currently empty).
+the web dashboard. The dashboard is admin-only - there is no mod tier -
+so a caller who reaches these routes may edit every mutable section.
 """
 
 from __future__ import annotations
@@ -47,9 +47,6 @@ _MUTABLE_SECTIONS: frozenset[str] = frozenset({
     "guide",
 })
 
-# Sections a mod tier may PUT. Empty until features opt in.
-MOD_ALLOWED_SECTIONS: frozenset[str] = frozenset()
-
 # Subkeys that exist inside a section's stored doc but are NOT managed by
 # the settings dashboard. Stripped from GET responses (so the frontend draft
 # does not include them) and excluded from PUT allowed-keys (so an honest
@@ -63,7 +60,13 @@ _SECTION_EXCLUDED_KEYS: dict[str, frozenset[str]] = {
     # used to be here claimed the Discord panel managed it - it never did. The live
     # role-to-tier mapping is `embed.role_tier` (Embed Settings -> Role Tier Mapping),
     # and `embed` is excluded from this form wholesale.
-    "roles": frozenset({"tiers"}),
+    #
+    # mod_role_ids is the retired moderator tier (removed 2026-08-06; admin surfaces
+    # are admin-only fleet-wide). Listed here for the same reason as tiers: a stored
+    # doc still carrying it until migration m13 `$unset`s it must not be echoed into
+    # the client draft, because PUT would then reject the whole roles section as an
+    # unknown field and Panel Access Roles could not be saved.
+    "roles": frozenset({"tiers", "mod_role_ids"}),
 }
 
 # ── ID coercion ─────────────────────────────────────────────────────────────
@@ -90,7 +93,7 @@ _ROLE_ID_FIELDS: dict[str, tuple[str, ...]] = {
 }
 
 _ROLE_ID_LIST_FIELDS: dict[str, tuple[str, ...]] = {
-    "roles": ("admin_role_ids", "mod_role_ids"),
+    "roles": ("admin_role_ids",),
 }
 
 
@@ -139,7 +142,7 @@ def _coerce_section_ids(section: str, value: dict) -> None:
             value[k] = _coerce_id(value[k])
     for k in _ROLE_ID_LIST_FIELDS.get(section, ()):
         if k in value and isinstance(value[k], list):
-            # Permission role lists persist as STRINGS (migration m9), unlike the
+            # The permission role list persists as STRINGS (migration m9), unlike the
             # scalar channel/role fields above which the config still stores as ints.
             value[k] = [str(v) for v in value[k] if v is not None]
     if section == "drops" and isinstance(value.get("tracker_channels"), dict):
@@ -205,7 +208,6 @@ async def get_settings(guild_id: str, session: dict = Depends(get_current_user))
         "config": _serialize_config(doc),
         "defaults": _serialize_defaults(),
         "panel_role": role,
-        "mod_allowed_sections": sorted(MOD_ALLOWED_SECTIONS),
     }
 
 
@@ -215,7 +217,7 @@ async def update_settings(
     patch: SettingsPatch,
     session: dict = Depends(get_current_user),
 ):
-    role = await require_panel_access(session, guild_id)
+    await require_panel_access(session, guild_id)
     # Both the config and the audit log are string-keyed (migrations m4 / m8).
     gid = str(int(guild_id))
     doc = await db.guild_config().find_one({"guild_id": gid})
@@ -238,11 +240,6 @@ async def update_settings(
     for section, value in payload.items():
         if section not in _MUTABLE_SECTIONS:
             raise HTTPException(status_code=400, detail=f"Section '{section}' is not editable")
-        if role == "mod" and section not in MOD_ALLOWED_SECTIONS:
-            raise HTTPException(
-                status_code=403,
-                detail=f"Mod role cannot edit '{section}'",
-            )
         if not isinstance(value, dict):
             raise HTTPException(status_code=400, detail=f"Section '{section}' must be an object")
 

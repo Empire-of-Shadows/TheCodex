@@ -226,7 +226,6 @@ def build_tag_tracker_node() -> PanelNode:
         summary_builder=tag_tracker_summary_text,
         counts_as_setting=True,
         requires_role_manage=True,
-        mod_allowed=False,
     )
     return node
 
@@ -335,6 +334,5 @@ def build_boost_tracker_node() -> PanelNode:
         summary_builder=boost_tracker_summary_text,
         counts_as_setting=True,
         required_channel_perms=_BOOST_CHANNEL_PERMS,
-        mod_allowed=False,
     )
     return node

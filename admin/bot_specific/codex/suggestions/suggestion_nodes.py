@@ -113,7 +113,6 @@ def build_suggestion_update_status_node() -> PanelNode:
         kind="action",
         description="Update a suggestion's review status.",
         on_run=_on_run,
-        mod_allowed=False,
     )
 
 
@@ -147,7 +146,6 @@ def build_suggestion_export_node() -> PanelNode:
         kind="action",
         description="Export suggestions as CSV or JSON.",
         on_run=_on_run,
-        mod_allowed=False,
     )
 
 
@@ -163,5 +161,4 @@ def build_suggestion_status_node() -> PanelNode:
         label="View Status",
         description="View suggestion system stats.",
         render=_render,
-        mod_allowed=True,
     )

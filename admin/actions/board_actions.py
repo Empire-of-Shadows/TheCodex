@@ -203,7 +203,6 @@ def build_board_publish_node() -> PanelNode:
         kind="action",
         description="Push the saved board layout live to its channel.",
         on_run=_on_run,
-        mod_allowed=False,
     )
 
 

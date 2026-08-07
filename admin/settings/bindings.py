@@ -43,10 +43,16 @@ logger = logging.getLogger("AdminBindings")
 
 BOT_NAME = "The Codex"
 
-# Mod-tier access is declared per-node via ``PanelNode.mod_allowed`` flags in panel_configs
-# (the engine's ``auth.effective_mod_allowed`` reads them); this legacy top-level-category
-# fallback is intentionally empty. No section grants blanket mod access by category.
-MOD_ALLOWED_CATEGORIES: set[str] = set()
+# Breadcrumb the vendored setup_notice module renders for "who can grant panel
+# access". Codex's node sits at the panel's top level (the old single-child
+# "Role Configuration" wrapper menu was flattened per ADMIN_PANEL_STANDARD.md
+# 1.1), so the engine default path would point at a menu that no longer exists.
+ROLE_ACCESS_PATH = "Panel Access Roles"
+
+# The Codex panel is admin-only: there is no Mod tier. resolve_panel_role below
+# collapses anything that is not "admin" to "none", so neither per-node
+# `PanelNode.mod_allowed` flags nor the legacy `MOD_ALLOWED_CATEGORIES` fallback
+# are used by this bot.
 
 # OVERVIEW_FOOTER / SETUP_GUIDE_TEXT are re-exported from panel_branding above.
 
@@ -54,14 +60,15 @@ MOD_ALLOWED_CATEGORIES: set[str] = set()
 # ── Tier resolution ──────────────────────────────────────────────────────────────
 
 async def resolve_panel_role(user: discord.Member, guild_id: int) -> str:
-    """Return "admin" | "mod" | "none".
+    """Return "admin" | "none" - the Codex panel has no Mod tier.
 
-    Delegates to the shared engine resolver (``auth.resolve_panel_role_from_config``), which
-    reads the admin/mod role-id lists from config via ``config_get`` at the canonical paths
-    ``roles.admin_role_ids`` / ``roles.mod_role_ids`` (Manage Server always resolves to
-    "admin"). Those are structured ``GuildConfig`` fields; ``config_get`` below routes them to
-    the typed store, so the engine reads the very lists the role-picker writes."""
-    return await resolve_panel_role_from_config(user, int(guild_id))
+    Delegates to the shared engine resolver (``auth.resolve_panel_role_from_config``) for the
+    Manage Server + ``roles.admin_role_ids`` checks - that is a structured ``GuildConfig``
+    field, and ``config_get`` below routes it to the typed store, so the engine reads the very
+    list the role-picker writes - then collapses any non-admin outcome to "none". A stale
+    ``roles.mod_role_ids`` value in an old document therefore grants nothing."""
+    role = await resolve_panel_role_from_config(user, int(guild_id))
+    return role if role == "admin" else "none"
 
 
 # ── Dashboard flags (setup-guide toggle, etc.) ───────────────────────────────────

@@ -352,8 +352,8 @@ export default function DashboardPage() {
     } else if (guild.panel_role === "admin") {
       navigate(`/builder/${guild.id}`);
     } else {
-      // Mod-tier (or otherwise non-admin) guild: select it to view activity
-      // rather than opening the admin-only builder.
+      // No panel access: select it to view activity rather than opening the
+      // admin-only builder.
       handleGuildFilter(guild.id);
     }
   };
@@ -432,16 +432,6 @@ export default function DashboardPage() {
               <p className="guild-invite-hint" style={{ marginTop: 8 }}>
                 Bot not in this server yet. Use the link above to add it, then return here.
               </p>
-            </div>
-          );
-        }
-        if (sel.panel_role !== "admin") {
-          return (
-            <div className="admin-section">
-              <h3>Moderator</h3>
-              <div className="admin-actions">
-                <span className="guild-invite-hint">Moderator access. Management tools are coming soon.</span>
-              </div>
             </div>
           );
         }

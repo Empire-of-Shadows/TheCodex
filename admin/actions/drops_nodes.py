@@ -153,7 +153,6 @@ def build_drops_channel_node() -> PanelNode:
         summary_builder=drops_channel_summary_text,
         counts_as_setting=True,
         required_channel_perms=DROPS_CHANNEL_PERMS,
-        mod_allowed=False,
     )
     return node
 
@@ -277,7 +276,6 @@ def build_drops_tracker_node() -> PanelNode:
         get_values=drops_tracker_summary_values,
         summary_builder=drops_tracker_summary_text,
         counts_as_setting=True,
-        mod_allowed=False,
     )
     return node
 

@@ -257,9 +257,8 @@ ADMIN = HelpCategory(
         "**Member screening** - `/whitelist add <user>`, `/whitelist remove <user>`, "
         "`/whitelist list`, `/whitelist check <user>`\n"
         "New accounts below the age requirement are removed on join unless they are "
-        "whitelisted. Add and remove are admin-only; list and check are open to "
-        "mods as well. Take a user ID rather than a username where you can - "
-        "usernames are case sensitive.\n"
+        "whitelisted. All four are admin-only. Take a user ID rather than a username "
+        "where you can - usernames are case sensitive.\n"
         "\n"
         "**Would You Rather** - `/wyr post [category] [random_pick]`, "
         "`/wyr reset_stats <user>`\n"
@@ -272,9 +271,9 @@ ADMIN = HelpCategory(
         f"Everything above is also configurable in the browser at {DASHBOARD_URL} - "
         "sign in with Discord.\n"
         "\n"
-        "Access is Manage Server, the configured Admin role, or the configured Mod "
-        "role. Mods get a read-only view of the panel. Set the admin and mod roles "
-        "first under Role Configuration."
+        "Access is Manage Server or a configured Panel Access role - nothing else "
+        "opens the panel or the dashboard. Set those roles first under Panel Access "
+        "Roles."
     ),
 )
 

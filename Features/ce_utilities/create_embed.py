@@ -58,9 +58,6 @@ def has_embed_permissions():
         if user_role_ids & set(guild_config.roles["admin_role_ids"]):
             return True
 
-        if user_role_ids & set(guild_config.roles["mod_role_ids"]):
-            return True
-
         tier_role_ids = set(guild_config.get_all_tier_role_ids())
         if user_role_ids & tier_role_ids:
             return True

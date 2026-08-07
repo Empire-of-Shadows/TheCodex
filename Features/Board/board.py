@@ -29,7 +29,7 @@ logger = get_logger("Board")
 
 
 def has_board_permissions():
-    """App command check: Administrator permission or a configured staff role."""
+    """App command check: Administrator permission or a configured Panel Access role."""
     async def predicate(interaction: discord.Interaction) -> bool:
         if not interaction.guild:
             return False
@@ -41,8 +41,7 @@ def has_board_permissions():
         guild_config = await get_config(interaction.guild.id)
         user_role_ids = {role.id for role in getattr(interaction.user, "roles", [])}
         admin_set = set(guild_config.roles["admin_role_ids"])
-        mod_set = set(guild_config.roles["mod_role_ids"])
-        return bool(user_role_ids & (admin_set | mod_set))
+        return bool(user_role_ids & admin_set)
 
     return app_commands.check(predicate)
 

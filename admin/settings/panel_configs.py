@@ -4,6 +4,14 @@ Admin Panel Config Trees.
 Defines PanelNode config trees for panels migrated to the generic engine.
 Each top-level node is passed to AdminCog._navigate_to() from the relevant
 _show_* handler.
+
+Top-level shape follows ADMIN_PANEL_STANDARD.md 1.1 (menu when an entry groups
+two or more settings, leaf when it is a single setting - ruled 2026-08-04):
+Panel Access Roles is a lone leaf in the Main Configurations group, above the
+Feature Configurations menus.
+
+The panel is admin-only: `bindings.resolve_panel_role` never returns "mod", so
+no node here declares `mod_allowed`.
 """
 
 import json
@@ -1055,15 +1063,23 @@ GUIDE_ENABLED_CONFIG = PanelNode(
 )
 
 
-# ── Panel Access (admin/mod role) get_values for dashboard summary ───────────
+# ── Panel Access role list ───────────────────────────────────────────────────
 
 # Built from the shared engine factory (panel_roles_pair) rather than hand-rolled
-# get/set/clear helpers. The default pre_check gates changes to who has panel access
-# behind Manage Server; keys, labels and role paths match what codex used before, and
-# the config-seam work lets these leaves reach the structured roles.* fields.
-_PANEL_ROLE_NODES = panel_roles_pair()
+# get/set/clear helpers. The panel is admin-only, so there is no mod picker.
+# The default pre_check gates changes to who has panel access behind
+# Manage Server, and the config-seam work lets this leaf reach the structured
+# roles.* fields.
+#
+# `str_ids` stays at its False default deliberately. Codex's storage boundary owns
+# the string form: `GuildConfig.to_dict` serializes the role list to strings (matching
+# migration m9) and `from_dict` coerces it back to ints, so the in-memory config this
+# leaf reads and writes holds INTS. Writing strings here would put strings into the
+# cached in-memory config, silently breaking the int comparisons in
+# `is_admin_role` / `has_admin_role` until the cache expired.
+_PANEL_ROLE_NODES = panel_roles_pair(str_ids=False)
 ADMIN_ROLES_CONFIG = _PANEL_ROLE_NODES["admin_roles"]
-MOD_ROLES_CONFIG = _PANEL_ROLE_NODES["mod_roles"]
+ADMIN_ROLES_CONFIG.category_group = "main"
 
 
 # ── Drops manager role ───────────────────────────────────────────────────────
@@ -1091,7 +1107,7 @@ DROPS_MANAGER_ROLE_CONFIG = role_leaf(
 )
 
 
-# ── "View Status" entries (read-only, mod-visible) ────────────────────────────
+# ── "View Status" entries (read-only) ─────────────────────────────────────────
 #
 # These surface live state the top-level overview does not - full config echo plus
 # stats - so each is a real `action` node built from the shared `info_action` factory.
@@ -1129,58 +1145,45 @@ NM_STATUS_NODE = info_action(
     label="View Status",
     description="View new members system status.",
     render=_render_new_member_status,
-    mod_allowed=True,
 )
 DROPS_STATUS_NODE = info_action(
     key="drops_status",
     label="View Status",
     description="View drops configuration and stats.",
     render=_render_drops_status,
-    mod_allowed=True,
 )
 WYR_STATUS_NODE = info_action(
     key="wyr_status",
     label="View Status",
     description="View Would You Rather configuration.",
     render=_render_wyr_status,
-    mod_allowed=True,
 )
 ANN_STATUS_NODE = info_action(
     key="ann_status",
     label="View Status",
     description="View announcement thread configuration.",
     render=_render_announcement_status,
-    mod_allowed=True,
 )
 TRACKER_STATUS_NODE = info_action(
     key="tracker_status",
     label="View Status",
     description="View tracker configuration and boost stats.",
     render=_render_tracker_status,
-    mod_allowed=True,
 )
 
 
 # ── MAIN_PANEL tree (Message 1 dashboard) ────────────────────────────────────
 #
-# Two-level tree per ADMIN_PANEL_STANDARD.md §1/§7:
-#   MAIN_PANEL.children = group menus (panel_access, embed_settings, ...)
-#   group.children      = subcategory entries (handler dispatch via admin_cog)
+# Top-level shape per ADMIN_PANEL_STANDARD.md §1.1: an entry is a MENU when it
+# groups two or more settings and a LEAF when it is a single setting. Panel
+# Access Roles is a lone `role_select` leaf and therefore sits directly on the
+# front screen - the old single-child "Role Configuration" wrapper menu was
+# non-compliant and was flattened when the mod picker was removed. Every other
+# entry groups several settings, so each stays a menu whose children are the
+# subcategory entries (handler dispatch via admin_cog), per §7.
 #
 # `category_group="main"` renders above the "── Feature Configurations ──"
 # divider in the dashboard Select; "feature" renders below.
-
-_PANEL_ACCESS_GROUP = PanelNode(
-    key="panel_access",
-    label="Role Configuration",
-    kind="menu",
-    description="Delegate admin panel access to server roles.",
-    category_group="main",
-    children={
-        "admin_roles": ADMIN_ROLES_CONFIG,
-        "mod_roles": MOD_ROLES_CONFIG,
-    },
-)
 
 _EMBED_SETTINGS_GROUP = PanelNode(
     key="embed_settings",
@@ -1341,8 +1344,9 @@ MAIN_PANEL = PanelNode(
     kind="menu",
     description=PANEL_DESCRIPTION,
     children={
-        # Main Configurations (per §7 hierarchy)
-        "panel_access": _PANEL_ACCESS_GROUP,
+        # Main Configurations (per §7 hierarchy) - a single-setting top-level
+        # leaf, opened straight from the front-screen select (§1.1).
+        "admin_roles": ADMIN_ROLES_CONFIG,
         # Feature Configurations
         "embed_settings": _EMBED_SETTINGS_GROUP,
         "wyr_settings": _WYR_SETTINGS_GROUP,

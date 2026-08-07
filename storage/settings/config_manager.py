@@ -2,8 +2,9 @@
 Unified Guild Configuration Manager for TheCodex Bot
 
 Feature-centric schema: each feature owns its channel ID, role ID, and
-settings in one place.  Cross-feature identifiers (admin/moderator roles,
-server admin channel) remain at the top level.
+settings in one place.  Cross-feature identifiers (admin roles, server
+admin channel) remain at the top level.  There is no moderator tier:
+``roles`` carries ``admin_role_ids`` only.
 
 Structured fields are managed through GuildConfig / save_config().
 Flat settings (legacy or miscellaneous) can still be written through
@@ -83,7 +84,6 @@ _STRUCTURED_KEYS: frozenset = frozenset({
 def _default_roles() -> Dict[str, Any]:
     return {
         "admin_role_ids": [],
-        "mod_role_ids": [],
     }
 
 
@@ -272,12 +272,11 @@ class GuildConfig:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for database storage.
 
-        The permission role lists are serialized as STRINGS (the storage-canonical
-        form, matching migration m9); ``from_dict`` coerces them back to ints for
+        The permission role list is serialized as STRINGS (the storage-canonical
+        form, matching migration m9); ``from_dict`` coerces it back to ints for
         in-memory comparisons against discord.py's int role ids."""
         roles = dict(self.roles)
         roles["admin_role_ids"] = [str(r) for r in roles.get("admin_role_ids") or []]
-        roles["mod_role_ids"] = [str(r) for r in roles.get("mod_role_ids") or []]
         return {
             "guild_id": self.guild_id,
             "roles": roles,
@@ -308,13 +307,12 @@ class GuildConfig:
         namespace) are deliberately not modeled; the diff-based save never
         touches them."""
         # ── roles ──────────────────────────────────────────────────────
-        # Normalize the permission-role lists to ints so downstream membership
+        # Normalize the permission-role list to ints so downstream membership
         # checks (create_embed, whitelist, is_admin_role) are type-consistent
         # regardless of how the ids were stored.
         stored = data.get("roles") or {}
         roles = _merge_unknown_keys({
             "admin_role_ids": _as_int_id_list(stored.get("admin_role_ids")),
-            "mod_role_ids": _as_int_id_list(stored.get("mod_role_ids")),
         }, stored)
 
         # ── server ─────────────────────────────────────────────────────
@@ -447,14 +445,6 @@ class GuildConfig:
     def is_admin_role(self, role_id: int) -> bool:
         """Check if a role ID is an admin role."""
         return role_id in self.roles["admin_role_ids"]
-
-    def is_moderator_role(self, role_id: int) -> bool:
-        """Check if a role ID is a moderator role."""
-        return role_id in self.roles["mod_role_ids"]
-
-    def is_staff_role(self, role_id: int) -> bool:
-        """Check if a role ID is admin or moderator."""
-        return self.is_admin_role(role_id) or self.is_moderator_role(role_id)
 
     def get_all_tier_role_ids(self) -> List[int]:
         """Every role id that Role Tier Mapping assigns to at least one tier.
@@ -680,15 +670,15 @@ class GuildConfigManager:
         return await self.save_config(config)
 
     async def set_role(self, guild_id: int, role_type: str, role_id: int, action: str = "add") -> bool:
-        """Add or remove a global permission role (admin or moderator).
+        """Add or remove a global permission role (admin only - there is no mod tier).
 
         Routed through the store's atomic ``$addToSet`` / ``$pull`` at the
-        canonical ``roles.admin_role_ids`` / ``roles.mod_role_ids`` paths, so
-        two concurrent role edits can never lose each other's update the way
-        the old read-modify-write save could."""
+        canonical ``roles.admin_role_ids`` path, so two concurrent role edits
+        can never lose each other's update the way the old read-modify-write
+        save could."""
         if not self._initialized:
             await self.initialize()
-        kind = {"admin": "admin", "moderator": "mod"}.get(role_type)
+        kind = {"admin": "admin"}.get(role_type)
         if kind is None:
             logger.warning(f"Invalid role type: {role_type}")
             return False
@@ -730,12 +720,6 @@ class GuildConfigManager:
         except Exception as e:
             logger.error(f"Error fetching configured guilds: {e}", exc_info=True)
             return []
-
-    def has_staff_role(self, config: GuildConfig, user_role_ids: Set[int]) -> bool:
-        """Check if any of the user's roles are admin or moderator roles."""
-        admin_set = set(config.roles["admin_role_ids"])
-        mod_set = set(config.roles["mod_role_ids"])
-        return bool(user_role_ids & (admin_set | mod_set))
 
     def has_admin_role(self, config: GuildConfig, user_role_ids: Set[int]) -> bool:
         """Check if any of the user's roles are admin roles."""

@@ -19,8 +19,8 @@ export default function SettingsPage() {
     api.botInviteUrl().then((r) => setInviteUrl(r.url)).catch(() => {});
   }, []);
 
-  // Client guard: admins and mods reach Settings; pure-none users have no
-  // Settings nav link. Server-side routes re-check access on their own.
+  // Client guard: only admins reach Settings; everyone else has no Settings nav
+  // link. Server-side routes re-check access on their own.
   useEffect(() => {
     if (user && !user.can_access_settings_any) navigate("/dashboard", { replace: true });
   }, [user, navigate]);
@@ -32,7 +32,6 @@ export default function SettingsPage() {
   const counts = useMemo(() => ({
     total: webGuilds.length,
     admin: webGuilds.filter((g) => g.panel_role === "admin").length,
-    mod: webGuilds.filter((g) => g.panel_role === "mod").length,
   }), [webGuilds]);
   const selected = webGuilds.find((g) => g.id === selectedId) ?? null;
 
@@ -58,10 +57,6 @@ export default function SettingsPage() {
           <div className="empire-stat">
             <div className="empire-stat__value">{counts.admin}</div>
             <div className="empire-stat__label">Admin</div>
-          </div>
-          <div className="empire-stat">
-            <div className="empire-stat__value">{counts.mod}</div>
-            <div className="empire-stat__label">Mod</div>
           </div>
         </div>
       </section>
@@ -120,7 +115,6 @@ function SettingsActionPanel({
   const iconUrl = guild.icon
     ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=64`
     : null;
-  const isAdmin = guild.panel_role === "admin";
 
   return (
     <aside className="card guild-web__panel">
@@ -132,9 +126,7 @@ function SettingsActionPanel({
           <div className="guild-name" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {guild.name}
           </div>
-          <span className={`status-badge ${isAdmin ? "status-badge--approved" : "status-badge--pending"}`}>
-            {isAdmin ? "Admin" : "Mod"}
-          </span>
+          <span className="status-badge status-badge--approved">Admin</span>
         </div>
       </div>
 
@@ -150,7 +142,7 @@ function SettingsActionPanel({
               Invite TheCodex
             </a>
           )
-        ) : isAdmin ? (
+        ) : (
           <>
             <button className="btn btn-primary" onClick={() => onNavigate(`/builder/${guild.id}`)}>
               Edit Guide
@@ -165,10 +157,6 @@ function SettingsActionPanel({
               Audit Log
             </button>
           </>
-        ) : (
-          <p className="guild-invite-hint" style={{ margin: 0 }}>
-            Moderator access. Management tools are coming soon.
-          </p>
         )}
       </div>
 

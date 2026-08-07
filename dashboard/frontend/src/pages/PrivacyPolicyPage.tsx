@@ -82,8 +82,8 @@ export default function PrivacyPolicyPage() {
         <section className="section card">
           <h2 className="section-title" style={{ marginTop: 0 }}>3. How we use your data</h2>
           <p>
-            We use this data to run the bot's features, power your dashboard, and gate admin and
-            moderator features to the right people. We do not sell your data and we do not show
+            We use this data to run the bot's features, power your dashboard, and gate admin
+            features to the right people. We do not sell your data and we do not show
             advertising.
           </p>
         </section>

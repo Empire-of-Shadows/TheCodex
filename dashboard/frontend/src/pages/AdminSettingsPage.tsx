@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import type {
@@ -38,20 +38,18 @@ type TabKey =
 interface TabDef {
   key: TabKey;
   label: string;
-  /** Settings sections this tab edits. Used for mod-tier filtering. */
-  sections: SettingsSection[];
 }
 
 const TABS: TabDef[] = [
-  { key: "panel_access", label: "Panel Access", sections: ["roles"] },
-  { key: "general", label: "General", sections: ["server"] },
-  { key: "wyr", label: "Would You Rather", sections: ["wyr"] },
-  { key: "new_members", label: "New Members", sections: ["new_members"] },
-  { key: "drops", label: "Drops", sections: ["drops"] },
-  { key: "announcement", label: "Announcements", sections: ["announcement"] },
-  { key: "suggestions", label: "Suggestions", sections: ["suggestions"] },
-  { key: "trackers", label: "Trackers", sections: ["tag_tracker", "boost"] },
-  { key: "guide", label: "Guide", sections: ["guide"] },
+  { key: "panel_access", label: "Panel Access" },
+  { key: "general", label: "General" },
+  { key: "wyr", label: "Would You Rather" },
+  { key: "new_members", label: "New Members" },
+  { key: "drops", label: "Drops" },
+  { key: "announcement", label: "Announcements" },
+  { key: "suggestions", label: "Suggestions" },
+  { key: "trackers", label: "Trackers" },
+  { key: "guide", label: "Guide" },
 ];
 
 // Static option lists (mirrors panel_configs.py constants).
@@ -146,22 +144,6 @@ export default function AdminSettingsPage() {
       });
   }, [guildId]);
 
-  const visibleTabs = useMemo(() => {
-    if (!resp) return TABS;
-    if (resp.panel_role === "mod") {
-      const allowed = new Set(resp.mod_allowed_sections);
-      return TABS.filter((t) => t.sections.some((s) => allowed.has(s)));
-    }
-    return TABS;
-  }, [resp]);
-
-  useEffect(() => {
-    if (visibleTabs.length === 0) return;
-    if (!visibleTabs.some((t) => t.key === tab)) {
-      setTab(visibleTabs[0].key);
-    }
-  }, [visibleTabs, tab]);
-
   if (loadError) {
     return (
       <div className="app-layout admin-settings-page">
@@ -217,12 +199,6 @@ export default function AdminSettingsPage() {
     }
   };
 
-  const isMod = resp.panel_role === "mod";
-  const readOnly = (section: SettingsSection): boolean => {
-    if (!isMod) return false;
-    return !resp.mod_allowed_sections.includes(section);
-  };
-
   return (
     <div className="app-layout admin-settings-page">
       <AppHeader
@@ -240,142 +216,121 @@ export default function AdminSettingsPage() {
         </div>
       )}
 
-      {isMod && visibleTabs.length === 0 && (
-        <div className="alert" style={{ margin: 24 }}>
-          You have <strong>Mod</strong> access. No dashboard sections are currently
-          opted-in for mod tier &mdash; use the Discord <code>/admin</code> panel.
-        </div>
-      )}
+      <div className="tabs" style={{ padding: "0 24px" }}>
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            className={"tab" + (tab === t.key ? " active" : "")}
+            onClick={() => setTab(t.key)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
-      {visibleTabs.length > 0 && (
-        <>
-          <div className="tabs" style={{ padding: "0 24px" }}>
-            {visibleTabs.map((t) => (
-              <button
-                key={t.key}
-                className={"tab" + (tab === t.key ? " active" : "")}
-                onClick={() => setTab(t.key)}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-
-          <div style={{ padding: "16px 24px 32px" }}>
-            {tab === "panel_access" && (
-              <PanelAccessTab
-                value={draft.roles}
-                roles={roles}
-                onChange={(v) => updateSection("roles", v)}
-                onSave={() => saveSection("roles")}
-                dirty={isDirty("roles")}
-                saving={savingSection === "roles"}
-                readOnly={readOnly("roles")}
-              />
-            )}
-            {tab === "general" && (
-              <GeneralTab
-                value={draft.server}
-                channels={channels}
-                onChange={(v) => updateSection("server", v)}
-                onSave={() => saveSection("server")}
-                dirty={isDirty("server")}
-                saving={savingSection === "server"}
-                readOnly={readOnly("server")}
-              />
-            )}
-            {tab === "wyr" && (
-              <WyrTab
-                value={draft.wyr}
-                channels={channels}
-                roles={roles}
-                onChange={(v) => updateSection("wyr", v)}
-                onSave={() => saveSection("wyr")}
-                dirty={isDirty("wyr")}
-                saving={savingSection === "wyr"}
-                readOnly={readOnly("wyr")}
-              />
-            )}
-            {tab === "new_members" && (
-              <NewMembersTab
-                guildId={guildId}
-                value={draft.new_members}
-                channels={channels}
-                roles={roles}
-                onChange={(v) => updateSection("new_members", v)}
-                onSave={() => saveSection("new_members")}
-                dirty={isDirty("new_members")}
-                saving={savingSection === "new_members"}
-                readOnly={readOnly("new_members")}
-              />
-            )}
-            {tab === "drops" && (
-              <DropsTab
-                value={draft.drops}
-                channels={channels}
-                roles={roles}
-                onChange={(v) => updateSection("drops", v)}
-                onSave={() => saveSection("drops")}
-                dirty={isDirty("drops")}
-                saving={savingSection === "drops"}
-                readOnly={readOnly("drops")}
-              />
-            )}
-            {tab === "announcement" && (
-              <AnnouncementTab
-                value={draft.announcement}
-                channels={channels}
-                onChange={(v) => updateSection("announcement", v)}
-                onSave={() => saveSection("announcement")}
-                dirty={isDirty("announcement")}
-                saving={savingSection === "announcement"}
-                readOnly={readOnly("announcement")}
-              />
-            )}
-            {tab === "suggestions" && (
-              <SuggestionsTab
-                value={draft.suggestions}
-                channels={channels}
-                onChange={(v) => updateSection("suggestions", v)}
-                onSave={() => saveSection("suggestions")}
-                dirty={isDirty("suggestions")}
-                saving={savingSection === "suggestions"}
-                readOnly={readOnly("suggestions")}
-              />
-            )}
-            {tab === "trackers" && (
-              <TrackersTab
-                tag={draft.tag_tracker}
-                boost={draft.boost}
-                channels={channels}
-                roles={roles}
-                onTagChange={(v) => updateSection("tag_tracker", v)}
-                onBoostChange={(v) => updateSection("boost", v)}
-                onSaveTag={() => saveSection("tag_tracker")}
-                onSaveBoost={() => saveSection("boost")}
-                tagDirty={isDirty("tag_tracker")}
-                boostDirty={isDirty("boost")}
-                savingTag={savingSection === "tag_tracker"}
-                savingBoost={savingSection === "boost"}
-                tagReadOnly={readOnly("tag_tracker")}
-                boostReadOnly={readOnly("boost")}
-              />
-            )}
-            {tab === "guide" && (
-              <GuideTab
-                guildId={guildId}
-                value={draft.guide}
-                channels={channels}
-                onChange={(v) => updateSection("guide", v)}
-                onSave={() => saveSection("guide")}
-                dirty={isDirty("guide")}
-                saving={savingSection === "guide"}
-                readOnly={readOnly("guide")}
-              />
-            )}
-          </div>
-        </>
-      )}
+      <div style={{ padding: "16px 24px 32px" }}>
+        {tab === "panel_access" && (
+          <PanelAccessTab
+            value={draft.roles}
+            roles={roles}
+            onChange={(v) => updateSection("roles", v)}
+            onSave={() => saveSection("roles")}
+            dirty={isDirty("roles")}
+            saving={savingSection === "roles"}
+          />
+        )}
+        {tab === "general" && (
+          <GeneralTab
+            value={draft.server}
+            channels={channels}
+            onChange={(v) => updateSection("server", v)}
+            onSave={() => saveSection("server")}
+            dirty={isDirty("server")}
+            saving={savingSection === "server"}
+          />
+        )}
+        {tab === "wyr" && (
+          <WyrTab
+            value={draft.wyr}
+            channels={channels}
+            roles={roles}
+            onChange={(v) => updateSection("wyr", v)}
+            onSave={() => saveSection("wyr")}
+            dirty={isDirty("wyr")}
+            saving={savingSection === "wyr"}
+          />
+        )}
+        {tab === "new_members" && (
+          <NewMembersTab
+            guildId={guildId}
+            value={draft.new_members}
+            channels={channels}
+            roles={roles}
+            onChange={(v) => updateSection("new_members", v)}
+            onSave={() => saveSection("new_members")}
+            dirty={isDirty("new_members")}
+            saving={savingSection === "new_members"}
+          />
+        )}
+        {tab === "drops" && (
+          <DropsTab
+            value={draft.drops}
+            channels={channels}
+            roles={roles}
+            onChange={(v) => updateSection("drops", v)}
+            onSave={() => saveSection("drops")}
+            dirty={isDirty("drops")}
+            saving={savingSection === "drops"}
+          />
+        )}
+        {tab === "announcement" && (
+          <AnnouncementTab
+            value={draft.announcement}
+            channels={channels}
+            onChange={(v) => updateSection("announcement", v)}
+            onSave={() => saveSection("announcement")}
+            dirty={isDirty("announcement")}
+            saving={savingSection === "announcement"}
+          />
+        )}
+        {tab === "suggestions" && (
+          <SuggestionsTab
+            value={draft.suggestions}
+            channels={channels}
+            onChange={(v) => updateSection("suggestions", v)}
+            onSave={() => saveSection("suggestions")}
+            dirty={isDirty("suggestions")}
+            saving={savingSection === "suggestions"}
+          />
+        )}
+        {tab === "trackers" && (
+          <TrackersTab
+            tag={draft.tag_tracker}
+            boost={draft.boost}
+            channels={channels}
+            roles={roles}
+            onTagChange={(v) => updateSection("tag_tracker", v)}
+            onBoostChange={(v) => updateSection("boost", v)}
+            onSaveTag={() => saveSection("tag_tracker")}
+            onSaveBoost={() => saveSection("boost")}
+            tagDirty={isDirty("tag_tracker")}
+            boostDirty={isDirty("boost")}
+            savingTag={savingSection === "tag_tracker"}
+            savingBoost={savingSection === "boost"}
+          />
+        )}
+        {tab === "guide" && (
+          <GuideTab
+            guildId={guildId}
+            value={draft.guide}
+            channels={channels}
+            onChange={(v) => updateSection("guide", v)}
+            onSave={() => saveSection("guide")}
+            dirty={isDirty("guide")}
+            saving={savingSection === "guide"}
+          />
+        )}
+      </div>
     </div>
   );
 }
@@ -712,22 +667,13 @@ function SaveBar({
   dirty,
   saving,
   onSave,
-  readOnly,
   label = "Save",
 }: {
   dirty: boolean;
   saving: boolean;
   onSave: () => void;
-  readOnly?: boolean;
   label?: string;
 }) {
-  if (readOnly) {
-    return (
-      <p className="muted" style={{ marginTop: 12 }}>
-        Read-only for your tier.
-      </p>
-    );
-  }
   return (
     <div style={{ marginTop: 16, display: "flex", gap: 8, alignItems: "center" }}>
       <button
@@ -775,7 +721,6 @@ function PanelAccessTab({
   onSave,
   dirty,
   saving,
-  readOnly,
 }: {
   value: RolesSection;
   roles: Role[];
@@ -783,12 +728,11 @@ function PanelAccessTab({
   onSave: () => void;
   dirty: boolean;
   saving: boolean;
-  readOnly: boolean;
 }) {
   return (
     <SectionCard
       title="Panel Access Roles"
-      description="Members holding any Panel Access role get full admin panel access (same as Manage Server). Mod Access roles grant the mod tier."
+      description="Members holding any Panel Access role get full admin panel access (same as Manage Server)."
     >
       <div className="field-row">
         <MultiRoleField
@@ -797,20 +741,10 @@ function PanelAccessTab({
           value={value.admin_role_ids ?? []}
           roles={roles}
           max={10}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, admin_role_ids: v })}
         />
-        <MultiRoleField
-          label="Mod Access Roles"
-          description="Limited (mod-tier) access to opted-in sections."
-          value={value.mod_role_ids ?? []}
-          roles={roles}
-          max={10}
-          disabled={readOnly}
-          onChange={(v) => onChange({ ...value, mod_role_ids: v })}
-        />
       </div>
-      <SaveBar dirty={dirty} saving={saving} onSave={onSave} readOnly={readOnly} />
+      <SaveBar dirty={dirty} saving={saving} onSave={onSave} />
     </SectionCard>
   );
 }
@@ -824,7 +758,6 @@ function GeneralTab({
   onSave,
   dirty,
   saving,
-  readOnly,
 }: {
   value: ServerSection;
   channels: Channel[];
@@ -832,7 +765,6 @@ function GeneralTab({
   onSave: () => void;
   dirty: boolean;
   saving: boolean;
-  readOnly: boolean;
 }) {
   return (
     <SectionCard
@@ -845,12 +777,11 @@ function GeneralTab({
           value={value.admin_channel_id}
           channels={channels}
           filterType={0}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, admin_channel_id: v })}
           description="Channel used for admin notifications and alerts."
         />
       </div>
-      <SaveBar dirty={dirty} saving={saving} onSave={onSave} readOnly={readOnly} />
+      <SaveBar dirty={dirty} saving={saving} onSave={onSave} />
     </SectionCard>
   );
 }
@@ -865,7 +796,6 @@ function WyrTab({
   onSave,
   dirty,
   saving,
-  readOnly,
 }: {
   value: WyrSection;
   channels: Channel[];
@@ -874,7 +804,6 @@ function WyrTab({
   onSave: () => void;
   dirty: boolean;
   saving: boolean;
-  readOnly: boolean;
 }) {
   return (
     <SectionCard
@@ -887,27 +816,23 @@ function WyrTab({
           value={value.channel_id}
           channels={channels}
           filterType={0}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, channel_id: v })}
         />
         <RoleField
           label="Ping Role"
           value={value.ping_role_id}
           roles={roles}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, ping_role_id: v })}
           description="Pinged on each post, and self-assignable by members. Leave blank for no ping."
         />
         <ToggleField
           label="Enabled"
           value={value.enabled}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, enabled: v })}
         />
         <ToggleField
           label="Notification Offer"
           value={value.subscribe_prompt_enabled}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, subscribe_prompt_enabled: v })}
           description="Offer the ping role to members who vote or check results without it."
         />
@@ -919,28 +844,24 @@ function WyrTab({
           label="Post Hour"
           value={value.post_hour}
           options={HOUR_OPTIONS}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, post_hour: v })}
         />
         <OptionSelect<number>
           label="Post Minute"
           value={value.post_minute}
           options={MINUTE_OPTIONS}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, post_minute: v })}
         />
         <OptionSelect<string>
           label="Timezone"
           value={value.timezone}
           options={TIMEZONE_OPTIONS}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, timezone: v })}
         />
         <OptionSelect<string>
           label="Default Category"
           value={value.default_category}
           options={WYR_CATEGORY_OPTIONS}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, default_category: v })}
           description="NSFW questions are only posted in age-restricted channels. If the WYR channel is not age-restricted, SFW questions are posted instead."
         />
@@ -951,7 +872,6 @@ function WyrTab({
         label="Thread Name Format"
         value={value.thread_name_format}
         maxLength={100}
-        disabled={readOnly}
         onChange={(v) => onChange({ ...value, thread_name_format: v })}
         description="Placeholders: {date} {question_num} {category} {option_1} {option_2} {option_3} {question}"
       />
@@ -959,7 +879,6 @@ function WyrTab({
         label="Starter Message"
         value={value.thread_starter_message}
         maxLength={500}
-        disabled={readOnly}
         onChange={(v) => onChange({ ...value, thread_starter_message: v })}
       />
       <div className="field-row">
@@ -967,20 +886,18 @@ function WyrTab({
           label="Auto-Archive"
           value={value.thread_auto_archive}
           options={ARCHIVE_OPTIONS}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, thread_auto_archive: v })}
         />
         <OptionSelect<number>
           label="Mapping Cleanup"
           value={value.mapping_cleanup_days}
           options={WYR_CLEANUP_OPTIONS}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, mapping_cleanup_days: v })}
           description="Days before old message-question mappings are pruned."
         />
       </div>
 
-      <SaveBar dirty={dirty} saving={saving} onSave={onSave} readOnly={readOnly} />
+      <SaveBar dirty={dirty} saving={saving} onSave={onSave} />
     </SectionCard>
   );
 }
@@ -996,7 +913,6 @@ function NewMembersTab({
   onSave,
   dirty,
   saving,
-  readOnly,
 }: {
   guildId: string;
   value: NewMembersSection;
@@ -1006,7 +922,6 @@ function NewMembersTab({
   onSave: () => void;
   dirty: boolean;
   saving: boolean;
-  readOnly: boolean;
 }) {
   return (
     <SectionCard
@@ -1019,21 +934,18 @@ function NewMembersTab({
           value={value.greeting_channel_id}
           channels={channels}
           filterType={0}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, greeting_channel_id: v })}
         />
         <RoleField
           label="Whitelist Role"
           value={value.whitelist_role_id}
           roles={roles}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, whitelist_role_id: v })}
         />
         <OptionSelect<number>
           label="Account Age Requirement"
           value={value.account_age_requirement_days}
           options={ACCOUNT_AGE_OPTIONS}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, account_age_requirement_days: v })}
         />
       </div>
@@ -1043,26 +955,22 @@ function NewMembersTab({
         <ToggleField
           label="System Enabled"
           value={value.enabled}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, enabled: v })}
           description="Master toggle for new-member processing."
         />
         <ToggleField
           label="Auto-Kick Underage Accounts"
           value={value.auto_kick}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, auto_kick: v })}
         />
         <ToggleField
           label="Greeting Messages"
           value={value.greeting_enabled}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, greeting_enabled: v })}
         />
         <ToggleField
           label="Whitelist System"
           value={value.whitelist_enabled}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, whitelist_enabled: v })}
         />
       </div>
@@ -1071,7 +979,6 @@ function NewMembersTab({
         label="Whitelist Role Name"
         value={value.whitelist_role_name}
         maxLength={100}
-        disabled={readOnly}
         onChange={(v) => onChange({ ...value, whitelist_role_name: v })}
         description="Used when auto-creating the whitelist role if one is not set above."
       />
@@ -1081,7 +988,7 @@ function NewMembersTab({
         <Link to={`/builder/${guildId}?mode=greeting`}>builder</Link>.
       </p>
 
-      <SaveBar dirty={dirty} saving={saving} onSave={onSave} readOnly={readOnly} />
+      <SaveBar dirty={dirty} saving={saving} onSave={onSave} />
     </SectionCard>
   );
 }
@@ -1096,7 +1003,6 @@ function DropsTab({
   onSave,
   dirty,
   saving,
-  readOnly,
 }: {
   value: DropsSection;
   channels: Channel[];
@@ -1105,7 +1011,6 @@ function DropsTab({
   onSave: () => void;
   dirty: boolean;
   saving: boolean;
-  readOnly: boolean;
 }) {
   const tracker = value.tracker_channels ?? {};
   return (
@@ -1119,21 +1024,18 @@ function DropsTab({
           value={value.channel_id}
           channels={channels}
           filterType={0}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, channel_id: v })}
         />
         <RoleField
           label="Manager Role"
           value={value.manager_role_id}
           roles={roles}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, manager_role_id: v })}
           description="Role allowed to manage drops via /drop."
         />
         <ToggleField
           label="Enabled"
           value={value.enabled}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, enabled: v })}
         />
       </div>
@@ -1147,7 +1049,6 @@ function DropsTab({
             value={tracker[bucket] ?? null}
             channels={channels}
             filterType={0}
-            disabled={readOnly}
             onChange={(v) =>
               onChange({
                 ...value,
@@ -1164,26 +1065,23 @@ function DropsTab({
           label="Post Hour"
           value={value.post_hour}
           options={HOUR_OPTIONS}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, post_hour: v })}
         />
         <OptionSelect<number>
           label="Post Minute"
           value={value.post_minute}
           options={MINUTE_OPTIONS}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, post_minute: v })}
         />
         <OptionSelect<string>
           label="Timezone"
           value={value.timezone}
           options={TIMEZONE_OPTIONS}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, timezone: v })}
         />
       </div>
 
-      <SaveBar dirty={dirty} saving={saving} onSave={onSave} readOnly={readOnly} />
+      <SaveBar dirty={dirty} saving={saving} onSave={onSave} />
     </SectionCard>
   );
 }
@@ -1197,7 +1095,6 @@ function AnnouncementTab({
   onSave,
   dirty,
   saving,
-  readOnly,
 }: {
   value: AnnouncementSection;
   channels: Channel[];
@@ -1205,7 +1102,6 @@ function AnnouncementTab({
   onSave: () => void;
   dirty: boolean;
   saving: boolean;
-  readOnly: boolean;
 }) {
   return (
     <SectionCard
@@ -1218,14 +1114,12 @@ function AnnouncementTab({
           value={value.channel_id}
           channels={channels}
           filterType={0}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, channel_id: v })}
         />
         <OptionSelect<number>
           label="Auto-Archive"
           value={value.thread_auto_archive_duration}
           options={ARCHIVE_OPTIONS}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, thread_auto_archive_duration: v })}
         />
       </div>
@@ -1234,13 +1128,11 @@ function AnnouncementTab({
         <ToggleField
           label="Auto-Create Threads"
           value={value.thread_auto_create}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, thread_auto_create: v })}
         />
         <ToggleField
           label="Auto-Delete Threads"
           value={value.auto_delete_threads}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, auto_delete_threads: v })}
           description="Delete the discussion thread when the announcement is deleted."
         />
@@ -1250,7 +1142,6 @@ function AnnouncementTab({
         label="Thread Name Format"
         value={value.thread_name_format}
         maxLength={100}
-        disabled={readOnly}
         onChange={(v) => onChange({ ...value, thread_name_format: v })}
         description="Placeholders: {message_content} {author_name} {channel_name}"
       />
@@ -1258,11 +1149,10 @@ function AnnouncementTab({
         label="Thread Welcome Message"
         value={value.thread_welcome_message}
         maxLength={500}
-        disabled={readOnly}
         onChange={(v) => onChange({ ...value, thread_welcome_message: v })}
       />
 
-      <SaveBar dirty={dirty} saving={saving} onSave={onSave} readOnly={readOnly} />
+      <SaveBar dirty={dirty} saving={saving} onSave={onSave} />
     </SectionCard>
   );
 }
@@ -1276,7 +1166,6 @@ function SuggestionsTab({
   onSave,
   dirty,
   saving,
-  readOnly,
 }: {
   value: SuggestionsSection;
   channels: Channel[];
@@ -1284,7 +1173,6 @@ function SuggestionsTab({
   onSave: () => void;
   dirty: boolean;
   saving: boolean;
-  readOnly: boolean;
 }) {
   return (
     <SectionCard
@@ -1297,11 +1185,10 @@ function SuggestionsTab({
           value={value.channel_id}
           channels={channels}
           filterType={0}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, channel_id: v })}
         />
       </div>
-      <SaveBar dirty={dirty} saving={saving} onSave={onSave} readOnly={readOnly} />
+      <SaveBar dirty={dirty} saving={saving} onSave={onSave} />
     </SectionCard>
   );
 }
@@ -1321,8 +1208,6 @@ function TrackersTab({
   boostDirty,
   savingTag,
   savingBoost,
-  tagReadOnly,
-  boostReadOnly,
 }: {
   tag: TagTrackerSection;
   boost: BoostSection;
@@ -1336,8 +1221,6 @@ function TrackersTab({
   boostDirty: boolean;
   savingTag: boolean;
   savingBoost: boolean;
-  tagReadOnly: boolean;
-  boostReadOnly: boolean;
 }) {
   return (
     <>
@@ -1350,7 +1233,6 @@ function TrackersTab({
             label="Server Tag"
             value={tag.server_tag ?? ""}
             maxLength={32}
-            disabled={tagReadOnly}
             onChange={(v) => onTagChange({ ...tag, server_tag: v || null })}
             description="The exact server tag string members must wear to qualify."
           />
@@ -1358,14 +1240,12 @@ function TrackersTab({
             label="Tag Role"
             value={tag.role_id}
             roles={roles}
-            disabled={tagReadOnly}
             onChange={(v) => onTagChange({ ...tag, role_id: v })}
             description="Role granted to members wearing the tag."
           />
           <ToggleField
             label="Enabled"
             value={tag.enabled}
-            disabled={tagReadOnly}
             onChange={(v) => onTagChange({ ...tag, enabled: v })}
           />
         </div>
@@ -1373,7 +1253,6 @@ function TrackersTab({
           dirty={tagDirty}
           saving={savingTag}
           onSave={onSaveTag}
-          readOnly={tagReadOnly}
           label="Save Tag Tracker"
         />
       </SectionCard>
@@ -1388,13 +1267,11 @@ function TrackersTab({
             value={boost.channel_id}
             channels={channels}
             filterType={0}
-            disabled={boostReadOnly}
             onChange={(v) => onBoostChange({ ...boost, channel_id: v })}
           />
           <ToggleField
             label="Enabled"
             value={boost.enabled}
-            disabled={boostReadOnly}
             onChange={(v) => onBoostChange({ ...boost, enabled: v })}
           />
         </div>
@@ -1402,7 +1279,6 @@ function TrackersTab({
           dirty={boostDirty}
           saving={savingBoost}
           onSave={onSaveBoost}
-          readOnly={boostReadOnly}
           label="Save Boost Tracker"
         />
       </SectionCard>
@@ -1420,7 +1296,6 @@ function GuideTab({
   onSave,
   dirty,
   saving,
-  readOnly,
 }: {
   guildId: string;
   value: GuideSection;
@@ -1429,7 +1304,6 @@ function GuideTab({
   onSave: () => void;
   dirty: boolean;
   saving: boolean;
-  readOnly: boolean;
 }) {
   return (
     <SectionCard
@@ -1442,14 +1316,12 @@ function GuideTab({
           value={value.channel_id}
           channels={channels}
           filterType={0}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, channel_id: v })}
           description="Optional - restrict /guide invocation to this channel."
         />
         <ToggleField
           label="Enabled"
           value={value.enabled}
-          disabled={readOnly}
           onChange={(v) => onChange({ ...value, enabled: v })}
         />
       </div>
@@ -1459,7 +1331,7 @@ function GuideTab({
         <Link to={`/builder/${guildId}`}>builder</Link>.
       </p>
 
-      <SaveBar dirty={dirty} saving={saving} onSave={onSave} readOnly={readOnly} />
+      <SaveBar dirty={dirty} saving={saving} onSave={onSave} />
     </SectionCard>
   );
 }
