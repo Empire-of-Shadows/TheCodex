@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased] - 2026-08-07
+
+### Added
+- **The dashboard now links to the project's new About page.** The login page and the footer
+  both point to a new page on the main site (eosofficial.club/about) explaining the whole
+  Empire of Shadows project - what each bot does, why it is built as six separate bots instead
+  of one big one, and how to report problems.
+
 ## [Unreleased] - 2026-08-06
 
 ### Changed
