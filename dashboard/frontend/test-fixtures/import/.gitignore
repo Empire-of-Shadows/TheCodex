@@ -1,7 +1,0 @@
-# Generated import test fixtures — reproduce with: python generate_fixtures.py
-#
-# The generator script and README are the source of truth and ARE committed.
-# The generated fixtures are not: several are large, and some are deliberately
-# hostile binaries (fake .exe, gzip, webshell/script placeholders) that don't
-# belong in version control. Run the generator to recreate them locally.
-[0-9][0-9]-*

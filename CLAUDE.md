@@ -128,12 +128,20 @@ boundary is where callback-arity, payload-shape and closure late-binding bugs hi
 ## Production data
 
 Codex has **real users and real data**. Schema changes ship an idempotent migration under
-`migrations/scripts/` (`_common.py` is the harness): dry-run by default, `--apply` to write,
-re-runnable as a no-op. Run the dry run, read its report, then apply. Never "drop the collection
-and start fresh". Once code stops reading a field, `$unset` it via migration rather than leaving
-orphaned data. Prefer migrating documents over carrying long-term `from_dict()` legacy handling;
-`migrations/scripts/_guildconfig_v2.py` keeps the pre-collapse schema frozen for reference.
-Pending work is tracked in `migrations/PENDING.md`.
+`TestsAndMigrations/TheCodex/migrations/scripts/` (`_common.py` is the harness): dry-run by
+default, `--apply` to write, re-runnable as a no-op. Run the dry run, read its report, then
+apply. Never "drop the collection and start fresh". Once code stops reading a field, `$unset` it
+via migration rather than leaving orphaned data. Prefer migrating documents over carrying
+long-term `from_dict()` legacy handling;
+`TestsAndMigrations/TheCodex/migrations/scripts/_guildconfig_v2.py` keeps the pre-collapse schema
+frozen for reference. Pending work is tracked in
+`TestsAndMigrations/TheCodex/migrations/PENDING.md`.
+
+> The `migrations/` tree moved out of this repo to the monorepo-level
+> `TestsAndMigrations/TheCodex/migrations/` on 2026-08-08. Paths above are relative to the
+> monorepo root, not to this service. The package shape (`migrations.scripts.mN_...`) is
+> unchanged, so scripts still run as `python -m migrations.scripts.mN_...` from
+> `TestsAndMigrations/TheCodex/` with `MONGO_URI` set.
 
 ## Changelog
 
