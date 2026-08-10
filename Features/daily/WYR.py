@@ -1439,45 +1439,98 @@ class WYR(commands.Cog):
             return clauses[0]
         return {"$and": clauses}
 
+    async def _find_least_used(self, category, allow_nsfw, gid_str, question_source,
+                               question_formats, used_path, exclude_used=False):
+        """One selection pass. Returns the least-used matching question, or None."""
+        query = self._assemble_question_query(
+            category, allow_nsfw, gid_str, question_source, question_formats,
+            used_path=used_path, exclude_used=exclude_used,
+        )
+        if query is None:
+            return None
+        questions = await db_manager.daily_wyr.find_many(
+            filter_dict=query,
+            sort=[(used_path, 1)],
+            limit=1,
+        )
+        return questions[0] if questions else None
+
     async def get_next_question(self, category="sfw", guild_id=None, exclude_used=False,
                                 allow_nsfw=False, question_source="both",
                                 question_formats=None):
         """
-        Fetch the next "Would You Rather" question for a guild - least-used in that guild first.
+        Fetch the next question for a guild - the guild's own questions first.
+
+        On "both", a server's own questions are not merely mixed in with the
+        shared bank, they come FIRST. A server that has gone to the trouble of
+        writing its own questions expects to see them, and under a single
+        least-used sort they would just queue up behind whatever the shared bank
+        happened to have used least.
+
+        Three passes, in order:
+
+          1. The guild's own questions it has not posted yet.
+          2. The shared bank's questions it has not posted yet.
+          3. Least-used across both, so an exhausted rotation keeps going
+             rather than stopping dead.
+
+        A guild with no questions of its own falls straight through to pass 2,
+        which is exactly what it did before, so nothing changes for it.
         """
         try:
             with PerformanceLogger(logger, f"get_next_question_{category}_{guild_id}"):
                 gid_str = str(guild_id) if guild_id is not None else None
                 used_path = f"guilds.{gid_str}.used_count" if gid_str else "used_count"
 
-                query = self._assemble_question_query(
-                    category, allow_nsfw, gid_str, question_source, question_formats,
-                    used_path=used_path, exclude_used=exclude_used,
+                # Tiering only means something when both banks are in play, and
+                # an explicit exclude_used caller is asking one specific thing -
+                # neither should be second-guessed here.
+                tiered = (
+                    question_source == "both"
+                    and gid_str is not None
+                    and not exclude_used
                 )
-                if query is None:
+
+                question = None
+                tier = "single"
+                if tiered:
+                    for tier_name, source in (("own", "guild_only"),
+                                              ("shared", "global_only")):
+                        question = await self._find_least_used(
+                            category, allow_nsfw, gid_str, source, question_formats,
+                            used_path, exclude_used=True,
+                        )
+                        if question:
+                            tier = f"{tier_name}-unposted"
+                            break
+
+                if question is None:
+                    # Pass 3, or the only pass for a single-source guild.
+                    question = await self._find_least_used(
+                        category, allow_nsfw, gid_str, question_source,
+                        question_formats, used_path, exclude_used=exclude_used,
+                    )
+                    if question is not None and tiered:
+                        tier = "least-used"
+
+                if question is None:
                     logger.warning(
-                        f"No question can be served to guild {guild_id}: category is "
-                        f"{category} (channel age-restricted: {allow_nsfw}), source is "
-                        f"{question_source}"
+                        f"No {category} question available for guild {guild_id} "
+                        f"(source: {question_source}, formats: {question_formats}, "
+                        f"channel age-restricted: {allow_nsfw})"
                     )
                     return None
 
-                questions = await db_manager.daily_wyr.find_many(
-                    filter_dict=query,
-                    sort=[(used_path, 1)],
-                    limit=1,
+                used = (
+                    ((question.get("guilds") or {}).get(gid_str) or {}).get("used_count", 0)
+                    if gid_str else question.get("used_count", 0)
                 )
-
-                if questions:
-                    question = questions[0]
-                    used = ((question.get("guilds") or {}).get(gid_str) or {}).get("used_count", 0) if gid_str else question.get("used_count", 0)
-                    logger.info(
-                        f"Retrieved next {category} question: ID {question['_id']} (guild_used_count: {used})"
-                    )
-                    return question
-                else:
-                    logger.warning(f"No {category} questions available for guild {guild_id} (exclude_used: {exclude_used})")
-                    return None
+                logger.info(
+                    f"Retrieved next {category} question #{question.get('id')} for guild "
+                    f"{guild_id} via {tier} (guild_used_count: {used}, "
+                    f"scope: {question.get('scope', 'global')})"
+                )
+                return question
 
         except Exception as e:
             logger.error(f"Error fetching next WYR question ({category}, guild {guild_id}): {e}", exc_info=True)

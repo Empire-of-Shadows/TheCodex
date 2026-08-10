@@ -1,5 +1,20 @@
 # Changelog
 
+## [Unreleased] - 2026-08-10 (your own questions come first)
+
+### Changed
+- **Your server's own questions now get posted before the shared ones.** If you are drawing
+  from both, the daily question is picked from the questions you added yourself for as long
+  as there are any your server has not seen yet. Only once you have worked through your own
+  does it start using the shared bank, and only once everything has been posted at least
+  once does it begin repeating - the least-seen question first, so the rotation never
+  stalls. Before this, your questions simply queued up alongside the shared ones and a
+  server that wrote its own could go a long time without seeing one.
+- A question of your own that has already run several times does not jump ahead of a shared
+  question your server has never seen. "Yours first" means the ones you have not used yet,
+  otherwise the shared bank would never be reached at all.
+- Nothing changes for a server that has not added any questions of its own.
+
 ## [Unreleased] - 2026-08-10 (command list cleanup)
 
 ### Changed
