@@ -99,6 +99,28 @@ const WYR_CLEANUP_OPTIONS: [number, string][] = [
   [90, "90 Days"],
 ];
 
+// Mirrors WYR._build_scope_clause - the three banks a server can draw from.
+const WYR_SOURCE_OPTIONS: [string, string][] = [
+  ["both", "Shared questions and this server's own"],
+  ["global_only", "Shared questions only"],
+  ["guild_only", "This server's own questions only"],
+];
+
+// Mirrors wyr_bank.FORMATS / FORMAT_LABELS.
+const WYR_FORMAT_OPTIONS: [string, string][] = [
+  ["wyr", "Would You Rather"],
+  ["poll", "Question with answers"],
+  ["open", "Open-ended question"],
+];
+
+const WYR_MAX_PENDING_OPTIONS: [number, string][] = [
+  [1, "1 waiting"],
+  [2, "2 waiting"],
+  [3, "3 waiting"],
+  [5, "5 waiting"],
+  [10, "10 waiting"],
+];
+
 const ACCOUNT_AGE_OPTIONS: [number, string][] = [
   [30, "30 Days"],
   [60, "60 Days"],
@@ -508,6 +530,89 @@ function MultiRoleField({
   );
 }
 
+/**
+ * Checkbox list over a fixed option list, producing an array setting.
+ *
+ * The array-valued sibling of OptionSelect. MultiRoleField is the same shape
+ * over Discord roles; this one takes the static [value, label] pairs the rest
+ * of this file already uses, and keeps the declared option order rather than
+ * the order the boxes were ticked, so the saved list is stable.
+ */
+function MultiOptionField<V extends string>({
+  label,
+  description,
+  value,
+  options,
+  onChange,
+  disabled,
+  requireOne,
+}: {
+  label: string;
+  description?: string;
+  value: V[];
+  options: [V, string][];
+  onChange: (v: V[]) => void;
+  disabled?: boolean;
+  requireOne?: boolean;
+}) {
+  const selected = new Set(value);
+  const toggle = (v: V) => {
+    if (disabled) return;
+    // With requireOne, the last remaining choice cannot be unticked. An empty
+    // list is not a meaningful setting here - the bot falls back to its default
+    // rather than posting everything - so the picker never offers that state.
+    if (requireOne && selected.has(v) && selected.size <= 1) return;
+    const next = new Set(selected);
+    if (next.has(v)) {
+      next.delete(v);
+    } else {
+      next.add(v);
+    }
+    onChange(options.map(([optValue]) => optValue).filter((o) => next.has(o)));
+  };
+  return (
+    <div className="field">
+      <label>{label}</label>
+      {description && (
+        <p className="muted" style={{ marginTop: 0, marginBottom: 6 }}>
+          {description}
+        </p>
+      )}
+      <div
+        style={{
+          border: "1px solid var(--border, #2a2a2a)",
+          borderRadius: 6,
+          padding: 8,
+          display: "flex",
+          flexDirection: "column",
+          gap: 4,
+        }}
+      >
+        {options.map(([optValue, optLabel]) => (
+          <label
+            key={String(optValue)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              cursor: disabled ? "not-allowed" : "pointer",
+              opacity: disabled ? 0.5 : 1,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={selected.has(optValue)}
+              disabled={disabled}
+              onChange={() => toggle(optValue)}
+            />
+            <span>{optLabel}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function OptionSelect<V extends string | number>({
   label,
   value,
@@ -838,6 +943,55 @@ function WyrTab({
         />
       </div>
 
+      <h3 style={{ marginTop: 20 }}>Questions &amp; Submissions</h3>
+      <div className="field-row">
+        <OptionSelect<string>
+          label="Where questions come from"
+          value={value.question_source}
+          options={WYR_SOURCE_OPTIONS}
+          onChange={(v) => onChange({ ...value, question_source: v })}
+          description="Shared questions are the pool every server draws from. Questions you add yourself stay private to this server."
+        />
+        <MultiOptionField<string>
+          label="Question types this server posts"
+          value={value.question_formats ?? []}
+          options={WYR_FORMAT_OPTIONS}
+          onChange={(v) => onChange({ ...value, question_formats: v })}
+          requireOne
+          description="A question of a type you have not ticked stays in the bank and is never posted. At least one type has to stay ticked."
+        />
+      </div>
+      <div className="field-row">
+        <ToggleField
+          label="Let members suggest questions"
+          value={value.submissions_enabled}
+          onChange={(v) => onChange({ ...value, submissions_enabled: v })}
+          description="Suggestions go to a review channel first. Nothing reaches the daily post until someone approves it."
+        />
+        <ChannelField
+          label="Suggestion review channel"
+          value={value.submission_review_channel_id}
+          channels={channels}
+          filterType={0}
+          onChange={(v) => onChange({ ...value, submission_review_channel_id: v })}
+          description="Where member suggestions land to be approved or rejected."
+        />
+        <RoleField
+          label="Who reviews suggestions"
+          value={value.submission_moderator_role_id}
+          roles={roles}
+          onChange={(v) => onChange({ ...value, submission_moderator_role_id: v })}
+          description="Members with this role can approve or reject suggestions."
+        />
+        <OptionSelect<number>
+          label="Suggestions a member can have waiting"
+          value={value.submission_max_pending}
+          options={WYR_MAX_PENDING_OPTIONS}
+          onChange={(v) => onChange({ ...value, submission_max_pending: v })}
+          description="Once a member has this many suggestions awaiting review, they wait for one to be handled before sending another."
+        />
+      </div>
+
       <h3 style={{ marginTop: 20 }}>Schedule</h3>
       <div className="field-row">
         <OptionSelect<number>
@@ -868,6 +1022,11 @@ function WyrTab({
       </div>
 
       <h3 style={{ marginTop: 20 }}>Threads</h3>
+      <p className="muted" style={{ marginTop: 0 }}>
+        Each question type gets its own thread wording, because a Would You Rather
+        template lists its options and would leave empty numbering behind on a
+        question that has different options or none.
+      </p>
       <TextField
         label="Thread Name Format"
         value={value.thread_name_format}
@@ -880,6 +1039,32 @@ function WyrTab({
         value={value.thread_starter_message}
         maxLength={500}
         onChange={(v) => onChange({ ...value, thread_starter_message: v })}
+      />
+      <TextField
+        label="Thread Name Format (question with answers)"
+        value={value.thread_name_format_poll}
+        maxLength={100}
+        onChange={(v) => onChange({ ...value, thread_name_format_poll: v })}
+        description="Placeholders: {date} {question_num} {category} {option_1} to {option_5} {question}"
+      />
+      <TextareaField
+        label="Starter Message (question with answers)"
+        value={value.thread_starter_message_poll}
+        maxLength={500}
+        onChange={(v) => onChange({ ...value, thread_starter_message_poll: v })}
+      />
+      <TextField
+        label="Thread Name Format (open-ended)"
+        value={value.thread_name_format_open}
+        maxLength={100}
+        onChange={(v) => onChange({ ...value, thread_name_format_open: v })}
+        description="Placeholders: {date} {question_num} {category} {question} - an open-ended question has no options."
+      />
+      <TextareaField
+        label="Starter Message (open-ended)"
+        value={value.thread_starter_message_open}
+        maxLength={500}
+        onChange={(v) => onChange({ ...value, thread_starter_message_open: v })}
       />
       <div className="field-row">
         <OptionSelect<number>

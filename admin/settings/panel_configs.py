@@ -46,6 +46,7 @@ from ..actions.drops_actions import DropsActions
 from ..actions.tracker_actions import TrackerActions
 from ..actions.color_set_nodes import build_color_tiers_node
 from ..actions.tracker_nodes import build_boost_tracker_node, build_tag_tracker_node
+from ..actions.wyr_question_nodes import build_wyr_questions_group
 from ..actions.drops_nodes import build_drops_channel_node, build_drops_tracker_node
 from ..actions.config.leaves import role_leaf
 from ..actions.data import timezone_options as tz_opts
@@ -1207,6 +1208,7 @@ _WYR_SETTINGS_GROUP = PanelNode(
     category_group="feature",
     children={
         "wyr_channel": WYR_CHANNEL_CONFIG,
+        "wyr_questions": build_wyr_questions_group(),
         "wyr_ping_role": WYR_PING_ROLE_CONFIG,
         "wyr_subscribe_prompt": WYR_SUBSCRIBE_PROMPT_CONFIG,
         "wyr_schedule": WYR_SCHEDULE_CONFIG,

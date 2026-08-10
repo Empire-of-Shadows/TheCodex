@@ -48,7 +48,7 @@ def format_wyr_status(overview: Dict[str, Any], guild: discord.Guild) -> str:
 
     starter_display = f"{starter[:100]}{'...' if len(starter) > 100 else ''}"
 
-    return (
+    body = (
         f"**Server:** {guild.name}\n"
         f"**Channel:** {channel_display}\n"
         f"**Ping Role:** {ping_display}\n"
@@ -60,3 +60,13 @@ def format_wyr_status(overview: Dict[str, Any], guild: discord.Guild) -> str:
         f"**Auto-Archive:** {archive_label}\n"
         f"**Mapping Cleanup:** {cleanup} days"
     )
+
+    # The question-content block, when the overview carries it. Without this,
+    # View Status silently omits the settings that decide whether anything gets
+    # posted at all - which is worse than not having the screen.
+    questions = overview.get("questions")
+    if questions:
+        from .wyr_question_views import format_question_bank_status
+        body += "\n\n" + format_question_bank_status(questions)
+
+    return body

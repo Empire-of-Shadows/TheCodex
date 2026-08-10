@@ -1,5 +1,40 @@
 # Changelog
 
+## [Unreleased] - 2026-08-10
+
+### Added
+- **You can now fill the daily question bank with your own questions.** Until now every daily
+  question came from one shared pool and there was no way to add to it. Under **WYR Settings ->
+  Question Bank** in the admin panel you can now write questions one at a time, or upload a whole
+  file of them at once with **Import Questions** (there is a Download Template button so you can
+  see the shape before you start). Questions you add are private to your server - no other server
+  will ever post them - and a question you already have is skipped rather than added twice.
+- **You can choose where your daily questions come from.** Keep drawing from the shared pool plus
+  your own questions, use only your own, or use only the shared pool. If you pick "only my own"
+  before adding any questions, nothing will post until you add some.
+- **Daily questions no longer have to be a choice between two things.** Alongside Would You
+  Rather, a server can post a general question with up to five answers, or an open-ended prompt
+  with no answers at all where the thread is the whole point. Pick which kinds your server posts
+  under **Question Types**; servers keep posting Would You Rather only until you change it.
+- **Browse and delete your own questions** from the panel, a page at a time, with a confirmation
+  step before anything is removed.
+- **Members can suggest questions, and a moderator approves them.** Turn on **Member Suggestions**,
+  pick a channel for the review posts (or a reviewer role), and members can send in their own
+  questions with `/wyr submit`. Each one arrives with Approve and Decline buttons; approving it
+  puts it straight into your server's rotation, and the member gets a DM either way. You can cap
+  how many suggestions one member can have waiting, and `/wyr queue` lists what is outstanding.
+  If nobody is set up to review them, a member is told so up front rather than sending a
+  suggestion into a queue nobody will read.
+- **The settings pages now warn you when a question will not be posted.** Adding, importing or
+  approving a question of a type your server does not currently post says so, and offers a single
+  button to turn that type on - so a question can never quietly sit in the bank unused.
+- **The web dashboard covers all of it too**, including separate thread wording for each question
+  type, and the vote breakdown now counts every answer on questions with four or five options.
+
+### Fixed
+- **A question posted by hand now counts toward the rotation.** Posting one with `/wyr post` used
+  to leave it looking unused, so the same question could come back again the next morning.
+
 ## [Unreleased] - 2026-08-07
 
 ### Added

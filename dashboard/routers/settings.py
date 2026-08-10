@@ -76,7 +76,7 @@ _SECTION_EXCLUDED_KEYS: dict[str, frozenset[str]] = {
 
 _CHANNEL_ID_FIELDS: dict[str, tuple[str, ...]] = {
     "server": ("admin_channel_id",),
-    "wyr": ("channel_id",),
+    "wyr": ("channel_id", "submission_review_channel_id"),
     "new_members": ("greeting_channel_id",),
     "announcement": ("channel_id",),
     "drops": ("channel_id",),
@@ -86,7 +86,7 @@ _CHANNEL_ID_FIELDS: dict[str, tuple[str, ...]] = {
 }
 
 _ROLE_ID_FIELDS: dict[str, tuple[str, ...]] = {
-    "wyr": ("ping_role_id",),
+    "wyr": ("ping_role_id", "submission_moderator_role_id"),
     "new_members": ("whitelist_role_id",),
     "drops": ("manager_role_id",),
     "tag_tracker": ("role_id",),

@@ -116,6 +116,41 @@ def _default_wyr() -> Dict[str, Any]:
         # not already have it. Off means the role stays available through
         # /wyr notify and the post button, just never advertised.
         "subscribe_prompt_enabled": True,
+
+        # Which questions this guild may draw from. "both" is what every guild
+        # did before private banks existed, so it is the no-change default.
+        # "guild_only" means the guild posts nothing until it adds its own.
+        "question_source": "both",
+
+        # Which question formats this guild posts. A LIST, not an enum - three
+        # formats make seven enum combinations. Defaults to Would You Rather
+        # alone so no existing guild's daily post changes shape on deploy; a
+        # question in a format that is not listed here stays in the bank
+        # unposted, which every add / import / approve surface warns about.
+        "question_formats": ["wyr"],
+
+        # Member question submissions. Off by default; turning it on without a
+        # review channel or a moderator role is refused at the command, so a
+        # submission can never land somewhere nobody will see it.
+        "submissions_enabled": False,
+        "submission_review_channel_id": None,
+        "submission_moderator_role_id": None,
+        "submission_max_pending": 3,
+
+        # Separate thread templates per format. One shared template cannot
+        # work: every guild's saved thread_starter_message contains literal
+        # "1️⃣ {option_1}" lines, which render as garbage for a format that has
+        # different options or none at all.
+        "thread_name_format_poll": "📊 QOTD · Q{question_num} · {date}",
+        "thread_starter_message_poll": (
+            "📊 **{question}**\n\n"
+            "Why that one? Tell us below!"
+        ),
+        "thread_name_format_open": "💬 QOTD · Q{question_num} · {date}",
+        "thread_starter_message_open": (
+            "💬 **{question}**\n\n"
+            "Share your answer and your reasoning below!"
+        ),
     }
 
 
@@ -222,6 +257,26 @@ def _as_int_id_list(values: Any) -> List[int]:
         except (TypeError, ValueError):
             continue
     return out
+
+
+#: The question formats the daily feature knows how to render. Anything else in
+#: a guild's ``question_formats`` list is dropped on load rather than reaching
+#: the selection filter, where an unknown value would silently match nothing.
+QUESTION_FORMATS = ("wyr", "poll", "open")
+
+
+def _as_question_formats(values: Any, fallback: List[str]) -> List[str]:
+    """Normalize a stored ``question_formats`` list.
+
+    Keeps only known formats, in a stable order, with duplicates removed. Falls
+    back to the default when the stored value is missing, the wrong type, or
+    filters down to nothing - an empty list would make the selection filter
+    match no question at all and silently stop the daily post.
+    """
+    if not isinstance(values, (list, tuple, set)):
+        return list(fallback)
+    kept = [f for f in QUESTION_FORMATS if f in values]
+    return kept or list(fallback)
 
 
 def _merge_unknown_keys(built: Dict[str, Any], stored: Dict[str, Any]) -> Dict[str, Any]:
@@ -336,6 +391,28 @@ class GuildConfig:
             "skip_initial_post": stored.get("skip_initial_post", dw["skip_initial_post"]),
             "subscribe_prompt_enabled": stored.get(
                 "subscribe_prompt_enabled", dw["subscribe_prompt_enabled"]
+            ),
+            "question_source": stored.get("question_source", dw["question_source"]),
+            "question_formats": _as_question_formats(
+                stored.get("question_formats"), dw["question_formats"]
+            ),
+            "submissions_enabled": stored.get("submissions_enabled", dw["submissions_enabled"]),
+            "submission_review_channel_id": stored.get("submission_review_channel_id"),
+            "submission_moderator_role_id": stored.get("submission_moderator_role_id"),
+            "submission_max_pending": stored.get(
+                "submission_max_pending", dw["submission_max_pending"]
+            ),
+            "thread_name_format_poll": stored.get(
+                "thread_name_format_poll", dw["thread_name_format_poll"]
+            ),
+            "thread_starter_message_poll": stored.get(
+                "thread_starter_message_poll", dw["thread_starter_message_poll"]
+            ),
+            "thread_name_format_open": stored.get(
+                "thread_name_format_open", dw["thread_name_format_open"]
+            ),
+            "thread_starter_message_open": stored.get(
+                "thread_starter_message_open", dw["thread_starter_message_open"]
             ),
         }
         wyr = _merge_unknown_keys(wyr, stored)

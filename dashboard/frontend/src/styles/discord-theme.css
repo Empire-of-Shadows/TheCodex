@@ -1943,6 +1943,9 @@ a:focus-visible {
 .wyr-bar__segment--1 { background: var(--brand-light); }
 .wyr-bar__segment--2 { background: var(--success); }
 .wyr-bar__segment--3 { background: var(--warning); }
+/* Questions with answers carry up to five options, so the bar does too. */
+.wyr-bar__segment--4 { background: var(--danger); }
+.wyr-bar__segment--5 { background: var(--text-muted); }
 
 .wyr-sparkline {
   margin-top: 10px;

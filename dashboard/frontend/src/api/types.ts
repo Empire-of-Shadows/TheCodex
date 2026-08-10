@@ -24,7 +24,14 @@ export interface Guild {
 
 export interface WyrActivity {
   total_votes: number;
-  option_breakdown: { option1: number; option2: number; option3: number };
+  // Five options: the poll question format carries up to five answers.
+  option_breakdown: {
+    option1: number;
+    option2: number;
+    option3: number;
+    option4: number;
+    option5: number;
+  };
   first_vote: string | null;
   last_vote: string | null;
   streak_active: boolean;
@@ -295,6 +302,21 @@ export interface WyrSection {
   thread_auto_archive: number;
   mapping_cleanup_days: number;
   subscribe_prompt_enabled: boolean;
+  // Which bank the server draws from: "both" | "global_only" | "guild_only".
+  question_source: string;
+  // Which question formats the server posts. A list, not an enum -
+  // "wyr" | "poll" | "open", any combination.
+  question_formats: string[];
+  submissions_enabled: boolean;
+  submission_review_channel_id: string | null;
+  submission_moderator_role_id: string | null;
+  submission_max_pending: number;
+  // Separate thread templates per format - one shared template cannot work,
+  // because a saved WYR starter message hard-codes its {option_1} lines.
+  thread_name_format_poll: string;
+  thread_starter_message_poll: string;
+  thread_name_format_open: string;
+  thread_starter_message_open: string;
 }
 
 export interface NewMembersSection {

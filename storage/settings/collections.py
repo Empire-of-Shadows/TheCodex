@@ -30,13 +30,48 @@ from . import bindings
 # ── TheCodex's collections (registry_key -> CollectionConfig) ───────────────────
 COLLECTIONS: dict[str, CollectionConfig] = {
     # Daily collections
+    # The question bank. Holds both the shared bank every guild draws from
+    # (scope="global") and each guild's own private questions
+    # (scope="guild" + guild_id). Selection always filters on scope, so a
+    # guild's private questions can never surface in another server.
     'daily_wyr': CollectionConfig(
         name='WYR',
         database='Daily',
         connection='primary',
         indexes=[
-            IndexModel([('created_at', -1)])
+            IndexModel([('created_at', -1)]),
+            # The global branch of the selection filter. Narrows the scan
+            # before the per-guild used_count sort, which no static index can
+            # serve because its path contains the guild id.
+            IndexModel([('scope', 1), ('format', 1), ('nsfw', 1)],
+                       name='scope_format_nsfw'),
+            # The guild-bank branch. Partial so it stays proportional to the
+            # private questions rather than the whole bank.
+            IndexModel([('guild_id', 1), ('format', 1), ('nsfw', 1)],
+                       name='guildbank_format_nsfw',
+                       partialFilterExpression={'scope': 'guild'}),
+            # Duplicate detection on add / import / approve.
+            IndexModel([('text_key', 1)], name='text_key_lookup'),
+            # The int question number - separate from the ObjectId _id, unique,
+            # and what the panel selects by and {question_num} renders. Partial
+            # so a document without one cannot collide on a missing value.
+            IndexModel([('id', 1)], name='question_number_unique', unique=True,
+                       partialFilterExpression={'id': {'$type': 'int'}}),
+            # Tag categories - the else-branch of _build_category_query.
+            IndexModel([('tags', 1), ('nsfw', 1)], name='tag_nsfw'),
         ]
+    ),
+
+    # Atomic sequence counters. Currently one document,
+    # {_id: "wyr_question_id", seq: int}, handing out Daily.WYR.id values - the
+    # int question number shown to people. It is NOT the document _id, which is
+    # an ObjectId assigned by Mongo and is what WYR_Mappings.question_id and
+    # WYR_Votes.question_id store.
+    'daily_counters': CollectionConfig(
+        name='Counters',
+        database='Daily',
+        connection='primary',
+        indexes=[]
     ),
 
     'daily_wyr_leaderboard': CollectionConfig(
@@ -58,6 +93,11 @@ COLLECTIONS: dict[str, CollectionConfig] = {
         indexes=[
             IndexModel([('guild_id', 1)]),
             IndexModel([('created_at', -1)]),
+            # Every vote or results click on a post that outlived a restart
+            # resolves its question through this lookup.
+            IndexModel([('message_id', 1)], name='message_lookup'),
+            IndexModel([('question_id', 1), ('guild_id', 1)],
+                       name='question_guild_lookup'),
         ]
     ),
 
@@ -86,6 +126,31 @@ COLLECTIONS: dict[str, CollectionConfig] = {
             IndexModel([('guild_id', 1), ('user_id', 1)],
                        unique=True, name='guild_user_unique'),
             IndexModel([('updated_at', -1)]),
+        ]
+    ),
+
+    # Member-submitted questions awaiting a moderator decision. Approving one
+    # copies it into daily_wyr as a guild-scoped question; the submission
+    # document stays as the record of who sent it and who decided.
+    'daily_wyr_submissions': CollectionConfig(
+        name='WYR_Submissions',
+        database='Daily',
+        connection='primary',
+        indexes=[
+            IndexModel([('submission_id', 1)], unique=True,
+                       name='submission_id_unique'),
+            # The review queue: oldest pending first.
+            IndexModel([('guild_id', 1), ('status', 1), ('created_at', 1)],
+                       name='guild_status_created'),
+            # The per-user pending cap.
+            IndexModel([('guild_id', 1), ('user_id', 1), ('status', 1)],
+                       name='guild_user_status'),
+            # Recovers the submission behind a review post whose view was
+            # rebuilt after a restart and carries no submission id.
+            IndexModel([('review_message_id', 1)], name='review_message_lookup',
+                       partialFilterExpression={'review_message_id': {'$type': 'string'}}),
+            IndexModel([('guild_id', 1), ('text_key', 1)], name='guild_text_key'),
+            IndexModel([('created_at', -1)]),
         ]
     ),
 

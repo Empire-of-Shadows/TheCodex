@@ -147,8 +147,10 @@ function Stat({ value, label }: { value: ReactNode; label: string }) {
 // ── Activity Cards ──────────────────────────────────────────────────────────
 
 function WyrCard({ wyr }: { wyr: UserActivity["wyr"] }) {
-  const { option1, option2, option3 } = wyr.option_breakdown;
-  const total = option1 + option2 + option3 || 1;
+  // All five options count. Questions with answers can carry up to five, and
+  // leaving 4 and 5 out of the denominator renders a bar that does not fill.
+  const { option1, option2, option3, option4, option5 } = wyr.option_breakdown;
+  const total = option1 + option2 + option3 + option4 + option5 || 1;
   // 14-bar mini sparkline - cosmetic visual energy, derived deterministically.
   const heights = [38, 52, 41, 68, 60, 74, 55, 80, 72, 91, 84, 76, 92, 100];
 
@@ -166,6 +168,8 @@ function WyrCard({ wyr }: { wyr: UserActivity["wyr"] }) {
         <div className="wyr-bar__segment wyr-bar__segment--1" style={{ width: `${(option1 / total) * 100}%` }} />
         <div className="wyr-bar__segment wyr-bar__segment--2" style={{ width: `${(option2 / total) * 100}%` }} />
         <div className="wyr-bar__segment wyr-bar__segment--3" style={{ width: `${(option3 / total) * 100}%` }} />
+        <div className="wyr-bar__segment wyr-bar__segment--4" style={{ width: `${(option4 / total) * 100}%` }} />
+        <div className="wyr-bar__segment wyr-bar__segment--5" style={{ width: `${(option5 / total) * 100}%` }} />
       </div>
       <div className="wyr-sparkline" aria-hidden>
         {heights.map((h, i) => (

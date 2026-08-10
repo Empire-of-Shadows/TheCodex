@@ -33,6 +33,20 @@ async def _get_gcm():
     return await get_guild_config_manager()
 
 
+async def _question_overview(guild_id: int) -> Optional[Dict[str, Any]]:
+    """Question-content summary for the status screen, or None if unavailable.
+
+    Imported lazily and failure-tolerant on purpose: the status screen's
+    scheduling half must still render if the question bank cannot be reached.
+    """
+    try:
+        from .wyr_question_actions import WYRQuestionActions
+        return await WYRQuestionActions.get_overview(guild_id)
+    except Exception:
+        logger.debug("WYR status: question overview unavailable", exc_info=True)
+        return None
+
+
 class WYRConfigActions:
     """Static async methods for managing WYR configuration."""
 
@@ -305,6 +319,11 @@ class WYRConfigActions:
             "thread_auto_archive": wyr.get("thread_auto_archive", _WYR_DEFAULTS["thread_auto_archive"]),
             "mapping_cleanup_days": wyr.get("mapping_cleanup_days", _WYR_DEFAULTS["mapping_cleanup_days"]),
             "subscribe_prompt_enabled": wyr.get("subscribe_prompt_enabled", True),
+            # Which questions get posted, and what is in this guild's own bank.
+            # Nested rather than flattened so the status view can render it as
+            # its own block, and so a failure to reach the bank cannot take the
+            # scheduling half of the screen down with it.
+            "questions": await _question_overview(guild_id),
         }
 
     # -- Enabled toggle --------------------------------------------------

@@ -10,10 +10,29 @@ from discord import app_commands
 from dotenv import load_dotenv
 
 from Features.daily import wyr_notify
+from Features.daily.wyr_bank import (
+    FORMAT_LABELS,
+    FORMAT_OPEN,
+    FORMATS,
+    MAX_OPTIONS,
+    normalize_text_key,
+    question_options,
+    validate_question,
+    wyr_bank,
+)
+from Features.daily.wyr_submissions import wyr_submissions
+from Features.daily.wyr_submit_views import (
+    RejectReasonModal,
+    SubmissionBuilderView,
+    SubmissionReviewView,
+    build_decision_dm_embed,
+    build_review_embed,
+)
 from startup.bot import s
 from storage.log import get_logger, PerformanceLogger
 from storage.settings.collections import db_manager
 from storage.settings.config_manager import get_config, get_guild_config_manager
+from admin.actions.wyr_question_actions import WYRQuestionActions
 from admin.setup_notice import send_setup_notice
 
 # Load environment variables
@@ -23,6 +42,21 @@ load_dotenv()
 OPTION1_EMOJI = "1️⃣"  # Reaction for option 1
 OPTION2_EMOJI = "2️⃣"  # Reaction for option 2
 OPTION3_EMOJI = "3️⃣"  # Reaction for option 3
+
+#: Vote button emoji by option number. Indexed by ``question_options``, so the
+#: ceiling here and ``MAX_OPTIONS`` move together.
+OPTION_EMOJI = {1: OPTION1_EMOJI, 2: OPTION2_EMOJI, 3: OPTION3_EMOJI, 4: "4️⃣", 5: "5️⃣"}
+
+# Outcomes of a scheduled post attempt. The distinction that matters is
+# NO_CONTENT vs FAILED: the first is settled for the day, the second retries on
+# the next tick.
+POST_SENT = "sent"
+POST_NO_CONTENT = "no_content"
+POST_FAILED = "failed"
+
+#: What a guild posts when its format list is missing or unusable. Mirrors
+#: config_manager's own default so the two layers cannot disagree.
+DEFAULT_QUESTION_FORMATS = ("wyr",)
 
 logger = get_logger("WYR")
 
@@ -41,19 +75,69 @@ def _channel_allows_nsfw(channel) -> bool:
 
 
 def _format_wyr_string(template: str, question: dict, now: "datetime") -> str:
-    """Substitute supported placeholders in a WYR thread format string."""
+    """Substitute supported placeholders in a WYR thread format string.
+
+    ``{question_num}`` reads ``id``, the int question number (1..5006 in
+    production), NOT ``_id``, which is an ObjectId. They are different fields
+    and only one of them is meant for human eyes.
+    """
     tags = question.get("tags") or []
     category = tags[0].title() if tags else "General"
-    return (
+    out = (
         template
         .replace("{date}",         now.strftime("%m/%d"))
         .replace("{question_num}", str(question.get("id", "")))
         .replace("{category}",     category)
-        .replace("{option_1}",     question.get("option_1", ""))
-        .replace("{option_2}",     question.get("option_2", ""))
-        .replace("{option_3}",     question.get("option_3") or "")
         .replace("{question}",     question.get("original", ""))
     )
+    # Options are substituted for every slot the format supports, so a template
+    # written for one format degrades to empty text rather than a literal
+    # "{option_4}" when it meets a question that has fewer.
+    for n in range(1, MAX_OPTIONS + 1):
+        out = out.replace(f"{{option_{n}}}", question.get(f"option_{n}") or "")
+    return out
+
+
+def _simple_layout(text: str) -> discord.ui.LayoutView:
+    """A one-message LayoutView, for replacing an ephemeral flow with its result."""
+    view = discord.ui.LayoutView(timeout=None)
+    container = discord.ui.Container()
+    container.add_item(discord.ui.TextDisplay(text))
+    view.add_item(container)
+    return view
+
+
+def _thread_templates(guild_config, question: dict) -> tuple:
+    """Pick the (thread name, starter message) templates for a question's format.
+
+    Each format gets its own pair rather than sharing one. It has to be that
+    way: every guild's SAVED thread_starter_message contains literal
+    "1️⃣ {option_1}" lines, so reusing it for a question with different options
+    (or none) renders leftover numbering with nothing beside it. Rewriting a
+    template an admin customized would be worse than carrying three keys.
+    """
+    wyr = guild_config.wyr
+    fmt = question.get("format") or "wyr"
+    if fmt == "poll":
+        suffix = "_poll"
+    elif fmt == FORMAT_OPEN:
+        suffix = "_open"
+    else:
+        suffix = ""
+    defaults = _default_thread_templates(suffix)
+    return (
+        wyr.get(f"thread_name_format{suffix}") or defaults[0],
+        wyr.get(f"thread_starter_message{suffix}") or defaults[1],
+    )
+
+
+def _default_thread_templates(suffix: str) -> tuple:
+    """Fallback templates, used only when a guild's config predates the key."""
+    if suffix == "_poll":
+        return "📊 QOTD · Q{question_num} · {date}", "📊 **{question}**"
+    if suffix == "_open":
+        return "💬 QOTD · Q{question_num} · {date}", "💬 **{question}**"
+    return "🎲 WYR · Q{question_num} · {date}", "🎲 **{question}**"
 
 
 class WYRCommandGroup(app_commands.Group):
@@ -105,20 +189,30 @@ class WYRCommandGroup(app_commands.Group):
                     )
                     return
 
+                source = guild_config.wyr.get("question_source", "both")
+                formats = guild_config.wyr.get("question_formats")
                 if random_pick:
-                    question = await self.cog.get_random_question(category, guild_id=guild_id, allow_nsfw=allow_nsfw)
+                    question = await self.cog.get_random_question(
+                        category, guild_id=guild_id, allow_nsfw=allow_nsfw,
+                        question_source=source, question_formats=formats,
+                    )
                 else:
-                    question = await self.cog.get_next_question(category, guild_id=guild_id, allow_nsfw=allow_nsfw)
+                    question = await self.cog.get_next_question(
+                        category, guild_id=guild_id, allow_nsfw=allow_nsfw,
+                        question_source=source, question_formats=formats,
+                    )
 
                 if not question:
                     logger.warning(f"No {category} questions available for manual post by {interaction.user}")
-                    await interaction.response.send_message(f"There are no {category} questions available right now.",
-                                                            ephemeral=True)
+                    await interaction.response.send_message(
+                        f"There are no {category} questions available right now.\n"
+                        f"Add some under **WYR Settings -> Question Bank** in `/admin panel`.",
+                        ephemeral=True,
+                    )
                     return
 
                 embed = self.cog.create_question_embed(question)
-                has_option3 = bool(question.get("option_3"))
-                view = WYRView(question["_id"], self.cog, has_option3=has_option3)
+                view = self.cog.build_question_view(question)
 
                 await interaction.response.send_message(embed=embed, view=view)
                 message = await interaction.original_response()
@@ -131,10 +225,9 @@ class WYRCommandGroup(app_commands.Group):
                     guild_id=guild_id
                 )
 
-                # Read thread settings from guild config
-                thread_name_fmt = guild_config.wyr.get("thread_name_format", "🎲 WYR · Q{question_num} · {date}")
+                # Read thread settings from guild config, per format
+                thread_name_fmt, starter_msg = _thread_templates(guild_config, question)
                 archive_dur = guild_config.wyr.get("thread_auto_archive", 1440)
-                starter_msg = guild_config.wyr.get("thread_starter_message", "🎲 **{question}**")
                 tz_name = guild_config.wyr.get("timezone", "America/Chicago")
                 tz = pytz.timezone(tz_name)
                 now = datetime.now(tz)
@@ -147,6 +240,11 @@ class WYRCommandGroup(app_commands.Group):
 
                 await thread.send(_format_wyr_string(starter_msg, question, now))
 
+                # A manual post counts toward the rotation, exactly like the
+                # scheduled one. Without this the question stayed at its old
+                # usage count and the next morning's post could serve it again.
+                await self.cog.increment_used_count(question["_id"], guild_id)
+
                 logger.info(f"Successfully posted manual WYR question {question['_id']} in thread {thread.id}")
 
         except Exception as e:
@@ -154,6 +252,127 @@ class WYRCommandGroup(app_commands.Group):
             if not interaction.response.is_done():
                 await interaction.response.send_message("❌ An error occurred while posting the question.",
                                                         ephemeral=True)
+
+    @app_commands.command(
+        name="submit",
+        description="Suggest a question for the daily post (a moderator approves it)",
+    )
+    @app_commands.checks.cooldown(1, 60)
+    async def wyr_submit(self, interaction: discord.Interaction):
+        """Open the suggestion builder.
+
+        Every refusal happens BEFORE anything is stored, and each one says
+        something different. In particular a server with submissions on but no
+        reviewer and no review channel is refused outright: accepting a
+        suggestion nobody can ever see is the exact dead end this feature was
+        built to remove.
+        """
+        logger.info(f"WYR submit opened by {interaction.user} in guild {interaction.guild_id}")
+
+        try:
+            settings = await WYRQuestionActions.get_submission_settings(interaction.guild_id)
+
+            if not settings["enabled"]:
+                await send_setup_notice(
+                    interaction,
+                    what="question suggestions",
+                    path="WYR Settings -> Question Bank -> Member Suggestions",
+                    detail="Suggestions are turned off in this server right now.",
+                )
+                return
+
+            if not settings["review_channel_id"] and not settings["moderator_role_id"]:
+                await interaction.response.send_message(
+                    "Suggestions are turned on here, but nobody is set up to review "
+                    "them yet, so yours would not reach anyone. Please let a server "
+                    "admin know.",
+                    ephemeral=True,
+                )
+                return
+
+            waiting = await wyr_submissions.count_open_for_user(
+                interaction.guild_id, interaction.user.id
+            )
+            if waiting >= settings["max_pending"]:
+                await interaction.response.send_message(
+                    f"You already have **{waiting}** suggestion(s) waiting to be "
+                    f"reviewed. Once one of those is handled you can send another.",
+                    ephemeral=True,
+                )
+                return
+
+            formats = await WYRQuestionActions.get_question_formats(interaction.guild_id)
+            view = SubmissionBuilderView(
+                member_id=interaction.user.id,
+                formats=formats,
+                on_submit=self.cog.process_submission,
+            )
+            await interaction.response.send_message(view=view, ephemeral=True)
+
+        except Exception as e:
+            logger.error(f"Error opening WYR submit for {interaction.user}: {e}", exc_info=True)
+            if not interaction.response.is_done():
+                await interaction.response.send_message(
+                    "❌ Something went wrong opening the suggestion box.", ephemeral=True
+                )
+
+    @app_commands.command(
+        name="queue",
+        description="See the question suggestions waiting for review (Moderator only)",
+    )
+    @app_commands.default_permissions(manage_messages=True)
+    async def wyr_queue(self, interaction: discord.Interaction):
+        """List what is waiting.
+
+        ``default_permissions`` is only a client-side hint a server admin can
+        override, so the real gate is the ``can_review`` check inside.
+        """
+        try:
+            if not await WYRQuestionActions.can_review(interaction.user):
+                await interaction.response.send_message(
+                    "You do not have permission to review question suggestions.",
+                    ephemeral=True,
+                )
+                return
+
+            pending = await wyr_submissions.list_open(interaction.guild_id)
+            if not pending:
+                await interaction.response.send_message(
+                    "There are no question suggestions waiting.", ephemeral=True
+                )
+                return
+
+            embed = discord.Embed(
+                title=f"📥 {len(pending)} suggestion(s) waiting",
+                color=discord.Color.blurple(),
+            )
+            # Discord caps an embed at 25 fields; say so rather than truncating
+            # silently, which would read as "that is all of them".
+            for submission in pending[:25]:
+                text = submission.get("original", "")
+                if len(text) > 200:
+                    text = text[:197] + "..."
+                claimed = (
+                    " · being reviewed"
+                    if submission.get("status") == "reviewing" else ""
+                )
+                embed.add_field(
+                    name=f"{FORMAT_LABELS.get(submission.get('format'), 'Question')}"
+                         f" from {submission.get('user_id')}{claimed}",
+                    value=text or "(no text)",
+                    inline=False,
+                )
+            if len(pending) > 25:
+                embed.set_footer(text=f"Showing 25 of {len(pending)}.")
+
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+
+        except Exception as e:
+            logger.error(f"Error listing the WYR queue: {e}", exc_info=True)
+            if not interaction.response.is_done():
+                await interaction.response.send_message(
+                    "❌ Could not read the suggestion queue.", ephemeral=True
+                )
 
     @app_commands.command(name="stats", description="Check WYR voting statistics for yourself or another user")
     @app_commands.describe(user="User to check stats for (defaults to yourself)")
@@ -183,12 +402,16 @@ class WYRCommandGroup(app_commands.Group):
                     value=f"{stats['option2_votes']:,}",
                     inline=True
                 )
-                if stats['option3_votes'] > 0:
-                    embed.add_field(
-                        name=f"{OPTION3_EMOJI} Option 3 Votes",
-                        value=f"{stats['option3_votes']:,}",
-                        inline=True
-                    )
+                # Options 3 and up only appear once the member has actually used
+                # them, so a server posting two-option questions keeps the
+                # compact layout it has always had.
+                for number in range(3, MAX_OPTIONS + 1):
+                    if stats.get(f"option{number}_votes", 0) > 0:
+                        embed.add_field(
+                            name=f"{OPTION_EMOJI[number]} Option {number} Votes",
+                            value=f"{stats[f'option{number}_votes']:,}",
+                            inline=True
+                        )
                 embed.add_field(
                     name="️ Total Votes",
                     value=f"{stats['total_votes']:,}",
@@ -196,15 +419,18 @@ class WYRCommandGroup(app_commands.Group):
                 )
 
                 if stats['total_votes'] > 0:
-                    option1_pct = (stats['option1_votes'] / stats['total_votes']) * 100
-                    option2_pct = (stats['option2_votes'] / stats['total_votes']) * 100
-                    pref_text = f"Option 1: {option1_pct:.1f}%\nOption 2: {option2_pct:.1f}%"
-                    if stats['option3_votes'] > 0:
-                        option3_pct = (stats['option3_votes'] / stats['total_votes']) * 100
-                        pref_text += f"\nOption 3: {option3_pct:.1f}%"
+                    total = stats['total_votes']
+                    pref_lines = [
+                        f"Option 1: {(stats['option1_votes'] / total) * 100:.1f}%",
+                        f"Option 2: {(stats['option2_votes'] / total) * 100:.1f}%",
+                    ]
+                    for number in range(3, MAX_OPTIONS + 1):
+                        votes = stats.get(f"option{number}_votes", 0)
+                        if votes > 0:
+                            pref_lines.append(f"Option {number}: {(votes / total) * 100:.1f}%")
                     embed.add_field(
                         name=" Voting Preference",
-                        value=pref_text,
+                        value="\n".join(pref_lines),
                         inline=False
                     )
 
@@ -277,9 +503,20 @@ class WYRCommandGroup(app_commands.Group):
                 await interaction.response.send_message("❌ Could not fetch results for that question.", ephemeral=True)
                 return
 
+            # An open-ended question has no options, so there is nothing to
+            # tally. Say so rather than drawing empty bars for options that do
+            # not exist.
+            if results.get("format") == FORMAT_OPEN:
+                await interaction.response.send_message(
+                    "That one is an open-ended question - there are no options to tally. "
+                    "Jump into its thread and add your answer.",
+                    ephemeral=True,
+                )
+                return
+
             # Create results embed
             embed = discord.Embed(
-                title="📊 WYR Results",
+                title="📊 Question Results",
                 color=discord.Color.green()
             )
 
@@ -288,25 +525,11 @@ class WYRCommandGroup(app_commands.Group):
                 filled = int(percentage / 100 * length)
                 return "█" * filled + "░" * (length - filled)
 
-            bar1 = create_bar(results['option1_percentage'])
-            bar2 = create_bar(results['option2_percentage'])
-
-            embed.add_field(
-                name=f"{OPTION1_EMOJI} Option 1",
-                value=f"{bar1} {results['option1_percentage']:.1f}% ({results['option1_votes']} votes)",
-                inline=False
-            )
-            embed.add_field(
-                name=f"{OPTION2_EMOJI} Option 2",
-                value=f"{bar2} {results['option2_percentage']:.1f}% ({results['option2_votes']} votes)",
-                inline=False
-            )
-
-            if results.get('option3_votes') is not None:
-                bar3 = create_bar(results['option3_percentage'])
+            for entry in results.get("options") or []:
+                bar = create_bar(entry["percentage"])
                 embed.add_field(
-                    name=f"{OPTION3_EMOJI} Option 3",
-                    value=f"{bar3} {results['option3_percentage']:.1f}% ({results['option3_votes']} votes)",
+                    name=f"{OPTION_EMOJI.get(entry['number'], '•')} {entry['text']}",
+                    value=f"{bar} {entry['percentage']:.1f}% ({entry['votes']} votes)",
                     inline=False
                 )
 
@@ -460,9 +683,15 @@ class WYR(commands.Cog):
     async def _register_views(self):
         """Register persistent views after bot is ready"""
         await self.bot.wait_until_ready()
-        # Register the view without question_id and cog - they will be set when needed
-        self.bot.add_view(WYRView(has_option3=True))
-        logger.info("Persistent WYRView registered after bot ready")
+        # Register the view without question_id and cog - they will be set when needed.
+        # Registered with the full option set so wyr:option4 and wyr:option5 also
+        # resolve on a post that outlived a restart; the question id is recovered
+        # from the message mapping when a button is actually clicked.
+        self.bot.add_view(WYRView(option_count=MAX_OPTIONS))
+        # Review posts outlive restarts too. Registered with no submission id;
+        # the handlers recover it from the message the buttons sit on.
+        self.bot.add_view(SubmissionReviewView())
+        logger.info("Persistent WYRView and SubmissionReviewView registered after bot ready")
 
     async def initialize_database(self):
         """
@@ -640,11 +869,16 @@ class WYR(commands.Cog):
             async def _run(guild_id, guild_config, today_key):
                 async with sem:
                     try:
-                        posted = await self.post_daily_question_for_guild(guild_id, guild_config)
+                        outcome = await self.post_daily_question_for_guild(guild_id, guild_config)
                     except Exception as e:
                         logger.error(f"Error posting WYR to guild {guild_id}: {e}", exc_info=True)
-                        posted = False
-                    if posted:
+                        outcome = POST_FAILED
+                    # "no_content" is a settled state, not a transient failure:
+                    # a guild drawing only from its own empty bank has nothing to
+                    # post and will still have nothing a minute from now. Treating
+                    # it as a failure would re-evaluate that guild every minute for
+                    # the rest of the day. Only a real failure retries.
+                    if outcome in (POST_SENT, POST_NO_CONTENT):
                         self._posted_today.add(today_key)
 
             await asyncio.gather(*(_run(*d) for d in due))
@@ -720,17 +954,21 @@ class WYR(commands.Cog):
         """Wait until bot is ready before starting tick loop."""
         await self.bot.wait_until_ready()
 
-    async def post_daily_question_for_guild(self, guild_id, guild_config) -> bool:
+    async def post_daily_question_for_guild(self, guild_id, guild_config) -> str:
         """
         Post a daily WYR question for a single guild using per-guild settings.
 
-        Returns True only if the question was actually posted. The caller marks
-        the guild as "posted today" solely on a True result, so a transient
-        failure (permissions blip, 5xx) is retried on the next tick instead of
-        silently skipping the guild for the whole day.
+        Returns one of ``POST_SENT`` / ``POST_NO_CONTENT`` / ``POST_FAILED``.
+
+        The three-way answer exists because "nothing to post" and "the post
+        failed" need opposite handling. The caller retries a failure on the next
+        tick, which is right for a permissions blip or a 5xx. It must NOT retry
+        an empty bank: a guild drawing only from its own questions before it has
+        added any would otherwise be re-evaluated every single minute for the
+        rest of the day.
         """
         if not guild_config.wyr.get("enabled", False):
-            return False
+            return POST_NO_CONTENT
 
         logger.info(f"Posting scheduled WYR question for guild {guild_id}")
 
@@ -738,8 +976,10 @@ class WYR(commands.Cog):
             with PerformanceLogger(logger, f"wyr_post_guild_{guild_id}"):
                 channel = self.bot.get_channel(guild_config.wyr["channel_id"])
                 if not channel:
+                    # The channel may simply not be in cache yet after a restart,
+                    # so this is a retryable failure rather than a settled state.
                     logger.warning(f"WYR channel {guild_config.wyr['channel_id']} not found for guild {guild_id}")
-                    return False
+                    return POST_FAILED
 
                 category = guild_config.wyr.get("default_category", "sfw")
 
@@ -755,14 +995,24 @@ class WYR(commands.Cog):
                     )
                     category = "sfw"
 
-                question = await self.get_next_question(category, guild_id=guild_id, allow_nsfw=allow_nsfw)
+                question = await self.get_next_question(
+                    category,
+                    guild_id=guild_id,
+                    allow_nsfw=allow_nsfw,
+                    question_source=guild_config.wyr.get("question_source", "both"),
+                    question_formats=guild_config.wyr.get("question_formats"),
+                )
                 if not question:
-                    logger.warning(f"No {category} questions available for guild {guild_id} - skipping")
-                    return False
+                    logger.warning(
+                        f"Guild {guild_id} has no {category} question available to post "
+                        f"(source: {guild_config.wyr.get('question_source', 'both')}, "
+                        f"formats: {guild_config.wyr.get('question_formats')}). Add questions "
+                        f"through the admin panel under WYR Settings -> Question Bank."
+                    )
+                    return POST_NO_CONTENT
 
                 embed = self.create_question_embed(question)
-                has_option3 = bool(question.get("option_3"))
-                view = WYRView(question["_id"], self, has_option3=has_option3)
+                view = self.build_question_view(question)
 
                 # Build ping content if role is configured
                 ping_content = f"<@&{guild_config.wyr['ping_role_id']}>" if guild_config.wyr.get("ping_role_id") else None
@@ -783,10 +1033,9 @@ class WYR(commands.Cog):
                     guild_id=guild_id
                 )
 
-                # Read thread settings from guild config
-                thread_name_fmt = guild_config.wyr.get("thread_name_format", "🎲 WYR · Q{question_num} · {date}")
+                # Read thread settings from guild config, per format
+                thread_name_fmt, starter_msg = _thread_templates(guild_config, question)
                 archive_dur = guild_config.wyr.get("thread_auto_archive", 1440)
-                starter_msg = guild_config.wyr.get("thread_starter_message", "🎲 **{question}**")
                 tz_name = guild_config.wyr.get("timezone", "America/Chicago")
                 tz = pytz.timezone(tz_name)
                 now = datetime.now(tz)
@@ -801,11 +1050,335 @@ class WYR(commands.Cog):
 
                 await self.increment_used_count(question["_id"], guild_id)
                 logger.info(f"Posted WYR question {question['_id']} in guild {guild_id}, channel {guild_config.wyr['channel_id']}")
-                return True
+                return POST_SENT
 
         except Exception as e:
             logger.error(f"Error posting WYR to guild {guild_id}: {e}", exc_info=True)
+            return POST_FAILED
+
+    # ── Member submissions ───────────────────────────────────────────────
+
+    async def process_submission(self, interaction, question_format, text, options, tags):
+        """Store a member's suggestion and post it for review.
+
+        Called from the builder's Send button. Everything that can refuse does
+        so before the submission is stored, and if the review post cannot be
+        delivered the submission is deleted again rather than left in a queue
+        nobody can see.
+        """
+        guild_id = interaction.guild_id
+        try:
+            ok, cleaned, error = validate_question(question_format, text, options, tags)
+            if not ok:
+                await interaction.response.send_message(f"❌ {error}", ephemeral=True)
+                return
+
+            text_key = normalize_text_key(
+                cleaned["format"], cleaned["original"],
+                [v for _, v in question_options(cleaned)],
+            )
+
+            if await wyr_bank.find_duplicate(text_key, guild_id):
+                await interaction.response.send_message(
+                    "This server already has that question, so there is nothing to add.",
+                    ephemeral=True,
+                )
+                return
+            if await wyr_submissions.find_duplicate(guild_id, text_key):
+                await interaction.response.send_message(
+                    "Somebody has already suggested that one.", ephemeral=True
+                )
+                return
+
+            settings = await WYRQuestionActions.get_submission_settings(guild_id)
+            submission = await wyr_submissions.create_submission(
+                guild_id=guild_id, user_id=interaction.user.id, cleaned=cleaned
+            )
+            if not submission:
+                await interaction.response.send_message(
+                    "❌ Could not save your suggestion. Please try again.", ephemeral=True
+                )
+                return
+
+            posted = await self._post_submission_for_review(
+                submission, guild_id, settings
+            )
+            if not posted:
+                # Better that the member is told to try again than that their
+                # question sits somewhere nobody will ever look.
+                await wyr_submissions.delete_submission(submission["submission_id"])
+                await interaction.response.send_message(
+                    "❌ Your suggestion could not be sent to the review channel, so "
+                    "it was not saved. Please let a server admin know.",
+                    ephemeral=True,
+                )
+                return
+
+            await interaction.response.edit_message(
+                view=_simple_layout(
+                    "✅ **Sent for review.**\n"
+                    "A moderator will take a look. You will get a DM either way."
+                )
+            )
+            logger.info(
+                f"Submission {submission['submission_id'][:8]} queued in guild {guild_id}"
+            )
+
+        except Exception as e:
+            logger.error(f"Error processing a submission in guild {guild_id}: {e}",
+                         exc_info=True)
+            if not interaction.response.is_done():
+                await interaction.response.send_message(
+                    "❌ Something went wrong sending your suggestion.", ephemeral=True
+                )
+
+    async def _post_submission_for_review(self, submission, guild_id, settings) -> bool:
+        """Put the review post in the review channel. False if it could not be."""
+        channel_id = settings.get("review_channel_id")
+        if not channel_id:
+            # A reviewer role with no channel is a valid setup: the queue is
+            # read with /wyr queue instead, so this is not a failure.
+            return True
+
+        channel = self.bot.get_channel(int(channel_id))
+        if channel is None:
+            try:
+                channel = await self.bot.fetch_channel(int(channel_id))
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
+                logger.warning(f"WYR review channel {channel_id} unreachable: {e}")
+                return False
+
+        warning = await WYRQuestionActions.warning_for_format(
+            guild_id, submission.get("format")
+        )
+        try:
+            message = await channel.send(
+                embed=build_review_embed(submission, format_warning=warning),
+                view=SubmissionReviewView(submission["submission_id"]),
+            )
+        except (discord.Forbidden, discord.HTTPException) as e:
+            logger.warning(f"Could not post a WYR review message in guild {guild_id}: {e}")
             return False
+
+        await wyr_submissions.set_review_message(
+            submission["submission_id"], channel.id, message.id
+        )
+        return True
+
+    async def _resolve_submission(self, interaction, view):
+        """Find the submission behind a review post, or explain why not.
+
+        A view rebuilt after a restart carries no id, so it is recovered from
+        the message. Returns None having already answered the interaction.
+        """
+        submission_id = getattr(view, "submission_id", None)
+        submission = None
+        if submission_id:
+            submission = await wyr_submissions.get_submission(submission_id)
+        if submission is None:
+            submission = await wyr_submissions.find_by_review_message(interaction.message.id)
+        if submission is None:
+            await interaction.response.send_message(
+                "That suggestion is no longer on file.", ephemeral=True
+            )
+            return None
+        return submission
+
+    async def _reviewer_gate(self, interaction) -> bool:
+        if await WYRQuestionActions.can_review(interaction.user):
+            return True
+        await interaction.response.send_message(
+            "You do not have permission to review question suggestions.", ephemeral=True
+        )
+        return False
+
+    async def handle_submission_nsfw_toggle(self, interaction, view):
+        """Mark the pending question age-restricted before approving it."""
+        if not await self._reviewer_gate(interaction):
+            return
+        submission = await self._resolve_submission(interaction, view)
+        if submission is None:
+            return
+
+        view.nsfw = not getattr(view, "nsfw", False)
+        view.submission_id = submission["submission_id"]
+        state = "age-restricted" if view.nsfw else "not age-restricted"
+        await interaction.response.edit_message(view=view)
+        await interaction.followup.send(
+            f"This question will be added as **{state}**.", ephemeral=True
+        )
+
+    async def handle_submission_approve(self, interaction, view):
+        """Approve a suggestion into the guild's own bank.
+
+        Ordering matters and is not incidental: the submission is CLAIMED before
+        anything is inserted. Without that, a double-click or two moderators
+        acting at the same moment would both pass the status check and add the
+        same question twice.
+        """
+        if not await self._reviewer_gate(interaction):
+            return
+        submission = await self._resolve_submission(interaction, view)
+        if submission is None:
+            return
+
+        submission_id = submission["submission_id"]
+        guild_id = interaction.guild_id
+
+        if not await wyr_submissions.claim_for_review(submission_id, interaction.user.id):
+            await interaction.response.send_message(
+                "Somebody else already handled that one.", ephemeral=True
+            )
+            return
+
+        try:
+            # Re-checked after the claim: the question may have been added by
+            # another route while this post sat in the channel.
+            text_key = submission.get("text_key")
+            if text_key and await wyr_bank.find_duplicate(text_key, guild_id):
+                await wyr_submissions.release_claim(submission_id)
+                await interaction.response.send_message(
+                    "This server already has that question, so it was not added again.",
+                    ephemeral=True,
+                )
+                return
+
+            cleaned = {
+                "format": submission.get("format") or "wyr",
+                "original": submission.get("original", ""),
+                "tags": list(submission.get("tags") or []),
+            }
+            for number, text in question_options(submission):
+                cleaned[f"option_{number}"] = text
+
+            question = await wyr_bank.insert_question(
+                cleaned,
+                guild_id=guild_id,
+                source="submission",
+                nsfw=bool(getattr(view, "nsfw", False)),
+                submitted_by=submission.get("user_id"),
+                approved_by=interaction.user.id,
+            )
+            if not question:
+                # Put it back in the queue rather than stranding it as claimed.
+                await wyr_submissions.release_claim(submission_id)
+                await interaction.response.send_message(
+                    "❌ Could not add that question. It has been put back in the queue.",
+                    ephemeral=True,
+                )
+                return
+
+            # The question NUMBER, not the ObjectId: this is what the submitter
+            # and the reviewer are shown, and what mark_approved stores as an int.
+            await wyr_submissions.mark_approved(
+                submission_id, question["id"], interaction.user.id
+            )
+            await self._close_review_post(
+                interaction, submission, outcome="approved",
+                question_id=question["id"],
+            )
+            await self._notify_submitter(interaction, submission, approved=True)
+
+            warning = await WYRQuestionActions.warning_for_format(
+                guild_id, cleaned["format"]
+            )
+            if warning:
+                await interaction.followup.send(
+                    f"{warning}\nTurn it on under **WYR Settings -> Question Bank -> "
+                    f"Question Types** in `/admin panel`.",
+                    ephemeral=True,
+                )
+            logger.info(
+                f"Submission {submission_id[:8]} approved as question "
+                f"{question['id']} in guild {guild_id}"
+            )
+
+        except Exception as e:
+            logger.error(f"Error approving submission {submission_id}: {e}", exc_info=True)
+            await wyr_submissions.release_claim(submission_id)
+            if not interaction.response.is_done():
+                await interaction.response.send_message(
+                    "❌ Something went wrong. The suggestion is back in the queue.",
+                    ephemeral=True,
+                )
+
+    async def handle_submission_reject(self, interaction, view):
+        """Decline a suggestion, optionally with a reason for the member."""
+        if not await self._reviewer_gate(interaction):
+            return
+        submission = await self._resolve_submission(interaction, view)
+        if submission is None:
+            return
+
+        submission_id = submission["submission_id"]
+
+        async def _on_reason(modal_interaction, reason: str):
+            if not await wyr_submissions.claim_for_review(
+                submission_id, modal_interaction.user.id
+            ):
+                await modal_interaction.response.send_message(
+                    "Somebody else already handled that one.", ephemeral=True
+                )
+                return
+            await wyr_submissions.mark_rejected(
+                submission_id, modal_interaction.user.id, reason
+            )
+            await self._close_review_post(
+                modal_interaction, submission, outcome="rejected", reason=reason
+            )
+            await self._notify_submitter(
+                modal_interaction, submission, approved=False, reason=reason
+            )
+            logger.info(f"Submission {submission_id[:8]} declined in guild {interaction.guild_id}")
+
+        await interaction.response.send_modal(RejectReasonModal(_on_reason))
+
+    async def _close_review_post(self, interaction, submission, *, outcome,
+                                 question_id=None, reason=""):
+        """Rewrite the review post to show the decision and drop its buttons."""
+        embed = build_review_embed(
+            submission,
+            decided_by=interaction.user,
+            outcome=outcome,
+            reason=reason,
+            question_id=question_id,
+        )
+        try:
+            if interaction.response.is_done():
+                await interaction.message.edit(embed=embed, view=None)
+            else:
+                await interaction.response.edit_message(embed=embed, view=None)
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
+            logger.warning(f"Could not update a WYR review post: {e}")
+            if not interaction.response.is_done():
+                await interaction.response.send_message(
+                    f"Recorded, but the review post could not be updated.", ephemeral=True
+                )
+
+    async def _notify_submitter(self, interaction, submission, *, approved, reason=""):
+        """DM the member the outcome. Best effort by design.
+
+        Sent inline rather than through a queue: the click has already been
+        answered, and a DM that cannot be delivered costs nothing - an approved
+        question is in the bank and will post regardless.
+        """
+        try:
+            user_id = int(submission.get("user_id"))
+        except (TypeError, ValueError):
+            return
+        try:
+            user = interaction.guild.get_member(user_id) or await self.bot.fetch_user(user_id)
+            await user.send(embed=build_decision_dm_embed(
+                submission,
+                guild_name=interaction.guild.name,
+                approved=approved,
+                reason=reason,
+            ))
+        except (discord.Forbidden, discord.NotFound, discord.HTTPException, AttributeError):
+            logger.info(
+                f"Could not DM member {user_id} about submission "
+                f"{str(submission.get('submission_id', ''))[:8]}"
+            )
 
     async def update_user_leaderboard(self, user_id, guild_id, option_chosen):
         """
@@ -826,14 +1399,18 @@ class WYR(commands.Cog):
                         "user_id": user_id_str,
                         "guild_id": gid_str,
                         "total_votes": 1,
-                        "option1_votes": 1 if option_chosen == "option1" else 0,
-                        "option2_votes": 1 if option_chosen == "option2" else 0,
-                        "option3_votes": 1 if option_chosen == "option3" else 0,
                         "score": 1,
                         "first_vote": now,
                         "last_vote": now,
                         "updated_at": now,
                     }
+                    # A column per option, so a member whose first ever vote is
+                    # option 4 still gets a complete row rather than one missing
+                    # the field every later read expects.
+                    for number in range(1, MAX_OPTIONS + 1):
+                        new_user[f"option{number}_votes"] = (
+                            1 if option_chosen == f"option{number}" else 0
+                        )
                     await db_manager.daily_wyr_leaderboard.create_one(new_user)
                     logger.info(f"Created leaderboard entry for user {user_id} in guild {guild_id}: {option_chosen}")
                 else:
@@ -886,29 +1463,124 @@ class WYR(commands.Cog):
             query["nsfw"] = False
         return query
 
-    async def get_next_question(self, category="sfw", guild_id=None, exclude_used=False, allow_nsfw=False):
+    #: Matches the shared bank. A question with no ``scope`` at all predates
+    #: private banks, and the bank was shared by every guild for its whole life
+    #: before then - so missing means global. Without this the daily post would
+    #: stop dead for every guild between deploying the code and running the
+    #: backfill migration, which is an ordering dependency worth not having.
+    _GLOBAL_SCOPE = {"$or": [{"scope": "global"}, {"scope": {"$exists": False}}]}
+
+    @classmethod
+    def _build_scope_clause(cls, gid_str: str | None, question_source: str) -> dict | None:
+        """Build the filter deciding WHICH bank a guild draws from.
+
+        Returns None when there is nothing this guild may ever be served, which
+        is a settled state rather than a failure - "guild_only" with no guild.
+
+        This clause is what keeps one server's private questions out of every
+        other server. It is never optional, and never omitted on any code path.
+        """
+        if question_source == "global_only":
+            return dict(cls._GLOBAL_SCOPE)
+        if question_source == "guild_only":
+            # A private question always carries both keys, so this branch needs
+            # no legacy allowance - and must not have one, or a missing scope
+            # would match every guild.
+            return {"scope": "guild", "guild_id": gid_str} if gid_str else None
+        if gid_str is None:
+            return dict(cls._GLOBAL_SCOPE)
+        return {"$or": [{"scope": "global"},
+                        {"scope": {"$exists": False}},
+                        {"scope": "guild", "guild_id": gid_str}]}
+
+    @staticmethod
+    def _build_formats_clause(question_formats) -> dict:
+        """Restrict selection to the formats this guild posts.
+
+        A question predating the format field is a Would You Rather, so when
+        "wyr" is enabled the clause also accepts documents with no format at
+        all - otherwise every question in the bank today would stop being
+        selectable the moment this shipped.
+
+        An empty or unrecognizable list falls back to the same default
+        ``config_manager`` uses, NOT to "post everything". Treating no
+        selection as every selection would let a corrupt value post a format
+        the server had deliberately switched off, and would put the runtime at
+        odds with the config layer, which already normalizes empty to ["wyr"].
+        """
+        wanted = [f for f in (question_formats or []) if f in FORMATS]
+        if not wanted:
+            wanted = list(DEFAULT_QUESTION_FORMATS)
+        if len(wanted) == len(FORMATS):
+            # Every format is wanted, so there is nothing to narrow.
+            return {}
+        if "wyr" in wanted:
+            return {"$or": [{"format": {"$in": wanted}}, {"format": {"$exists": False}}]}
+        return {"format": {"$in": wanted}}
+
+    @classmethod
+    def _assemble_question_query(cls, category, allow_nsfw, gid_str,
+                                 question_source, question_formats,
+                                 used_path=None, exclude_used=False) -> dict | None:
+        """Combine the category, scope, format and usage filters into one query.
+
+        Deliberately an explicit ``$and`` of independent clauses rather than one
+        merged dict. Several of these clauses want a top-level ``$or``, and a
+        dict can only hold one - merging them would let the last writer silently
+        drop an earlier clause. If that clause were the scope filter, the result
+        is a guild being served another server's private questions, with no
+        error anywhere. Keep the clauses separate.
+        """
+        base = cls._build_category_query(category, allow_nsfw)
+        if base is None:
+            return None
+
+        scope = cls._build_scope_clause(gid_str, question_source)
+        if scope is None:
+            return None
+
+        clauses = [base, scope]
+
+        formats = cls._build_formats_clause(question_formats)
+        if formats:
+            clauses.append(formats)
+
+        if exclude_used and used_path:
+            # Treat missing nested key (never posted in this guild) as zero.
+            clauses.append({"$or": [
+                {used_path: {"$exists": False}},
+                {used_path: 0},
+            ]})
+
+        clauses = [c for c in clauses if c]
+        if not clauses:
+            return {}
+        if len(clauses) == 1:
+            return clauses[0]
+        return {"$and": clauses}
+
+    async def get_next_question(self, category="sfw", guild_id=None, exclude_used=False,
+                                allow_nsfw=False, question_source="both",
+                                question_formats=None):
         """
         Fetch the next "Would You Rather" question for a guild - least-used in that guild first.
         """
         try:
             with PerformanceLogger(logger, f"get_next_question_{category}_{guild_id}"):
-                query = self._build_category_query(category, allow_nsfw)
-                if query is None:
-                    logger.warning(
-                        f"Refusing to serve an NSFW question for guild {guild_id}: "
-                        f"category is {category} but the channel is not age-restricted"
-                    )
-                    return None
-
                 gid_str = str(guild_id) if guild_id is not None else None
                 used_path = f"guilds.{gid_str}.used_count" if gid_str else "used_count"
 
-                if exclude_used:
-                    # Treat missing nested key (never posted in this guild) as zero.
-                    query["$or"] = [
-                        {used_path: {"$exists": False}},
-                        {used_path: 0},
-                    ]
+                query = self._assemble_question_query(
+                    category, allow_nsfw, gid_str, question_source, question_formats,
+                    used_path=used_path, exclude_used=exclude_used,
+                )
+                if query is None:
+                    logger.warning(
+                        f"No question can be served to guild {guild_id}: category is "
+                        f"{category} (channel age-restricted: {allow_nsfw}), source is "
+                        f"{question_source}"
+                    )
+                    return None
 
                 questions = await db_manager.daily_wyr.find_many(
                     filter_dict=query,
@@ -931,17 +1603,26 @@ class WYR(commands.Cog):
             logger.error(f"Error fetching next WYR question ({category}, guild {guild_id}): {e}", exc_info=True)
             return None
 
-    async def get_random_question(self, category="sfw", guild_id=None, allow_nsfw=False):
+    async def get_random_question(self, category="sfw", guild_id=None, allow_nsfw=False,
+                                  question_source="both", question_formats=None):
         """
         Get a random question from the specified category using the new DatabaseManager.
+
+        Carries the same scope and format filters as ``get_next_question``. It
+        has to: without the scope clause this path would happily hand a guild a
+        random question out of another server's private bank.
         """
         try:
             with PerformanceLogger(logger, f"get_random_question_{category}"):
-                match_filter = self._build_category_query(category, allow_nsfw)
+                gid_str = str(guild_id) if guild_id is not None else None
+                match_filter = self._assemble_question_query(
+                    category, allow_nsfw, gid_str, question_source, question_formats,
+                )
                 if match_filter is None:
                     logger.warning(
-                        f"Refusing to serve a random NSFW question for guild {guild_id}: "
-                        f"category is {category} but the channel is not age-restricted"
+                        f"No random question can be served to guild {guild_id}: category "
+                        f"is {category} (channel age-restricted: {allow_nsfw}), source is "
+                        f"{question_source}"
                     )
                     return None
 
@@ -969,7 +1650,8 @@ class WYR(commands.Cog):
         """
         Get user voting statistics for a specific guild from the leaderboard collection.
         """
-        default_stats = {"option1_votes": 0, "option2_votes": 0, "option3_votes": 0, "total_votes": 0}
+        default_stats = {f"option{n}_votes": 0 for n in range(1, MAX_OPTIONS + 1)}
+        default_stats["total_votes"] = 0
 
         try:
             with PerformanceLogger(logger, f"get_user_stats_{user_id}_{guild_id}"):
@@ -979,16 +1661,17 @@ class WYR(commands.Cog):
 
                 if not user_stats:
                     logger.info(f"No stats found for user {user_id} in guild {guild_id}")
-                    return default_stats
+                    return dict(default_stats)
 
                 stats = {
-                    "option1_votes": user_stats.get("option1_votes", 0),
-                    "option2_votes": user_stats.get("option2_votes", 0),
-                    "option3_votes": user_stats.get("option3_votes", 0),
+                    f"option{n}_votes": user_stats.get(f"option{n}_votes", 0)
+                    for n in range(1, MAX_OPTIONS + 1)
+                }
+                stats.update({
                     "total_votes": user_stats.get("total_votes", 0),
                     "first_vote": user_stats.get("first_vote"),
-                    "last_vote": user_stats.get("last_vote")
-                }
+                    "last_vote": user_stats.get("last_vote"),
+                })
 
                 logger.info(f"Retrieved stats for user {user_id}: {stats['total_votes']} total votes")
                 return stats
@@ -1080,32 +1763,39 @@ class WYR(commands.Cog):
                     return None
 
                 guild_data = (question.get("guilds") or {}).get(gid) or {}
-                vote_counts = guild_data.get("vote_counts") or {"option1": 0, "option2": 0}
-                has_option3 = bool(question.get("option_3"))
-                total_votes = (
-                    vote_counts.get("option1", 0)
-                    + vote_counts.get("option2", 0)
-                    + (vote_counts.get("option3", 0) if has_option3 else 0)
-                )
+                vote_counts = guild_data.get("vote_counts") or {}
+                options = question_options(question)
 
-                if total_votes > 0:
-                    option1_percentage = (vote_counts.get("option1", 0) / total_votes) * 100
-                    option2_percentage = (vote_counts.get("option2", 0) / total_votes) * 100
-                else:
-                    option1_percentage = option2_percentage = 0
+                # Only count options the question actually has. A stale
+                # vote_counts entry for an option since removed must not inflate
+                # the total and skew every percentage.
+                total_votes = sum(vote_counts.get(f"option{n}", 0) for n, _ in options)
 
                 results = {
-                    "option1_votes": vote_counts.get("option1", 0),
-                    "option2_votes": vote_counts.get("option2", 0),
-                    "option1_percentage": option1_percentage,
-                    "option2_percentage": option2_percentage,
+                    "format": question.get("format") or "wyr",
                     "total_votes": total_votes,
+                    "options": [],
                 }
+                for number, text in options:
+                    votes = vote_counts.get(f"option{number}", 0)
+                    percentage = (votes / total_votes * 100) if total_votes > 0 else 0
+                    results["options"].append({
+                        "number": number,
+                        "text": text,
+                        "votes": votes,
+                        "percentage": percentage,
+                    })
+                    # Flat per-option keys kept alongside the list: /wyr results,
+                    # the Show Results button and the embed builder all read them.
+                    results[f"option{number}_votes"] = votes
+                    results[f"option{number}_percentage"] = percentage
 
-                if has_option3:
-                    option3_votes = vote_counts.get("option3", 0)
-                    results["option3_votes"] = option3_votes
-                    results["option3_percentage"] = (option3_votes / total_votes * 100) if total_votes > 0 else 0
+                # An option-less question still answers with zeroes rather than
+                # a missing key, so a caller that reads option1_votes on one
+                # gets 0 instead of a KeyError.
+                for number in (1, 2):
+                    results.setdefault(f"option{number}_votes", 0)
+                    results.setdefault(f"option{number}_percentage", 0)
 
                 logger.info(f"Retrieved results for question {question_id}: {total_votes} total votes")
                 return results
@@ -1155,37 +1845,70 @@ class WYR(commands.Cog):
                 exc_info=True,
             )
 
+    def build_question_view(self, question):
+        """Build the right view for a question's format.
+
+        An open-ended question has nothing to vote on, so it gets a view with
+        only the notification button rather than a set of dead vote buttons.
+        """
+        if question.get("format") == FORMAT_OPEN:
+            return OpenQuestionView()
+        return WYRView(
+            question["_id"],
+            self,
+            option_count=len(question_options(question)),
+        )
+
     def create_question_embed(self, question, show_results=False, results=None):
         """
-        Create a Discord embed for the WYR question.
+        Create a Discord embed for a daily question.
+
+        Would You Rather keeps the presentation it has always had: a fixed
+        title and the options alone, with the ``original`` text deliberately
+        not shown. The other two formats lead with the question text, because
+        for them the options are the answer rather than the question.
         """
         try:
-            description = (
-                f"{OPTION1_EMOJI} **{question['option_1']}**\n"
-                f"{OPTION2_EMOJI} **{question['option_2']}**"
-            )
-            if question.get('option_3'):
-                description += f"\n{OPTION3_EMOJI} **{question['option_3']}**"
+            fmt = question.get("format") or "wyr"
+            options = question_options(question)
 
-            embed = discord.Embed(
-                title="❓ Would You Rather...",
-                description=description,
-                color=discord.Color.blue()
+            if fmt == FORMAT_OPEN:
+                # No option lines at all. Reading option_1 here used to raise
+                # KeyError, land in the handler below and post a red "Error"
+                # embed to the whole server.
+                embed = discord.Embed(
+                    title="💬 Question of the Day",
+                    description=question.get("original", ""),
+                    color=discord.Color.blurple(),
+                )
+                embed.set_footer(text="Jump into the thread and share your answer!")
+                logger.debug(f"Created open-question embed for {question.get('_id', 'unknown')}")
+                return embed
+
+            option_lines = "\n".join(
+                f"{OPTION_EMOJI.get(number, '•')} **{text}**" for number, text in options
             )
+
+            if fmt == "poll":
+                title = "📊 Question of the Day"
+                description = f"{question.get('original', '')}\n\n{option_lines}"
+                color = discord.Color.green()
+            else:
+                title = "❓ Would You Rather..."
+                description = option_lines
+                color = discord.Color.blue()
+
+            embed = discord.Embed(title=title, description=description, color=color)
 
             if show_results and results:
-                results_text = (
-                    f"{OPTION1_EMOJI} **{results['option1_percentage']:.1f}%** "
-                    f"({results['option1_votes']} votes)\n"
-                    f"{OPTION2_EMOJI} **{results['option2_percentage']:.1f}%** "
-                    f"({results['option2_votes']} votes)\n"
-                )
-                if results.get('option3_votes') is not None:
-                    results_text += (
-                        f"{OPTION3_EMOJI} **{results['option3_percentage']:.1f}%** "
-                        f"({results['option3_votes']} votes)\n"
+                lines = []
+                for entry in results.get("options") or []:
+                    emoji = OPTION_EMOJI.get(entry["number"], "•")
+                    lines.append(
+                        f"{emoji} **{entry['percentage']:.1f}%** ({entry['votes']} votes)"
                     )
-                results_text += f"\n**Total Votes:** {results['total_votes']}"
+                results_text = "\n".join(lines)
+                results_text += f"\n\n**Total Votes:** {results['total_votes']}"
 
                 embed.add_field(
                     name=" Current Results",
@@ -1207,30 +1930,77 @@ class WYR(commands.Cog):
             )
 
 
+class OpenQuestionView(discord.ui.View):
+    """Persistent view for an open-ended question - discussion only.
+
+    Deliberately NOT registered with ``bot.add_view``: its only component is
+    ``wyr:notify``, which the persistent WYRView already registers. Registering
+    the same custom_id twice would shadow the first handler.
+    """
+
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.add_item(wyr_notify.NotifyButton())
+
+
 class WYRView(discord.ui.View):
-    def __init__(self, question_id=None, cog=None, has_option3=False):
+    def __init__(self, question_id=None, cog=None, has_option3=False, option_count=None):
         super().__init__(timeout=None)
         self.question_id = question_id
         self.cog = cog
-        if has_option3:
+
+        # Options 1 and 2 stay as class-level decorated buttons below. Every
+        # question ever posted resolves its votes through those two custom_ids
+        # after a restart, so they are not made dynamic. Options 3 to 5 are
+        # added here instead.
+        if option_count is None:
+            option_count = 3 if has_option3 else 2
+        try:
+            option_count = int(option_count)
+        except (TypeError, ValueError):
+            option_count = 2
+        option_count = max(2, min(option_count, MAX_OPTIONS))
+        self.option_count = option_count
+
+        for number in range(3, option_count + 1):
             btn = discord.ui.Button(
-                label="Option 3", style=discord.ButtonStyle.primary,
-                emoji=OPTION3_EMOJI, custom_id="wyr:option3"
+                label=f"Option {number}", style=discord.ButtonStyle.primary,
+                emoji=OPTION_EMOJI[number], custom_id=f"wyr:option{number}"
             )
-            btn.callback = self.option3_callback
-            # Insert before Show Results (which is at index 2 after Option 1, Option 2)
+            btn.callback = self._make_vote_callback(number)
             self.add_item(btn)
-            # Reorder: move Option 3 (now last) before Show Results
-            items = list(self.children)
-            items.insert(2, items.pop())
+
+        if option_count > 2:
+            # The decorated buttons put Show Results at index 2, so the extra
+            # options land after it. Move it back to the end by custom_id
+            # rather than by index, which stays correct however many were added.
+            options = [c for c in self.children
+                       if getattr(c, "custom_id", "") != "wyr:results"]
+            results = [c for c in self.children
+                       if getattr(c, "custom_id", "") == "wyr:results"]
             self.clear_items()
-            for item in items:
+            for item in options + results:
                 self.add_item(item)
+
         # Sits on its own row under the vote buttons: joining the ping role is
         # one click from any question, old posts included.
         self.add_item(wyr_notify.NotifyButton())
         if question_id:
-            logger.debug(f"Created WYRView for question {question_id} (has_option3={has_option3})")
+            logger.debug(f"Created WYRView for question {question_id} ({option_count} options)")
+
+    def _make_vote_callback(self, option_number: int):
+        """Bind one vote callback per option.
+
+        A factory, not a lambda in the loop: a closure over the loop variable
+        would leave every button voting for the last option.
+        """
+        async def _callback(interaction: discord.Interaction):
+            logger.info(
+                f"Option {option_number} vote button clicked by {interaction.user} "
+                f"(ID: {interaction.user.id}) for question {self.question_id}"
+            )
+            await self.handle_vote(interaction, f"option{option_number}")
+        return _callback
 
     def _get_cog(self, interaction: discord.Interaction):
         """Get the cog instance from the bot"""
@@ -1253,11 +2023,6 @@ class WYRView(discord.ui.View):
         logger.info(
             f"Option 2 vote button clicked by {interaction.user} (ID: {interaction.user.id}) for question {self.question_id}")
         await self.handle_vote(interaction, "option2")
-
-    async def option3_callback(self, interaction: discord.Interaction):
-        logger.info(
-            f"Option 3 vote button clicked by {interaction.user} (ID: {interaction.user.id}) for question {self.question_id}")
-        await self.handle_vote(interaction, "option3")
 
     @discord.ui.button(label="Show Results", style=discord.ButtonStyle.secondary, custom_id="wyr:results")
     async def show_results_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1286,6 +2051,14 @@ class WYRView(discord.ui.View):
                     await interaction.response.send_message("❌ Could not fetch results.", ephemeral=True)
                     return
 
+                if results.get("format") == FORMAT_OPEN:
+                    await interaction.response.send_message(
+                        "That one is an open-ended question - there are no options to "
+                        "tally. Jump into its thread and add your answer.",
+                        ephemeral=True,
+                    )
+                    return
+
                 # Look up which option this user voted for
                 user_vote = await cog.get_user_vote(question_id, interaction.guild_id, interaction.user.id)
 
@@ -1299,29 +2072,12 @@ class WYRView(discord.ui.View):
                     filled = int(percentage / 100 * length)
                     return "█" * filled + "░" * (length - filled)
 
-                bar1 = create_bar(results['option1_percentage'])
-                bar2 = create_bar(results['option2_percentage'])
-
-                pick1 = " **<< Your pick**" if user_vote == "option1" else ""
-                pick2 = " **<< Your pick**" if user_vote == "option2" else ""
-
-                embed.add_field(
-                    name=f"{OPTION1_EMOJI} Option 1",
-                    value=f"{bar1} {results['option1_percentage']:.1f}% ({results['option1_votes']} votes){pick1}",
-                    inline=False
-                )
-                embed.add_field(
-                    name=f"{OPTION2_EMOJI} Option 2",
-                    value=f"{bar2} {results['option2_percentage']:.1f}% ({results['option2_votes']} votes){pick2}",
-                    inline=False
-                )
-
-                if results.get('option3_votes') is not None:
-                    bar3 = create_bar(results['option3_percentage'])
-                    pick3 = " **<< Your pick**" if user_vote == "option3" else ""
+                for entry in results.get("options") or []:
+                    bar = create_bar(entry["percentage"])
+                    pick = " **<< Your pick**" if user_vote == f"option{entry['number']}" else ""
                     embed.add_field(
-                        name=f"{OPTION3_EMOJI} Option 3",
-                        value=f"{bar3} {results['option3_percentage']:.1f}% ({results['option3_votes']} votes){pick3}",
+                        name=f"{OPTION_EMOJI.get(entry['number'], '•')} {entry['text']}",
+                        value=f"{bar} {entry['percentage']:.1f}% ({entry['votes']} votes){pick}",
                         inline=False
                     )
 

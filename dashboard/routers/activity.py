@@ -33,9 +33,16 @@ async def _get_wyr_activity(user_id: int, guild_ids: list[int]) -> dict:
         {"$group": {
             "_id": None,
             "total_votes": {"$sum": {"$ifNull": ["$total_votes", 0]}},
+            # Five options, because the poll format carries up to five. Anything
+            # below five under-reports the breakdown against total_votes, which
+            # is a separate stored field and is NOT derived from these sums.
+            # $ifNull covers the leaderboard rows written before options 4 and 5
+            # existed - those docs simply have no option4_votes/option5_votes key.
             "option1": {"$sum": {"$ifNull": ["$option1_votes", 0]}},
             "option2": {"$sum": {"$ifNull": ["$option2_votes", 0]}},
             "option3": {"$sum": {"$ifNull": ["$option3_votes", 0]}},
+            "option4": {"$sum": {"$ifNull": ["$option4_votes", 0]}},
+            "option5": {"$sum": {"$ifNull": ["$option5_votes", 0]}},
             "first_vote": {"$min": "$first_vote"},
             "last_vote": {"$max": "$last_vote"},
         }},
@@ -45,7 +52,8 @@ async def _get_wyr_activity(user_id: int, guild_ids: list[int]) -> dict:
     if not result:
         return {
             "total_votes": 0,
-            "option_breakdown": {"option1": 0, "option2": 0, "option3": 0},
+            "option_breakdown": {"option1": 0, "option2": 0, "option3": 0,
+                                 "option4": 0, "option5": 0},
             "first_vote": None,
             "last_vote": None,
             "streak_active": False,
@@ -66,6 +74,8 @@ async def _get_wyr_activity(user_id: int, guild_ids: list[int]) -> dict:
             "option1": doc["option1"],
             "option2": doc["option2"],
             "option3": doc["option3"],
+            "option4": doc["option4"],
+            "option5": doc["option5"],
         },
         "first_vote": first_vote.isoformat() if first_vote else None,
         "last_vote": last_vote.isoformat() if last_vote else None,
