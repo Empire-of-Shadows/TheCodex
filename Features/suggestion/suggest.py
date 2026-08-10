@@ -25,6 +25,22 @@ SUGGESTION_CATEGORIES = [
     "Other",
 ]
 
+# Statuses a suggestion can carry, in the order they are offered as filters.
+SUGGESTION_STATUSES = [
+    "Pending",
+    "Under Review",
+    "Approved",
+    "Implemented",
+    "Rejected",
+    "On Hold",
+]
+
+# Filter option sets for the browser view. They mirror the /suggestions slash
+# command choices exactly, "All" included, so a filter picked on the command and
+# the same filter picked in the view mean the same thing.
+BROWSE_CATEGORY_OPTIONS = ["All"] + SUGGESTION_CATEGORIES
+BROWSE_STATUS_OPTIONS = ["All"] + SUGGESTION_STATUSES
+
 class SuggestionView(discord.ui.View):
     def __init__(self, suggestion_id: str, db_manager):
         super().__init__(timeout=None)
@@ -422,6 +438,297 @@ class SuggestionBuilderView(discord.ui.LayoutView):
         self.stop()
 
 
+class SuggestionBrowserView(discord.ui.LayoutView):
+    """Ephemeral Components v2 browser over one guild's suggestions.
+
+    Author-locked and short-lived, following the builder above: `render()`
+    rebuilds the container from scratch on every state change. Two properties
+    this view exists to get right:
+
+    - Each page is its own database query (server-side skip/limit), so a result
+      set larger than one page is actually reachable.
+    - The footer's total comes from a count over the SAME filter document the
+      page query used, so the number it prints is the real number of matches and
+      not however many rows happened to be fetched.
+
+    Anonymous suggestions store no user_id, so they can never appear under the
+    "Mine only" toggle. That is intended, and the empty state says so rather than
+    letting it read as a bug.
+    """
+
+    PAGE_SIZE = 5
+
+    def __init__(
+        self,
+        cog: "SuggestionCog",
+        author_id: int,
+        guild_id: int,
+        query: Optional[str] = None,
+        category: Optional[str] = None,
+        status: Optional[str] = None,
+        filter_author_id: Optional[int] = None,
+        mine: bool = False,
+        timeout: float = 300.0,
+    ):
+        super().__init__(timeout=timeout)
+        self.cog = cog
+        self.author_id = author_id
+        self.guild_id = guild_id
+        self.query = query or None
+        self.category = category if category in BROWSE_CATEGORY_OPTIONS else "All"
+        self.status = status if status in BROWSE_STATUS_OPTIONS else "All"
+        # Seeded from the command's `author` option; the Mine toggle overrides it.
+        self.filter_author_id = filter_author_id
+        self.mine = mine
+        self.page = 1
+        self.total = 0
+        self.items: List[Dict[str, Any]] = []
+        self.vote_totals: Dict[str, int] = {}
+        # Render immediately so the view is always in a sendable state; `load()`
+        # refetches and re-renders with real data before it is ever sent.
+        self.render()
+
+    # ---- state ---------------------------------------------------------
+
+    @property
+    def author_filter(self) -> Optional[int]:
+        """Whose suggestions to show: the caller while Mine only is on, otherwise
+        whoever was passed to the command's author option (None means everyone)."""
+        return self.author_id if self.mine else self.filter_author_id
+
+    @property
+    def page_count(self) -> int:
+        """Number of pages the current total spans; at least 1 so an empty result
+        set still reads as "page 1 of 1" rather than "page 1 of 0"."""
+        return max(1, (self.total + self.PAGE_SIZE - 1) // self.PAGE_SIZE)
+
+    def _has_filters(self) -> bool:
+        return bool(
+            self.query
+            or self.category != "All"
+            or self.status != "All"
+            or self.mine
+            or self.filter_author_id
+        )
+
+    # ---- data ----------------------------------------------------------
+
+    async def _fetch(self):
+        """Pull the current page and the exact total for the current filters."""
+        result = await self.cog.db_manager.browse_suggestions(
+            page=self.page,
+            page_size=self.PAGE_SIZE,
+            query=self.query,
+            category=self.category,
+            status=self.status,
+            author_id=self.author_filter,
+            guild_id=self.guild_id,
+        )
+        self.items = result.get("items", [])
+        self.total = result.get("total", 0)
+
+    async def load(self):
+        """Fetch the page, its vote counts, and rebuild the layout."""
+        with PerformanceLogger(logger, "suggestion_browser_load"):
+            await self._fetch()
+
+            # A page can fall off the end when suggestions are removed between
+            # renders. Step back to the last page that exists rather than showing
+            # an empty screen over a non-empty result set.
+            if not self.items and self.total > 0 and self.page > self.page_count:
+                logger.debug(
+                    f"Suggestion browser page {self.page} is past the end "
+                    f"({self.total} results); falling back to page {self.page_count}"
+                )
+                self.page = self.page_count
+                await self._fetch()
+
+            suggestion_ids = [
+                s["suggestion_id"] for s in self.items if s.get("suggestion_id")
+            ]
+            self.vote_totals = await self.cog.db_manager.get_vote_totals(suggestion_ids)
+            self.render()
+
+    # ---- state -> text -------------------------------------------------
+
+    def _filter_text(self) -> str:
+        bits = []
+        if self.query:
+            bits.append(f"Search: `{self.query}`")
+        if self.category != "All":
+            bits.append(f"Category: {self.category}")
+        if self.status != "All":
+            bits.append(f"Status: {self.status}")
+        if self.mine:
+            bits.append("Mine only")
+        elif self.filter_author_id:
+            bits.append(f"Author: <@{self.filter_author_id}>")
+        return " | ".join(bits) if bits else "No filters - showing everything"
+
+    def _row_text(self, position: int, suggestion: Dict[str, Any]) -> str:
+        text = suggestion.get("text") or ""
+        preview = text[:100] + "..." if len(text) > 100 else text
+        suggestion_id = suggestion.get("suggestion_id") or ""
+        votes = self.vote_totals.get(suggestion_id, 0)
+        return (
+            f"**{position}. {suggestion.get('status', 'Pending')} - "
+            f"{suggestion.get('category', 'Other')}**\n"
+            f"**ID:** {suggestion_id[:8]} | **Votes:** {votes}\n"
+            f"{preview}"
+        )
+
+    def _empty_text(self) -> str:
+        if self.mine:
+            return (
+                "You have no suggestions matching these filters.\n"
+                "Anonymous suggestions are not linked to your account, so they never "
+                "show up here."
+            )
+        if self._has_filters():
+            return "No suggestions match these filters."
+        return "No suggestions have been submitted on this server yet."
+
+    def _footer_text(self) -> str:
+        noun = "result" if self.total == 1 else "results"
+        return f"-# Page {self.page} of {self.page_count} - {self.total} {noun}"
+
+    # ---- rendering -----------------------------------------------------
+
+    def render(self):
+        """Rebuild the layout to reflect the current page and filters."""
+        self.clear_items()
+
+        container = discord.ui.Container(accent_color=0x5865F2)
+        container.add_item(
+            discord.ui.TextDisplay(f"## Suggestions\n{self._filter_text()}")
+        )
+        container.add_item(discord.ui.Separator())
+
+        if self.items:
+            first = (self.page - 1) * self.PAGE_SIZE + 1
+            for position, suggestion in enumerate(self.items, start=first):
+                container.add_item(discord.ui.TextDisplay(self._row_text(position, suggestion)))
+        else:
+            container.add_item(discord.ui.TextDisplay(self._empty_text()))
+
+        container.add_item(discord.ui.Separator())
+
+        category_select = discord.ui.Select(
+            placeholder=f"Category: {self.category}",
+            min_values=1,
+            max_values=1,
+            options=[
+                discord.SelectOption(label=c, value=c, default=(c == self.category))
+                for c in BROWSE_CATEGORY_OPTIONS
+            ],
+        )
+        category_select.callback = self._on_category
+        category_row = discord.ui.ActionRow()
+        category_row.add_item(category_select)
+        container.add_item(category_row)
+
+        status_select = discord.ui.Select(
+            placeholder=f"Status: {self.status}",
+            min_values=1,
+            max_values=1,
+            options=[
+                discord.SelectOption(label=s, value=s, default=(s == self.status))
+                for s in BROWSE_STATUS_OPTIONS
+            ],
+        )
+        status_select.callback = self._on_status
+        status_row = discord.ui.ActionRow()
+        status_row.add_item(status_select)
+        container.add_item(status_row)
+
+        prev_btn = discord.ui.Button(
+            label="Prev",
+            style=discord.ButtonStyle.secondary,
+            emoji="◀️",
+            disabled=self.page <= 1,
+        )
+        prev_btn.callback = self._on_prev
+
+        next_btn = discord.ui.Button(
+            label="Next",
+            style=discord.ButtonStyle.secondary,
+            emoji="▶️",
+            disabled=self.page >= self.page_count,
+        )
+        next_btn.callback = self._on_next
+
+        mine_btn = discord.ui.Button(
+            label="Mine only: On" if self.mine else "Mine only: Off",
+            style=discord.ButtonStyle.success if self.mine else discord.ButtonStyle.secondary,
+            emoji="🙋",
+        )
+        mine_btn.callback = self._on_toggle_mine
+
+        controls_row = discord.ui.ActionRow()
+        controls_row.add_item(prev_btn)
+        controls_row.add_item(next_btn)
+        controls_row.add_item(mine_btn)
+        container.add_item(controls_row)
+
+        container.add_item(discord.ui.TextDisplay(self._footer_text()))
+
+        self.add_item(container)
+
+    # ---- guards --------------------------------------------------------
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.author_id:
+            await interaction.response.send_message(
+                "This suggestion browser belongs to someone else. "
+                "Run `/suggestions` to open your own.",
+                ephemeral=True,
+            )
+            return False
+        return True
+
+    # ---- component callbacks ------------------------------------------
+
+    async def _reload(self, interaction: discord.Interaction):
+        await self.load()
+        await interaction.response.edit_message(view=self)
+
+    async def _on_category(self, interaction: discord.Interaction):
+        values = interaction.data.get("values") if interaction.data else None
+        if values:
+            self.category = values[0]
+            logger.debug(
+                f"Suggestion browser category set to {self.category} by user {interaction.user.id}")
+        # A filter change invalidates the current page number.
+        self.page = 1
+        await self._reload(interaction)
+
+    async def _on_status(self, interaction: discord.Interaction):
+        values = interaction.data.get("values") if interaction.data else None
+        if values:
+            self.status = values[0]
+            logger.debug(
+                f"Suggestion browser status set to {self.status} by user {interaction.user.id}")
+        self.page = 1
+        await self._reload(interaction)
+
+    async def _on_toggle_mine(self, interaction: discord.Interaction):
+        self.mine = not self.mine
+        logger.debug(
+            f"Suggestion browser 'Mine only' toggled to {self.mine} by user {interaction.user.id}")
+        self.page = 1
+        await self._reload(interaction)
+
+    async def _on_prev(self, interaction: discord.Interaction):
+        if self.page > 1:
+            self.page -= 1
+        await self._reload(interaction)
+
+    async def _on_next(self, interaction: discord.Interaction):
+        if self.page < self.page_count:
+            self.page += 1
+        await self._reload(interaction)
+
+
 class SuggestionDatabaseManager:
     """
     Database manager adapter that uses the new DatabaseManager for suggestions.
@@ -575,6 +882,34 @@ class SuggestionDatabaseManager:
             )
             return None
 
+    @staticmethod
+    def _build_search_filter(query: str = None, category: str = None,
+                             status: str = None, author_id: int = None,
+                             guild_id: int = None) -> Dict[str, Any]:
+        """Build the Mongo filter shared by search, paged browse, and the browse count.
+
+        One builder so a page query and the count that labels it are guaranteed to
+        be looking at the same documents - a filter that drifts between the two is
+        exactly how a footer starts reporting a total that is not the total.
+
+        Snowflakes are stored as strings, so every id is cast; an int matches
+        nothing, silently.
+        """
+        filter_doc: Dict[str, Any] = {}
+
+        if guild_id:
+            filter_doc["guild_id"] = str(guild_id)
+        if query:
+            filter_doc["$text"] = {"$search": query}
+        if category and category != "All":
+            filter_doc["category"] = category
+        if status and status != "All":
+            filter_doc["status"] = status
+        if author_id:
+            filter_doc["user_id"] = str(author_id)
+
+        return filter_doc
+
     async def search_suggestions(self, query: str = None, category: str = None,
                                  status: str = None, author_id: int = None,
                                  limit: int = 10, guild_id: int = None) -> List[Dict]:
@@ -593,18 +928,13 @@ class SuggestionDatabaseManager:
             logger.info(f"Searching suggestions with parameters: {search_params}")
 
             try:
-                filter_doc = {}
-
-                if guild_id:
-                    filter_doc["guild_id"] = str(guild_id)
-                if query:
-                    filter_doc["$text"] = {"$search": query}
-                if category and category != "All":
-                    filter_doc["category"] = category
-                if status and status != "All":
-                    filter_doc["status"] = status
-                if author_id:
-                    filter_doc["user_id"] = str(author_id)
+                filter_doc = self._build_search_filter(
+                    query=query,
+                    category=category,
+                    status=status,
+                    author_id=author_id,
+                    guild_id=guild_id,
+                )
 
                 results = await self.db_manager.suggestions_suggestions.find_many(
                     filter_dict=filter_doc,
@@ -618,6 +948,81 @@ class SuggestionDatabaseManager:
             except Exception as e:
                 logger.error(f"Error searching suggestions: {e}", exc_info=True)
                 return []
+
+    async def browse_suggestions(self, page: int = 1, page_size: int = 5,
+                                 query: str = None, category: str = None,
+                                 status: str = None, author_id: int = None,
+                                 guild_id: int = None) -> Dict[str, Any]:
+        """Fetch ONE page of suggestions plus the exact total for the same filters.
+
+        Paging is done server-side (skip/limit) so the whole result set is never
+        pulled back to be sliced in memory, and the total is a count over the very
+        same filter document the page was fetched with.
+
+        Returns ``{"items": [...], "total": int}``.
+        """
+        await self._ensure_initialized()
+
+        with PerformanceLogger(logger, "browse_suggestions"):
+            page = max(1, int(page))
+            page_size = max(1, int(page_size))
+
+            filter_doc = self._build_search_filter(
+                query=query,
+                category=category,
+                status=status,
+                author_id=author_id,
+                guild_id=guild_id,
+            )
+            logger.info(
+                f"Browsing suggestions page {page} (size {page_size}) with filter: {filter_doc}")
+
+            try:
+                total = await self.db_manager.suggestions_suggestions.count_documents(filter_doc)
+                items = await self.db_manager.suggestions_suggestions.find_many(
+                    filter_dict=filter_doc,
+                    skip=(page - 1) * page_size,
+                    limit=page_size,
+                    sort=[("created_at", -1)]
+                )
+
+                logger.info(f"Browse returned {len(items)} of {total} suggestions")
+                return {"items": items, "total": total}
+
+            except Exception as e:
+                logger.error(f"Error browsing suggestions: {e}", exc_info=True)
+                return {"items": [], "total": 0}
+
+    async def get_vote_totals(self, suggestion_ids: List[str]) -> Dict[str, int]:
+        """Total vote count for each of several suggestions, in ONE aggregation.
+
+        Rendering a browse page needs one number per row; asking per row is one
+        round trip per row. ``get_vote_counts`` stays as it is - the vote buttons
+        need the per-type breakdown for a single suggestion, which this does not
+        return.
+        """
+        await self._ensure_initialized()
+
+        if not suggestion_ids:
+            return {}
+
+        with PerformanceLogger(logger, "get_vote_totals"):
+            try:
+                pipeline = [
+                    {"$match": {"suggestion_id": {"$in": list(suggestion_ids)}}},
+                    {"$group": {"_id": "$suggestion_id", "count": {"$sum": 1}}}
+                ]
+
+                results = await self.db_manager.suggestions_votes.aggregate(pipeline)
+                totals = {result["_id"]: result["count"] for result in results}
+
+                logger.debug(
+                    f"Retrieved vote totals for {len(suggestion_ids)} suggestions: {totals}")
+                return totals
+
+            except Exception as e:
+                logger.error(f"Error getting vote totals: {e}", exc_info=True)
+                return {}
 
     async def get_user_suggestions(self, user_id: int, limit: int = 10, guild_id: int = None) -> List[Dict]:
         """Get suggestions by a specific user"""
@@ -808,7 +1213,7 @@ class SuggestionCog(commands.Cog):
             )
             await interaction.response.send_message(view=view, ephemeral=True)
 
-    @app_commands.command(name="suggest-search", description="Search suggestions")
+    @app_commands.command(name="suggestions", description="Browse and search this server's suggestions")
     @app_commands.guild_only()
     @app_commands.describe(
         query="Search terms",
@@ -835,7 +1240,7 @@ class SuggestionCog(commands.Cog):
             app_commands.Choice(name="On Hold", value="On Hold"),
         ],
     )
-    async def suggest_search_command(
+    async def suggestions_command(
             self,
             interaction: discord.Interaction,
             query: Optional[str] = None,
@@ -843,18 +1248,30 @@ class SuggestionCog(commands.Cog):
             status: Optional[str] = None,
             author: Optional[discord.Member] = None,
     ):
-        """Search through suggestions."""
+        """Browse this server's suggestions in a paged, filterable browser.
+
+        The options only SEED the browser: category, status, whose suggestions
+        ("Mine only") and the page are all adjustable from the message itself.
+        Always ephemeral - the suggestions themselves live in the suggestions
+        channel, this is only a lookup tool.
+        """
         logger.info(
-            f"Search command used by {interaction.user.id} - Query: '{query}', Category: {category}, Status: {status}, Author: {author.id if author else None}")
-        await interaction.response.defer()
+            f"Suggestions browser opened by {interaction.user.id} - Query: '{query}', Category: {category}, Status: {status}, Author: {author.id if author else None}")
+        await interaction.response.defer(ephemeral=True)
 
-        results = await self.db_manager.search_suggestions(
-            query, category, status, author.id if author else None, limit=10,
-            guild_id=interaction.guild.id,
+        view = SuggestionBrowserView(
+            self,
+            interaction.user.id,
+            interaction.guild.id,
+            query=query,
+            category=category,
+            status=status,
+            filter_author_id=author.id if author else None,
         )
+        await view.load()
 
-        if not results:
-            logger.info(f"Search returned no results for user {interaction.user.id}")
+        if view.total == 0:
+            logger.info(f"Suggestions browser returned no results for user {interaction.user.id}")
             # An empty result on a server that never set a channel is a setup gap,
             # not a failed search - say which one it is.
             guild_config = await get_config(interaction.guild.id)
@@ -866,58 +1283,10 @@ class SuggestionCog(commands.Cog):
                     detail="There is nothing to search yet.",
                 )
                 return
-            await interaction.followup.send("No suggestions found matching your criteria.")
-            return
 
-        embed = discord.Embed(
-            title="Suggestion Search Results",
-            color=discord.Color.blue(),
-        )
-
-        for i, suggestion in enumerate(results[:5], 1):
-            text_preview = suggestion["text"][:100] + "..." if len(suggestion["text"]) > 100 else suggestion["text"]
-            embed.add_field(
-                name=f"{i}. {suggestion['category']} - {suggestion['status']}",
-                value=f"**ID:** {suggestion['suggestion_id'][:8]}\n{text_preview}",
-                inline=False,
-            )
-
-        embed.set_footer(text=f"Showing {len(results[:5])} of {len(results)} results")
-        logger.info(f"Search results displayed to user {interaction.user.id}: {len(results)} total results")
-        await interaction.followup.send(embed=embed)
-
-    @app_commands.command(name="suggest-mine", description="View your suggestion history")
-    @app_commands.guild_only()
-    async def suggest_mine_command(self, interaction: discord.Interaction):
-        """View user's suggestion history."""
-        logger.info(f"User {interaction.user.id} requested their suggestion history")
-        await interaction.response.defer(ephemeral=True)
-
-        suggestions = await self.db_manager.get_user_suggestions(interaction.user.id, guild_id=interaction.guild.id)
-
-        if not suggestions:
-            logger.info(f"User {interaction.user.id} has no suggestions")
-            await interaction.followup.send("You haven't submitted any suggestions yet.", ephemeral=True)
-            return
-
-        embed = discord.Embed(
-            title="Your Suggestions",
-            color=discord.Color.green(),
-        )
-
-        for i, suggestion in enumerate(suggestions[:5], 1):
-            text_preview = suggestion["text"][:80] + "..." if len(suggestion["text"]) > 80 else suggestion["text"]
-            vote_counts = await self.db_manager.get_vote_counts(suggestion["suggestion_id"])
-            total_votes = sum(vote_counts.values())
-            embed.add_field(
-                name=f"{i}. {suggestion['status']} - {suggestion['category']}",
-                value=f"**ID:** {suggestion['suggestion_id'][:8]}\n{text_preview}\n**Votes:** {total_votes}",
-                inline=False,
-            )
-
-        embed.set_footer(text=f"Showing {len(suggestions[:5])} of {len(suggestions)} suggestions")
-        logger.info(f"Displayed {len(suggestions)} suggestions to user {interaction.user.id}")
-        await interaction.followup.send(embed=embed, ephemeral=True)
+        logger.info(
+            f"Suggestions browser sent to user {interaction.user.id}: {view.total} total results")
+        await interaction.followup.send(view=view, ephemeral=True)
 
     def cog_unload(self):
         logger.info("Unloading SuggestionCog")

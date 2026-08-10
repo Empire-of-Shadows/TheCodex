@@ -8,7 +8,10 @@ Replaces the two admin-only whitelist screens that were slash commands:
   whole list answers without anybody having to type a snowflake.
 
 Both were admin-tier reads, so they belong on the panel rather than in the
-command tree. ``/whitelist add`` and ``/whitelist remove`` stay as commands.
+command tree. Acting on one named person stays a command: the single
+``/whitelist`` command resolves them, shows where they stand, and offers the one
+action that state allows. Its Remove step calls ``remove_entry`` below, so there
+is one removal implementation and not two.
 
 Shape follows ``wyr_question_nodes.build_wyr_question_bank_node``: a
 ``paginated_list`` node, so the engine owns the paging, the per-item select
@@ -16,7 +19,7 @@ Shape follows ``wyr_question_nodes.build_wyr_question_bank_node``: a
 step in front of the destructive action, the autosave cooldown, the audit entry
 and the cache invalidation. What is left here is the queries and the formatting.
 
-Storage is the same collection the commands use (``serverdata_whitelist``) with
+Storage is the same collection the command uses (``serverdata_whitelist``) with
 the same filters - guild id and user id are STRINGS in storage, so every filter
 casts, or it matches nothing and reports a silent failure.
 """
@@ -50,6 +53,12 @@ _PAGE_SIZE = 10
 #: reachable by paging - which is the right trade for a screening exemption list
 #: that is a handful of people in practice.
 _FETCH_LIMIT = 500
+
+#: Discord audit-log reason written when the panel's Remove takes the whitelist
+#: role back off a member. It is the DEFAULT rather than a literal down in
+#: ``_strip_whitelist_role`` so the command path can name its own surface and
+#: the acting admin; leaving the default alone keeps the panel path unchanged.
+_PANEL_STRIP_REASON = "Removed from the whitelist through the admin panel"
 
 
 def _collection():
@@ -172,12 +181,26 @@ class WhitelistPanelActions:
     # -- the per-item action -----------------------------------------------
 
     @staticmethod
-    async def remove_entry(guild_id: int, value: str) -> bool:
-        """Take one member off the whitelist. Mirrors ``/whitelist remove``.
+    async def remove_entry(
+        guild_id: int,
+        value: str,
+        actor_id: int | None = None,
+        role_reason: str | None = None,
+    ) -> bool:
+        """Take one member off the whitelist. The only removal implementation.
 
-        A soft delete, exactly as the command does it: readers everywhere filter
-        on ``is_active: True``, and keeping the document preserves who added the
-        member and why.
+        Both callers land here: the panel's per-item Remove, and the Remove step
+        on the ``/whitelist`` card.
+
+        A soft delete: readers everywhere filter on ``is_active: True``, and
+        keeping the document preserves who added the member and why.
+
+        ``actor_id`` records who did the removal and ``role_reason`` is the
+        Discord audit-log reason for taking the whitelist role back off. Both are
+        optional because the engine calls ``list_action(guild_id, value)``
+        positionally with nothing else to give - so the panel path is unchanged
+        and keeps ``_PANEL_STRIP_REASON``, while the command passes the admin who
+        pressed the button and a reason naming the command.
 
         Returns False for an entry that is already gone or already inactive, which
         the engine turns into a "Failed to remove" notice and a re-render - the
@@ -193,12 +216,16 @@ class WhitelistPanelActions:
             if not entry or not entry.get("is_active", True):
                 return False
 
+            updates: Dict[str, Any] = {
+                "is_active": False,
+                "removed_at": datetime.now(timezone.utc),
+            }
+            if actor_id is not None:
+                updates["removed_by"] = str(actor_id)
+
             removed = await collection.update_one(
                 {"guild_id": guild_key, "user_id": user_key},
-                {"$set": {
-                    "is_active": False,
-                    "removed_at": datetime.now(timezone.utc),
-                }},
+                {"$set": updates},
             )
         except Exception:
             logger.error(
@@ -211,16 +238,20 @@ class WhitelistPanelActions:
             return False
 
         if entry.get("role_assigned"):
-            await WhitelistPanelActions._strip_whitelist_role(guild_key, user_key)
+            await WhitelistPanelActions._strip_whitelist_role(
+                guild_key, user_key, role_reason or _PANEL_STRIP_REASON
+            )
 
+        actor = f"by {actor_id}" if actor_id is not None else "through the admin panel"
         logger.info(
-            f"Whitelist entry {user_key} removed through the admin panel "
-            f"in guild {guild_key}"
+            f"Whitelist entry {user_key} removed {actor} in guild {guild_key}"
         )
         return True
 
     @staticmethod
-    async def _strip_whitelist_role(guild_key: str, user_key: str) -> None:
+    async def _strip_whitelist_role(
+        guild_key: str, user_key: str, reason: str = _PANEL_STRIP_REASON
+    ) -> None:
         """Take the whitelist role back off a member, best effort.
 
         The engine hands ``list_action`` only ``(guild_id, value)``, so the guild
@@ -228,9 +259,16 @@ class WhitelistPanelActions:
         ``WhitelistRoleCleanupTask`` does. Imported lazily so importing the panel
         tree does not pull in the gateway client.
 
+        ``reason`` is what Discord's audit log shows. It defaults to the panel's
+        wording so that path is unchanged; the ``/whitelist`` command passes one
+        naming the command and the admin who pressed the button.
+
         Failure here is logged and swallowed on purpose: the member is already off
         the whitelist in storage, and reporting the whole removal as failed would
-        invite an admin to retry an action that has already happened.
+        invite an admin to retry an action that has already happened. The stored
+        ``role_assigned`` flag below is therefore the only signal a caller has
+        about whether the role actually came off - it is cleared on this path and
+        nowhere else in this function.
         """
         try:
             from startup.bot import bot
@@ -253,9 +291,7 @@ class WhitelistPanelActions:
             if role is None or role not in member.roles:
                 return
 
-            await member.remove_roles(
-                role, reason="Removed from the whitelist through the admin panel"
-            )
+            await member.remove_roles(role, reason=reason)
             # The role is off, so the stored flag has to follow it. The hourly
             # cleanup task clears the flag the same way when it removes the role;
             # leaving it set would tell a later re-add that the member still has
@@ -300,7 +336,8 @@ def build_whitelist_browse_node() -> PanelNode:
             "first.\n\n"
             "Removing someone takes them off the list and takes the whitelist role "
             "back off them; from then on they are screened like anybody else. Use "
-            "`/whitelist add` to put someone on the list."
+            "`/whitelist` to look one person up and put them on the list or take "
+            "them off."
         ),
         list_get_items=WhitelistPanelActions.list_entries,
         list_count=WhitelistPanelActions.count_entries,

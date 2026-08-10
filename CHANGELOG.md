@@ -1,5 +1,38 @@
 # Changelog
 
+## [Unreleased] - 2026-08-10 (two pairs of commands became one each)
+
+### Changed
+- **Browsing suggestions is now one command, `/suggestions`.** It replaces `/suggest-search`
+  and `/suggest-mine`. It opens a private list only you can see, and you can change the
+  category and status filters right there instead of running the command again. **Mine only**
+  narrows it to your own suggestions. Every entry shows its status, category, short ID and
+  vote count. Submitting a suggestion has not changed - `/suggest` works exactly as before.
+- Anything you sent in anonymously is not tied to your account, so it will not appear under
+  **Mine only**. That is what anonymous means, and the list says so rather than leaving you
+  wondering where it went.
+- **The member whitelist is now one command, `/whitelist <user>`.** It replaces
+  `/whitelist add` and `/whitelist remove`. Give it a user ID or an exact username and it
+  tells you where that person stands - whether they are on the list, who put them there and
+  why, or that they were taken off before - and offers only the button that fits: Add, Remove
+  or Reactivate. It also shows how old their account is against what this server asks for and
+  whether they would be turned away without a whitelist entry, which you previously had to
+  work out yourself.
+- Removing someone from the whitelist now asks you to confirm first, and the screen updates
+  itself afterwards instead of leaving you looking at information that is already out of date.
+
+### Fixed
+- **You can now reach every suggestion.** The old search showed the first five matches and
+  there was no way to see the sixth, and the count underneath was wrong - it would say
+  something like "showing 5 of 10" no matter how many suggestions actually matched. It now
+  reports the true number of matches and lets you page through all of them.
+- **The whitelist no longer claims to have removed a role when it did not.** If the bot cannot
+  take the whitelist role off someone - usually because the role sits above the bot's own - it
+  now says so and tells you to remove it by hand, instead of reporting a clean removal.
+- Removing someone from the whitelist is recorded the same way whether you did it from the
+  command or from the panel, and the entry in your server's audit log now names the command
+  you actually used.
+
 ## [Unreleased] - 2026-08-10 (your own questions come first)
 
 ### Changed
@@ -39,8 +72,8 @@
   `/whitelist check` are gone - **New Members -> Whitelisted Members** shows everyone on the
   list a page at a time instead of stopping at 25, with who added them, when and why, and a
   Remove button that also takes the whitelist role back off them. Since the list shows
-  everybody, there is nothing left to look one person up for. `/whitelist add` and
-  `/whitelist remove` still work as commands.
+  everybody, there is nothing left to look one person up for. Acting on one person is
+  still a command.
 - **Testing your greeting now tells you where it is going.** `/greeting test` has become
   **New Members -> Send a Test Greeting**. It names the channel the test will be posted in
   before you send it, lets you pick who gets greeted, and refuses with a clear reason when
