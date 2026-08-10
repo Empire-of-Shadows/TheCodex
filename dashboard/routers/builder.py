@@ -139,7 +139,8 @@ async def get_board(guild_id: str, _session: dict = Depends(require_guild_admin)
     return {
         "board_data": doc.get("board_data"),
         # Read-only context for the builder: it can say where the board lives,
-        # but posting and moving stay with the bot (/board post).
+        # but posting and moving stay in the admin panel
+        # (/admin panel -> Info Board -> Post / Update Board).
         "posted": {
             "channel_id": doc.get("channel_id"),
             "message_id": doc.get("message_id"),
@@ -157,7 +158,8 @@ async def put_board(
 
     Deliberately does not touch channel_id / message_id: editing the layout must
     not lose track of where the board is already posted. The saved layout goes
-    live when someone runs /board refresh or the panel's Post / Update action.
+    live when someone uses the admin panel's Info Board -> Post / Update Board
+    screen.
     """
     board_data = body.board_data
     ok, error = validate_board_schema(board_data)

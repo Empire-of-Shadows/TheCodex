@@ -5,9 +5,9 @@ The one place that knows how to get a board onto Discord and keep it there.
 
 A board is a STATIC message: it is posted once and then edited in place, so the
 channel never accumulates duplicates. That invariant is enforced here rather than
-at each call site, because three surfaces publish boards - `/board post`,
-`/board refresh`, and the admin panel's Post action - and they must all behave
-identically.
+at each call site, because two controls publish boards (the refresh button and the
+channel picker on the admin panel's Info Board -> Post / Update Board screen) and
+they must both behave identically.
 """
 
 from dataclasses import dataclass
@@ -183,4 +183,8 @@ def _resolve_target(
         if isinstance(stored, (discord.TextChannel, discord.Thread)):
             return stored, None
 
-    return None, "There's no board posted yet. Use `/board post #channel` to put one up."
+    return None, (
+        "There's no board posted yet.\n\n"
+        "**Put one up:** `/admin panel` -> **Info Board -> Post / Update Board** and "
+        "pick a channel."
+    )

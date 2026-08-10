@@ -38,9 +38,10 @@ from startup.phases import (  # noqa: E402
 from health_endpoint import initialize_health_server, stop_health_server  # noqa: E402
 from storage.settings.collections import db_manager  # noqa: E402
 
-# Guild that owns the guild-scoped admin slash commands (e.g. /status).
+# Guild that owns the private, guild-scoped slash commands (/status, /wyrbank).
 # Environment-specific, so it is opt-in via env; guild sync is skipped if unset.
-STATUS_ADMIN_GUILD_ID = int(os.getenv("STATUS_ADMIN_GUILD_ID", "0"))
+# Resolved in one place - see startup/owner_guild.py for why.
+from startup.owner_guild import get_owner_guild_id  # noqa: E402
 
 # Initialize application-wide logging
 APPLICATION_NAME = "discord-bot-codex"
@@ -96,17 +97,18 @@ async def on_ready():
     try:
         async with startup_phase("Command Sync"):
             synced_global = await bot.tree.sync()
-            if STATUS_ADMIN_GUILD_ID:
-                admin_guild = discord.Object(id=STATUS_ADMIN_GUILD_ID)
+            owner_guild_id = get_owner_guild_id()
+            if owner_guild_id:
+                admin_guild = discord.Object(id=owner_guild_id)
                 synced_admin = await bot.tree.sync(guild=admin_guild)
                 logger.info(
                     f"🔄 Resynced commands: {len(synced_global)} global + "
-                    f"{len(synced_admin)} guild-scoped registered."
+                    f"{len(synced_admin)} private to guild {owner_guild_id}."
                 )
             else:
                 logger.info(
                     f"🔄 Resynced global commands: {len(synced_global)} registered "
-                    f"(STATUS_ADMIN_GUILD_ID unset, skipped guild sync)."
+                    f"(OWNER_GUILD_ID unset, skipped guild sync)."
                 )
     except Exception as sync_error:
         logger.error(f"❌ Error during command sync: {sync_error}", exc_info=True)

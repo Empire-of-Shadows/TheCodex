@@ -34,6 +34,7 @@ from ..views.wyr_question_views import (
     build_add_result_view,
 )
 from .panel_flow import PanelFlow
+from .structure import member_action
 from .wyr_question_actions import (
     QUESTION_FORMAT_OPTIONS,
     QUESTION_SOURCE_OPTIONS,
@@ -43,6 +44,7 @@ from .wyr_question_actions import (
 logger = get_logger("WYRQuestionNodes")
 
 ADD_NODE_KEY = "wyr_add_question"
+QUEUE_NODE_KEY = "wyr_review_queue"
 BANK_NODE_KEY = "wyr_browse_questions"
 IMPORT_NODE_KEY = "wyr_import_questions"
 
@@ -123,7 +125,7 @@ class _AddQuestionFlow(PanelFlow):
             )
             await self._render_via_modal(interaction, layout)
             await self._after_write(
-                interaction, "create", None, f"question {question['_id']}"
+                interaction, "create", None, f"question {question['id']}"
             )
         return _handler
 
@@ -361,6 +363,278 @@ WYR_MAX_PENDING_CONFIG = PanelNode(
 )
 
 
+class _ReviewQueueFlow(PanelFlow):
+    """Work through the suggestions waiting for a decision, one at a time.
+
+    Deliberately NOT a ``paginated_list``: that kind supports exactly one
+    per-item action behind a confirm step, and a review needs two (approve and
+    decline) plus a reason prompt on the decline. So the paging is hand-rolled
+    here, the same way the Color Tiers flow does it.
+
+    The decisions themselves route back through the cog's own approve/decline
+    handlers - the same code the buttons on a review post use - so the panel and
+    the review channel cannot drift into deciding things differently, and the
+    atomic claim that stops a double-approve applies to both.
+    """
+
+    node_key = QUEUE_NODE_KEY
+    audit_section = "wyr"
+
+    def __init__(self, cog, guild, ctx, node):
+        super().__init__(cog, guild, ctx, node)
+        self._index = 0
+
+    async def _pending(self):
+        from Features.daily.wyr_submissions import wyr_submissions
+        return await wyr_submissions.list_open(self.guild.id)
+
+    async def open(self, interaction: discord.Interaction) -> None:
+        await self._render(interaction, await self._layout())
+
+    async def _layout(self) -> discord.ui.LayoutView:
+        from ..views.wyr_question_views import build_review_queue_view
+        pending = await self._pending()
+        if pending:
+            self._index = max(0, min(self._index, len(pending) - 1))
+        return build_review_queue_view(
+            pending=pending,
+            index=self._index,
+            guild=self.guild,
+            on_prev=self._on_prev,
+            on_next=self._on_next,
+            on_approve=self._on_approve,
+            on_decline=self._on_decline,
+            on_back=self._on_back,
+            back_label=self.ctx.back_label,
+        )
+
+    async def _on_prev(self, interaction: discord.Interaction) -> None:
+        self._index -= 1
+        await self._render(interaction, await self._layout())
+
+    async def _on_next(self, interaction: discord.Interaction) -> None:
+        self._index += 1
+        await self._render(interaction, await self._layout())
+
+    async def _current(self):
+        pending = await self._pending()
+        if not pending:
+            return None
+        self._index = max(0, min(self._index, len(pending) - 1))
+        return pending[self._index]
+
+    async def _on_approve(self, interaction: discord.Interaction) -> None:
+        submission = await self._current()
+        if submission is None:
+            await self._refresh_then_notice(
+                interaction, "Nothing left",
+                "That suggestion is already handled.", await self._layout(),
+            )
+            return
+
+        cog = interaction.client.get_cog("WYR")
+        if cog is None:
+            await self._notice(interaction, "Unavailable",
+                               "The daily question feature is not loaded right now.")
+            return
+        # A lightweight stand-in for the review post's view: the handler only
+        # reads submission_id and the age-restriction flag off it.
+        await cog.handle_submission_approve(
+            interaction, _QueueDecision(submission["submission_id"])
+        )
+
+    async def _on_decline(self, interaction: discord.Interaction) -> None:
+        submission = await self._current()
+        if submission is None:
+            await self._refresh_then_notice(
+                interaction, "Nothing left",
+                "That suggestion is already handled.", await self._layout(),
+            )
+            return
+
+        cog = interaction.client.get_cog("WYR")
+        if cog is None:
+            await self._notice(interaction, "Unavailable",
+                               "The daily question feature is not loaded right now.")
+            return
+        await cog.handle_submission_reject(
+            interaction, _QueueDecision(submission["submission_id"])
+        )
+
+    async def _on_back(self, interaction: discord.Interaction) -> None:
+        await self._back_to_parent(interaction)
+
+
+class _QueueDecision:
+    """What the cog's approve/decline handlers expect to be handed.
+
+    They accept the review post's persistent view, but only ever read
+    ``submission_id`` and ``nsfw`` from it, so the panel passes this instead of
+    constructing a message view it has no message for.
+    """
+
+    def __init__(self, submission_id: str, nsfw: bool = False):
+        self.submission_id = submission_id
+        self.nsfw = nsfw
+
+
+async def _run_review_queue(cog, interaction: discord.Interaction,
+                            guild: discord.Guild, ctx: ActionContext) -> None:
+    node = build_wyr_review_queue_node()
+    await _ReviewQueueFlow(cog, guild, ctx, node).open(interaction)
+
+
+async def _queue_summary(guild_id: int) -> str:
+    """Summary line for the review queue entry.
+
+    A one-shot review screen owns no config, so this reports the workload
+    instead - and returns an engine "unset" string when there is none, so the
+    category badge does not count an empty queue as a configured setting.
+    """
+    from Features.daily.wyr_submissions import wyr_submissions
+    try:
+        waiting = await wyr_submissions.count_open(guild_id)
+    except Exception:
+        logger.debug("review queue summary failed", exc_info=True)
+        return "Empty"
+    return f"{waiting} waiting" if waiting else "Empty"
+
+
+def build_wyr_review_queue_node() -> PanelNode:
+    """Review member suggestions from the panel.
+
+    Replaces `/wyr queue`. Stateless as far as configuration goes, so it
+    deliberately does not set ``counts_as_setting`` - the Member Suggestions
+    toggle above it is the setting.
+    """
+    return PanelNode(
+        key=QUEUE_NODE_KEY,
+        label="Review Suggestions",
+        kind="action",
+        description=(
+            "Work through the question suggestions waiting for a decision. "
+            "Approving one puts it straight into this server's rotation."
+        ),
+        summary_builder=_queue_summary,
+        on_run=_run_review_queue,
+    )
+
+
+async def _run_post_now(cog, interaction: discord.Interaction,
+                        guild: discord.Guild, ctx: ActionContext) -> None:
+    """Pick a channel and post a question there straight away.
+
+    Replaces `/wyr post`. A channel picker rather than "wherever you typed",
+    which also means you can post somewhere you are not currently looking at.
+    """
+    from ..views.base import AdminLayoutBuilder, build_notice_layout, readonly_container
+
+    builder = AdminLayoutBuilder()
+    builder.add_header("## Post a Question Now")
+    builder.add_item(readonly_container(discord.ui.TextDisplay(
+        "Posts the next question straight away, outside the daily schedule.\n"
+        "It counts toward the rotation, so it will not come back tomorrow."
+    )))
+
+    async def _on_pick(pi: discord.Interaction):
+        if not cog._check_cooldown(pi.user.id, "wyr_post_now", guild.id):
+            await pi.response.send_message(
+                view=build_notice_layout("Slow Down", "Please wait a moment before trying again."),
+                ephemeral=True,
+            )
+            return
+
+        picked = pi.data.get("values") or []
+        channel = guild.get_channel(int(picked[0])) if picked else None
+        if channel is None:
+            await pi.response.send_message(
+                view=build_notice_layout("Channel not found", "Pick a channel I can still see."),
+                ephemeral=True,
+            )
+            return
+
+        wyr_cog = pi.client.get_cog("WYR")
+        if wyr_cog is None:
+            await pi.response.send_message(
+                view=build_notice_layout(
+                    "Unavailable", "The daily question feature is not loaded right now."
+                ),
+                ephemeral=True,
+            )
+            return
+
+        await pi.response.defer(ephemeral=True)
+        ok, message = await wyr_cog.post_question_now(channel)
+        await pi.followup.send(
+            view=build_notice_layout(
+                "Question posted" if ok else "Nothing posted", message
+            ),
+            ephemeral=True,
+        )
+
+    picker = discord.ui.ChannelSelect(
+        placeholder="Post a question in...",
+        channel_types=[discord.ChannelType.text, discord.ChannelType.news],
+        min_values=1, max_values=1,
+    )
+    picker.callback = _on_pick
+    builder.add_item(discord.ui.ActionRow(picker))
+
+    back = discord.ui.Button(label=ctx.back_label, style=discord.ButtonStyle.secondary)
+
+    async def _on_back(bi: discord.Interaction):
+        if ctx.parent_node is not None:
+            await cog._navigate_to(
+                bi, ctx.parent_node, guild, parent_node=ctx.grandparent_node,
+                edit=True, refresh_parent=ctx.refresh_parent, session=ctx.session,
+            )
+    back.callback = _on_back
+    builder.add_item(discord.ui.ActionRow(back))
+
+    await cog._send_or_edit(
+        interaction, cog._rebind_session_view(ctx.session, builder.build()), ctx.edit
+    )
+
+
+def build_wyr_post_now_node() -> PanelNode:
+    """Post a question on demand. Stateless, so no ``counts_as_setting``."""
+    return PanelNode(
+        key="wyr_post_now",
+        label="Post a Question Now",
+        kind="action",
+        description="Post the next question to a channel right away, off-schedule.",
+        on_run=_run_post_now,
+    )
+
+
+def build_wyr_reset_stats_node() -> PanelNode:
+    """Wipe one member's voting record. Replaces `/wyr reset_stats`.
+
+    Uses the engine's member-action factory, which owns the member picker, the
+    confirm step and the back navigation - so this only has to say what to run.
+    """
+    return member_action(
+        key="wyr_reset_stats",
+        label="Reset Member Stats",
+        description=(
+            "Clear one member's Would You Rather voting record in this server. "
+            "Their record in other servers is untouched, and the questions "
+            "themselves are unaffected."
+        ),
+        placeholder="Select a member to reset...",
+        run=WYRQuestionActions.reset_member_stats,
+        confirm_text=lambda member: (
+            f"Clear **{member.display_name}**'s voting record for this server? "
+            f"This cannot be undone."
+        ),
+        success_text=lambda result, member: (
+            f"Cleared {member.mention}'s voting record."
+            if result else
+            f"{member.mention} had no voting record here."
+        ),
+    )
+
+
 def build_wyr_submissions_group() -> PanelNode:
     """Member suggestions, behind one on/off switch.
 
@@ -385,6 +659,7 @@ def build_wyr_submissions_group() -> PanelNode:
         toggle_set=WYRQuestionActions.set_submissions_enabled,
         summary_builder=WYRQuestionActions.submissions_summary,
         children={
+            "wyr_review_queue": build_wyr_review_queue_node(),
             "wyr_review_channel": WYR_REVIEW_CHANNEL_CONFIG,
             "wyr_reviewer_role": WYR_REVIEWER_ROLE_CONFIG,
             "wyr_max_pending": WYR_MAX_PENDING_CONFIG,
@@ -414,5 +689,7 @@ def build_wyr_questions_group() -> PanelNode:
             "wyr_question_formats": WYR_QUESTION_FORMATS_CONFIG,
             "wyr_question_source": WYR_QUESTION_SOURCE_CONFIG,
             "wyr_submissions": build_wyr_submissions_group(),
+            "wyr_post_now": build_wyr_post_now_node(),
+            "wyr_reset_stats": build_wyr_reset_stats_node(),
         },
     )

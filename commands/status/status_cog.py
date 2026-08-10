@@ -16,10 +16,15 @@ from storage.log import get_logger
 logger = get_logger("StatusAdmin")
 
 # The guild that owns the /status admin commands. Single source of truth shared
-# with Codex.py's guild command sync - both read STATUS_ADMIN_GUILD_ID, so the
-# commands are always defined for exactly the guild they're synced to. Unset (0)
-# disables the tool (setup() skips registering the cog).
-STATUS_ADMIN_GUILD_ID = int(os.getenv("STATUS_ADMIN_GUILD_ID", "0"))
+# with Codex.py's guild command sync, so the commands are always defined for
+# exactly the guild they are synced to. Unset (0) disables the tool (setup()
+# skips registering the cog).
+#
+# Read at import time on purpose: the group below is a class attribute, so its
+# guild_ids must be known before the class body executes.
+from startup.owner_guild import get_owner_guild_id
+
+STATUS_ADMIN_GUILD_ID = get_owner_guild_id()
 
 # Discord caps activity name at 128 chars.
 MAX_NAME_LEN = 128
@@ -315,7 +320,7 @@ class StatusAdmin(commands.Cog):
 
 async def setup(bot: commands.Bot):
     if not STATUS_ADMIN_GUILD_ID:
-        logger.info("STATUS_ADMIN_GUILD_ID unset - /status admin commands disabled")
+        logger.info("OWNER_GUILD_ID unset - /status admin commands disabled")
         return
     await bot.add_cog(StatusAdmin(bot))
     logger.info(f"StatusAdmin cog loaded (guild-scoped to {STATUS_ADMIN_GUILD_ID})")

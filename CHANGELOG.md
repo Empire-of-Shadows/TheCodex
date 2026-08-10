@@ -1,5 +1,47 @@
 # Changelog
 
+## [Unreleased] - 2026-08-10 (command list cleanup)
+
+### Changed
+- **The slash command list is a lot shorter, and members only see commands they can
+  actually use.** Several staff commands were showing up for everyone and simply refusing
+  to run - Discord had no way to know they were restricted. Those are now hidden from
+  members who cannot use them, and the ones that were really admin screens have moved into
+  `/admin panel` where the rest of the settings already live.
+- **The info board commands are gone.** `/board post`, `/board refresh` and `/board info`
+  all now live in the panel under **Info Board**. **Post / Update Board** puts the board up
+  in a channel you pick, moves it somewhere else, or refreshes the copy that is already
+  posted; **Board Status** shows where it lives and whether the layout is valid. Posted
+  boards keep working exactly as before - nothing needs re-posting.
+- **Reviewing question suggestions and clearing a member's voting record moved to the
+  panel**, under **WYR Settings -> Question Bank**. `/wyr queue` and `/wyr reset_stats` are
+  gone; **Review Suggestions** walks you through what is waiting one at a time, and
+  **Reset Member Stats** has a member picker and a confirmation step.
+- **Whitelist and greeting commands are now hidden from ordinary members.** If you give
+  Panel Access to a role that does not have Manage Server, you can still hand that role the
+  commands under **Server Settings -> Integrations**.
+- **The whitelist and greeting screens moved into the panel.** `/whitelist list` and
+  `/whitelist check` are gone - **New Members -> Whitelisted Members** shows everyone on the
+  list a page at a time instead of stopping at 25, with who added them, when and why, and a
+  Remove button that also takes the whitelist role back off them. Since the list shows
+  everybody, there is nothing left to look one person up for. `/whitelist add` and
+  `/whitelist remove` still work as commands.
+- **Testing your greeting now tells you where it is going.** `/greeting test` has become
+  **New Members -> Send a Test Greeting**. It names the channel the test will be posted in
+  before you send it, lets you pick who gets greeted, and refuses with a clear reason when
+  the greeting could not arrive - no greeting channel, a channel that has been deleted, no
+  greeting built yet, a layout with a mistake in it, or the bot not being allowed to post
+  there. `/greeting info` is gone; **New Members -> View Status** already showed everything
+  it did.
+
+### Fixed
+- **Owner-only tools no longer appear in the command list of every server.** They now
+  register to a single private server. If that server is not configured they simply do not
+  load, instead of quietly falling back to being visible everywhere.
+- **A denied whitelist command used to point you at a command that does not exist.** It said
+  to run `/config view` to see who has access. It now names the Panel Access role and where
+  it is granted, the same way every other permission message does.
+
 ## [Unreleased] - 2026-08-10
 
 ### Added

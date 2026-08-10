@@ -47,6 +47,8 @@ from ..actions.tracker_actions import TrackerActions
 from ..actions.color_set_nodes import build_color_tiers_node
 from ..actions.tracker_nodes import build_boost_tracker_node, build_tag_tracker_node
 from ..actions.wyr_question_nodes import build_wyr_questions_group
+from ..actions.greeting_nodes import build_greeting_test_node
+from ..actions.whitelist_nodes import build_whitelist_browse_node
 from ..actions.drops_nodes import build_drops_channel_node, build_drops_tracker_node
 from ..actions.config.leaves import role_leaf
 from ..actions.data import timezone_options as tz_opts
@@ -1228,8 +1230,10 @@ _NEW_MEMBERS_GROUP = PanelNode(
     children={
         "nm_greeting_channel": NM_GREETING_CHANNEL_CONFIG,
         "nm_greeting_builder": NM_GREETING_TEXT_CONFIG,
+        "nm_greeting_test": build_greeting_test_node(),
         "nm_settings": NM_SETTINGS_CONFIG,
         "nm_whitelist_role": NM_WHITELIST_ROLE_CONFIG,
+        "nm_whitelist_browse": build_whitelist_browse_node(),
         "nm_status": NM_STATUS_NODE,
     },
 )

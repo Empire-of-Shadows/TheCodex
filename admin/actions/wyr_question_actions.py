@@ -209,6 +209,25 @@ class WYRQuestionActions:
         return f"On, {waiting} waiting" if waiting else "On"
 
     @staticmethod
+    async def reset_member_stats(guild_id: int, user_id: int) -> bool:
+        """Wipe one member's voting record in this guild.
+
+        Scoped to the guild, so resetting someone here never touches their
+        record in another server.
+        """
+        from storage.settings.collections import db_manager
+        try:
+            return await db_manager.daily_wyr_leaderboard.delete_one(
+                {"user_id": str(user_id), "guild_id": str(guild_id)}
+            )
+        except Exception as e:
+            logger.error(
+                f"Failed to reset WYR stats for {user_id} in guild {guild_id}: {e}",
+                exc_info=True,
+            )
+            return False
+
+    @staticmethod
     async def can_review(member) -> bool:
         """Whether this member may approve or decline suggestions.
 

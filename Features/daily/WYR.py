@@ -150,109 +150,6 @@ class WYRCommandGroup(app_commands.Group):
         super().__init__(name="wyr", description="Would You Rather commands", guild_only=True)
         self.cog = cog
 
-    @app_commands.command(name="post", description="Manually post a WYR question (Admin only)")
-    @app_commands.describe(
-        category="Category of question (sfw, nsfw, mixed)",
-        random_pick="Pick a random question instead of least used"
-    )
-    @app_commands.default_permissions(manage_messages=True)
-    async def post_wyr(self, interaction: discord.Interaction, category: str = None, random_pick: bool = False):
-        """
-        Manually post a WYR question.
-        """
-        logger.info(
-            f"Manual WYR post requested by {interaction.user} (ID: {interaction.user.id}) - Category: {category}, Random: {random_pick}")
-
-        try:
-            with PerformanceLogger(logger, f"post_wyr_command_{category}"):
-                # Read guild settings from config
-                guild_id = interaction.guild_id
-                guild_config = await get_config(guild_id)
-
-                if category is None:
-                    category = guild_config.wyr.get("default_category", "sfw")
-
-                # NSFW questions only go to age-restricted channels. An explicit
-                # NSFW request is refused outright rather than quietly answered
-                # with an SFW question, so the admin knows why.
-                allow_nsfw = _channel_allows_nsfw(interaction.channel)
-                if category == "nsfw" and not allow_nsfw:
-                    logger.warning(
-                        f"Blocked NSFW WYR post by {interaction.user} in non-age-restricted "
-                        f"channel {interaction.channel_id}"
-                    )
-                    await interaction.response.send_message(
-                        "❌ NSFW questions can only be posted in age-restricted channels. "
-                        "Enable **Age-Restricted Channel** in this channel's settings, or pick "
-                        "the `sfw` category.",
-                        ephemeral=True,
-                    )
-                    return
-
-                source = guild_config.wyr.get("question_source", "both")
-                formats = guild_config.wyr.get("question_formats")
-                if random_pick:
-                    question = await self.cog.get_random_question(
-                        category, guild_id=guild_id, allow_nsfw=allow_nsfw,
-                        question_source=source, question_formats=formats,
-                    )
-                else:
-                    question = await self.cog.get_next_question(
-                        category, guild_id=guild_id, allow_nsfw=allow_nsfw,
-                        question_source=source, question_formats=formats,
-                    )
-
-                if not question:
-                    logger.warning(f"No {category} questions available for manual post by {interaction.user}")
-                    await interaction.response.send_message(
-                        f"There are no {category} questions available right now.\n"
-                        f"Add some under **WYR Settings -> Question Bank** in `/admin panel`.",
-                        ephemeral=True,
-                    )
-                    return
-
-                embed = self.cog.create_question_embed(question)
-                view = self.cog.build_question_view(question)
-
-                await interaction.response.send_message(embed=embed, view=view)
-                message = await interaction.original_response()
-
-                # Store the message-question mapping with guild info
-                await self.cog.store_message_question_mapping(
-                    message.id,
-                    question["_id"],
-                    channel_id=interaction.channel_id,
-                    guild_id=guild_id
-                )
-
-                # Read thread settings from guild config, per format
-                thread_name_fmt, starter_msg = _thread_templates(guild_config, question)
-                archive_dur = guild_config.wyr.get("thread_auto_archive", 1440)
-                tz_name = guild_config.wyr.get("timezone", "America/Chicago")
-                tz = pytz.timezone(tz_name)
-                now = datetime.now(tz)
-
-                thread_name = _format_wyr_string(thread_name_fmt, question, now)[:100]
-                thread = await message.create_thread(
-                    name=thread_name,
-                    auto_archive_duration=archive_dur
-                )
-
-                await thread.send(_format_wyr_string(starter_msg, question, now))
-
-                # A manual post counts toward the rotation, exactly like the
-                # scheduled one. Without this the question stayed at its old
-                # usage count and the next morning's post could serve it again.
-                await self.cog.increment_used_count(question["_id"], guild_id)
-
-                logger.info(f"Successfully posted manual WYR question {question['_id']} in thread {thread.id}")
-
-        except Exception as e:
-            logger.error(f"Error in manual WYR post by {interaction.user}: {e}", exc_info=True)
-            if not interaction.response.is_done():
-                await interaction.response.send_message("❌ An error occurred while posting the question.",
-                                                        ephemeral=True)
-
     @app_commands.command(
         name="submit",
         description="Suggest a question for the daily post (a moderator approves it)",
@@ -314,64 +211,6 @@ class WYRCommandGroup(app_commands.Group):
             if not interaction.response.is_done():
                 await interaction.response.send_message(
                     "❌ Something went wrong opening the suggestion box.", ephemeral=True
-                )
-
-    @app_commands.command(
-        name="queue",
-        description="See the question suggestions waiting for review (Moderator only)",
-    )
-    @app_commands.default_permissions(manage_messages=True)
-    async def wyr_queue(self, interaction: discord.Interaction):
-        """List what is waiting.
-
-        ``default_permissions`` is only a client-side hint a server admin can
-        override, so the real gate is the ``can_review`` check inside.
-        """
-        try:
-            if not await WYRQuestionActions.can_review(interaction.user):
-                await interaction.response.send_message(
-                    "You do not have permission to review question suggestions.",
-                    ephemeral=True,
-                )
-                return
-
-            pending = await wyr_submissions.list_open(interaction.guild_id)
-            if not pending:
-                await interaction.response.send_message(
-                    "There are no question suggestions waiting.", ephemeral=True
-                )
-                return
-
-            embed = discord.Embed(
-                title=f"📥 {len(pending)} suggestion(s) waiting",
-                color=discord.Color.blurple(),
-            )
-            # Discord caps an embed at 25 fields; say so rather than truncating
-            # silently, which would read as "that is all of them".
-            for submission in pending[:25]:
-                text = submission.get("original", "")
-                if len(text) > 200:
-                    text = text[:197] + "..."
-                claimed = (
-                    " · being reviewed"
-                    if submission.get("status") == "reviewing" else ""
-                )
-                embed.add_field(
-                    name=f"{FORMAT_LABELS.get(submission.get('format'), 'Question')}"
-                         f" from {submission.get('user_id')}{claimed}",
-                    value=text or "(no text)",
-                    inline=False,
-                )
-            if len(pending) > 25:
-                embed.set_footer(text=f"Showing 25 of {len(pending)}.")
-
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-
-        except Exception as e:
-            logger.error(f"Error listing the WYR queue: {e}", exc_info=True)
-            if not interaction.response.is_done():
-                await interaction.response.send_message(
-                    "❌ Could not read the suggestion queue.", ephemeral=True
                 )
 
     @app_commands.command(name="stats", description="Check WYR voting statistics for yourself or another user")
@@ -612,43 +451,6 @@ class WYRCommandGroup(app_commands.Group):
             logger.error(f"Error generating WYR leaderboard: {e}", exc_info=True)
             await interaction.response.send_message("❌ An error occurred while generating the leaderboard.",
                                                     ephemeral=True)
-
-    @app_commands.command(name="reset_stats", description="Reset a user's WYR statistics (Admin only)")
-    @app_commands.describe(user="User to reset stats for")
-    @app_commands.default_permissions(administrator=True)
-    async def wyr_reset_stats(self, interaction: discord.Interaction, user: discord.Member):
-        """
-        Reset a user's WYR statistics (Admin only).
-        """
-        logger.warning(f"WYR stats reset requested by {interaction.user} for {user} (ID: {user.id})")
-
-        try:
-            with PerformanceLogger(logger, f"wyr_stats_reset_{user.id}"):
-                # Delete this user's stats for the current guild only
-                success = await db_manager.daily_wyr_leaderboard.delete_one(
-                    {"user_id": str(user.id), "guild_id": str(interaction.guild_id)}
-                )
-
-                if success:
-                    embed = discord.Embed(
-                        title="✅ Stats Reset",
-                        description=f"Successfully reset WYR statistics for {user.mention}",
-                        color=discord.Color.green()
-                    )
-                    logger.info(f"Successfully reset WYR stats for {user} (ID: {user.id})")
-                else:
-                    embed = discord.Embed(
-                        title="ℹ️ No Stats Found",
-                        description=f"No WYR statistics found for {user.mention}",
-                        color=discord.Color.blue()
-                    )
-                    logger.info(f"No WYR stats found to reset for {user} (ID: {user.id})")
-
-                await interaction.response.send_message(embed=embed)
-
-        except Exception as e:
-            logger.error(f"Error resetting WYR stats for {user}: {e}", exc_info=True)
-            await interaction.response.send_message("❌ An error occurred while resetting stats.", ephemeral=True)
 
 
 class WYR(commands.Cog):
@@ -1056,6 +858,83 @@ class WYR(commands.Cog):
             logger.error(f"Error posting WYR to guild {guild_id}: {e}", exc_info=True)
             return POST_FAILED
 
+    async def post_question_now(self, channel, *, category=None,
+                                random_pick=False) -> tuple:
+        """Post one question to a channel on demand. Returns ``(ok, message)``.
+
+        This is what `/wyr post` used to be. It moved here so the admin panel
+        can drive it: the command was a subcommand of `/wyr`, and Discord only
+        honours ``default_member_permissions`` on TOP-LEVEL commands, so there
+        was no way to hide it from members who could never use it. `/wyr` itself
+        has to stay visible - the rest of its commands are for everyone.
+
+        The channel is explicit rather than "wherever you typed", which also
+        means an admin can post to a channel they are not currently in.
+        """
+        guild = channel.guild
+        guild_config = await get_config(guild.id)
+        if category is None:
+            category = guild_config.wyr.get("default_category", "sfw")
+
+        # NSFW questions only go to age-restricted channels. An explicit NSFW
+        # request is refused outright rather than quietly answered with an SFW
+        # question, so the admin knows why.
+        allow_nsfw = _channel_allows_nsfw(channel)
+        if category == "nsfw" and not allow_nsfw:
+            return False, (
+                f"{channel.mention} is not age-restricted, so NSFW questions "
+                f"cannot be posted there. Turn on **Age-Restricted Channel** in "
+                f"that channel's settings, or choose the `sfw` category."
+            )
+
+        source = guild_config.wyr.get("question_source", "both")
+        formats = guild_config.wyr.get("question_formats")
+        fetch = self.get_random_question if random_pick else self.get_next_question
+        question = await fetch(
+            category, guild_id=guild.id, allow_nsfw=allow_nsfw,
+            question_source=source, question_formats=formats,
+        )
+        if not question:
+            return False, (
+                f"There are no {category} questions available right now.\n"
+                f"Add some under **Question Bank** above."
+            )
+
+        try:
+            message = await channel.send(
+                embed=self.create_question_embed(question),
+                view=self.build_question_view(question),
+            )
+        except (discord.Forbidden, discord.HTTPException) as e:
+            logger.warning(f"Could not post a WYR question to {channel.id}: {e}")
+            return False, f"I could not post in {channel.mention}."
+
+        await self.store_message_question_mapping(
+            message.id, question["_id"], channel_id=channel.id, guild_id=guild.id
+        )
+
+        thread_name_fmt, starter_msg = _thread_templates(guild_config, question)
+        tz = pytz.timezone(guild_config.wyr.get("timezone", "America/Chicago"))
+        now = datetime.now(tz)
+        try:
+            thread = await message.create_thread(
+                name=_format_wyr_string(thread_name_fmt, question, now)[:100],
+                auto_archive_duration=guild_config.wyr.get("thread_auto_archive", 1440),
+            )
+            await thread.send(_format_wyr_string(starter_msg, question, now))
+        except (discord.Forbidden, discord.HTTPException) as e:
+            # The question is up; only the discussion thread failed.
+            logger.warning(f"Posted WYR question but could not open its thread: {e}")
+
+        # A manual post counts toward the rotation exactly like a scheduled one,
+        # or the same question could come back the next morning.
+        await self.increment_used_count(question["_id"], guild.id)
+        logger.info(f"Posted WYR question {question.get('id')} on demand in guild {guild.id}")
+        return True, (
+            f"Posted question **#{question.get('id')}** in {channel.mention}.\n"
+            f"[Jump to it]({message.jump_url})"
+        )
+
     # ── Member submissions ───────────────────────────────────────────────
 
     async def process_submission(self, interaction, question_format, text, options, tags):
@@ -1137,7 +1016,8 @@ class WYR(commands.Cog):
         channel_id = settings.get("review_channel_id")
         if not channel_id:
             # A reviewer role with no channel is a valid setup: the queue is
-            # read with /wyr queue instead, so this is not a failure.
+            # worked through in the admin panel instead, under WYR Settings ->
+            # Question Bank -> Member Suggestions -> Review Suggestions.
             return True
 
         channel = self.bot.get_channel(int(channel_id))

@@ -17,6 +17,7 @@ from Features.daily.wyr_bank import (
     FORMAT_OPTION_RANGE,
     FORMAT_POLL,
     FORMAT_WYR,
+    question_options,
 )
 # The entry form lives with the feature, not in the admin seam: an admin adding
 # a question and a member submitting one fill in the same thing, and the member
@@ -125,6 +126,95 @@ def build_add_result_view(
     back_button.callback = on_back
     row.add_item(back_button)
     builder.add_item(row)
+
+    return builder.build()
+
+
+def build_review_queue_view(
+    *,
+    pending: List[Dict[str, Any]],
+    index: int,
+    guild,
+    on_prev: Callable[[discord.Interaction], Awaitable[None]],
+    on_next: Callable[[discord.Interaction], Awaitable[None]],
+    on_approve: Callable[[discord.Interaction], Awaitable[None]],
+    on_decline: Callable[[discord.Interaction], Awaitable[None]],
+    on_back: Callable[[discord.Interaction], Awaitable[None]],
+    back_label: str = "Back",
+) -> discord.ui.LayoutView:
+    """One suggestion at a time, with Approve, Decline and paging.
+
+    Shows a single suggestion rather than a list because a decision needs the
+    whole question in front of you - the text, every answer, and who sent it.
+    """
+    builder = AdminLayoutBuilder()
+    builder.add_header("## Review Suggestions")
+
+    if not pending:
+        builder.add_item(readonly_container(discord.ui.TextDisplay(
+            "Nothing is waiting for review.\n\n"
+            "Members send suggestions with `/wyr submit` once **Member "
+            "Suggestions** is turned on."
+        )))
+        row = discord.ui.ActionRow()
+        back = discord.ui.Button(label=back_label, style=discord.ButtonStyle.secondary)
+        back.callback = on_back
+        row.add_item(back)
+        builder.add_item(row)
+        return builder.build()
+
+    index = max(0, min(index, len(pending) - 1))
+    submission = pending[index]
+    fmt = submission.get("format") or "wyr"
+
+    lines = [
+        f"**{index + 1} of {len(pending)}** waiting",
+        "",
+        f"{FORMAT_EMOJI.get(fmt, '•')} **{FORMAT_LABELS.get(fmt, fmt)}**",
+        f"> {submission.get('original', '')}",
+    ]
+    options = question_options(submission)
+    if options:
+        lines.append("")
+        lines.extend(f"{number}. {text}" for number, text in options)
+    lines.append("")
+    lines.append(f"Suggested by <@{submission.get('user_id')}>")
+    if submission.get("tags"):
+        lines.append(f"Tags: {', '.join(submission['tags'])}")
+    if submission.get("status") == "reviewing":
+        lines.append("\n*Someone else opened this one recently.*")
+
+    builder.add_item(editable_container(discord.ui.TextDisplay("\n".join(lines))))
+
+    decide = discord.ui.ActionRow()
+    approve = discord.ui.Button(label="Approve", emoji="✅",
+                                style=discord.ButtonStyle.success)
+    approve.callback = on_approve
+    decide.add_item(approve)
+
+    decline = discord.ui.Button(label="Decline", emoji="❌",
+                                style=discord.ButtonStyle.danger)
+    decline.callback = on_decline
+    decide.add_item(decline)
+    builder.add_item(decide)
+
+    nav = discord.ui.ActionRow()
+    prev_button = discord.ui.Button(label="Previous",
+                                    style=discord.ButtonStyle.secondary,
+                                    disabled=index == 0)
+    prev_button.callback = on_prev
+    nav.add_item(prev_button)
+
+    next_button = discord.ui.Button(label="Next",
+                                    style=discord.ButtonStyle.secondary,
+                                    disabled=index >= len(pending) - 1)
+    next_button.callback = on_next
+    nav.add_item(next_button)
+
+    back = discord.ui.Button(label=back_label, style=discord.ButtonStyle.secondary)
+    back.callback = on_back
+    nav.add_item(back)
+    builder.add_item(nav)
 
     return builder.build()
 

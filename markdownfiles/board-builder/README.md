@@ -49,29 +49,27 @@ see this" reply.
 
 ## Publishing
 
-Saving stores the layout. To put it in a channel, run this in Discord:
+Saving stores the layout. Everything to do with putting it on Discord happens in the
+admin panel: run `/admin panel` in your server and open
+**Info Board -> Post / Update Board**.
 
-```
-/board post #your-channel
-```
+- **Not posted yet?** Pick a channel from the dropdown on that screen and the board
+  goes up there.
+- **Already posted?** Press the **Post / Update** button. That **edits the message
+  already in the channel** rather than posting a new one, so the board never
+  duplicates. Do this each time you change the layout and save.
+- **Want it in a different channel?** Pick the new channel from the same dropdown.
+  The board is posted there and the old copy is removed, so you never end up with
+  two.
 
-After that, whenever you change the layout and save, run:
-
-```
-/board refresh
-```
-
-That **edits the message already in the channel** rather than posting a new one, so
-the board never duplicates. You can also use **Post / Update Board** in
-`/admin -> Info Board`.
-
-`/board post #another-channel` moves the board: it posts to the new channel and
-removes the old copy. `/board info` tells you where it currently lives.
+**Info Board -> Board Status**, on the same panel, tells you where the board is
+currently posted, how many blocks and private responses it has, and whether the
+layout is valid.
 
 ## Things worth knowing
 
-- If you delete the board message in Discord by hand, `/board refresh` puts a fresh
-  one back in the same channel.
+- If you delete the board message in Discord by hand, **Post / Update Board** puts a
+  fresh one back in the same channel.
 - A button pointing at a response you later delete will fail validation, and the
   builder tells you exactly which button is dangling. Fix it before saving.
 - Responses can have their own buttons pointing at other responses, so you can build

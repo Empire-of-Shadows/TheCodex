@@ -1337,8 +1337,8 @@ export default function BuilderPage() {
         setSavedSigs((prev) => ({ ...prev, board: currentBoardSig }));
         pushToast(
           boardPosted
-            ? "Board saved! Run /board refresh to update the posted message."
-            : "Board saved! Run /board post #channel to put it up.",
+            ? "Board saved! Update the posted message from /admin panel -> Info Board -> Post / Update Board."
+            : "Board saved! Put it up from /admin panel -> Info Board -> Post / Update Board.",
           "success",
         );
       } else {
@@ -1546,8 +1546,8 @@ export default function BuilderPage() {
               {!simulating && mode === "board" && (
                 <span style={{ fontSize: 12, color: "var(--dc-text-muted)" }}>
                   {boardPosted
-                    ? "Posted - run /board refresh after saving"
-                    : "Not posted - run /board post #channel"}
+                    ? "Posted - update it in Info Board -> Post / Update Board"
+                    : "Not posted - post it from Info Board -> Post / Update Board"}
                 </span>
               )}
               <button

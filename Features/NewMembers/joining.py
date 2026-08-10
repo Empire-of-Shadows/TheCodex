@@ -757,10 +757,13 @@ class GuildEventHandler:
             )
 
 
-# The guild event handler instance. Kept at module level because
-# greetingtrigger.py imports `guild_handler` directly; the listeners it relies on
-# are registered explicitly in setup() below, so this feature now loads through
-# the normal cog loader instead of only as an import side effect of that cog.
+# The guild event handler instance. Kept at module level because the admin
+# panel's Send a Test Greeting node imports `guild_handler` directly; the
+# listeners it relies on are registered explicitly in setup() below, so this
+# feature loads through the normal cog loader rather than as an import side
+# effect. (It used to be greetingtrigger.py doing that import - that file was
+# only ever the two /greeting commands, and went away when they moved into the
+# panel.)
 guild_handler = GuildEventHandler(bot)
 
 

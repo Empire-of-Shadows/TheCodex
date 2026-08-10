@@ -20,12 +20,11 @@ check is the actual gate.
 
 from __future__ import annotations
 
-import os
-
 import discord
 from discord import app_commands
 from discord.ext import commands
 
+from startup.owner_guild import get_owner_guild_id
 from storage.log import get_logger
 
 from Features.daily.wyr_bank import (
@@ -276,8 +275,15 @@ class _ConfirmPromoteView(discord.ui.View):
         await self.decision._on_back(interaction)
 
 
+@app_commands.default_permissions(administrator=True)
 class WYRBankGroup(app_commands.Group):
-    """Owner-only tools over the whole question bank."""
+    """Owner-only tools over the whole question bank.
+
+    Guild scoping already keeps this out of every other server. The permission
+    default is belt and braces for the one guild it does live in - and unlike a
+    subcommand decorator it actually reaches Discord, because this is a
+    top-level command.
+    """
 
     def __init__(self):
         super().__init__(
@@ -410,40 +416,29 @@ class WYRBankGroup(app_commands.Group):
 
 
 class WYRBankOwner(commands.Cog):
-    """Registers the owner-only `/wyrbank` group."""
+    """Registers the owner-only `/wyrbank` group, private to one guild."""
 
-    def __init__(self, bot):
+    def __init__(self, bot, guild_id: int):
         self.bot = bot
+        self.guild_id = guild_id
         self.group = WYRBankGroup()
-
-        # Scoped to the home guild when one is configured, so it never appears
-        # in another server's command list. Without the variable it registers
-        # globally and the ownership check alone keeps it private.
-        owner_guild = os.getenv("OWNER_GUILD_ID")
-        if owner_guild:
-            try:
-                bot.tree.add_command(self.group, guild=discord.Object(id=int(owner_guild)))
-                logger.info(f"/wyrbank registered to guild {owner_guild}")
-                return
-            except (TypeError, ValueError):
-                logger.warning(
-                    f"OWNER_GUILD_ID is not a server ID ({owner_guild!r}); "
-                    f"registering /wyrbank globally instead"
-                )
-        bot.tree.add_command(self.group)
+        bot.tree.add_command(self.group, guild=discord.Object(id=guild_id))
+        logger.info(f"/wyrbank registered privately to guild {guild_id}")
 
     async def cog_unload(self):
-        owner_guild = os.getenv("OWNER_GUILD_ID")
-        try:
-            if owner_guild:
-                self.bot.tree.remove_command(
-                    "wyrbank", guild=discord.Object(id=int(owner_guild))
-                )
-            else:
-                self.bot.tree.remove_command("wyrbank")
-        except (TypeError, ValueError):
-            self.bot.tree.remove_command("wyrbank")
+        self.bot.tree.remove_command("wyrbank", guild=discord.Object(id=self.guild_id))
 
 
 async def setup(bot):
-    await bot.add_cog(WYRBankOwner(bot))
+    """Load the owner tools, but only when there is a guild to hide them in.
+
+    Deliberately does NOT fall back to a global registration. These are owner
+    tools; appearing in the command list of every server the bot serves is a
+    worse outcome than not being available at all, and a silent fallback is how
+    that happens without anyone noticing.
+    """
+    guild_id = get_owner_guild_id()
+    if not guild_id:
+        logger.info("OWNER_GUILD_ID unset - /wyrbank owner tools disabled")
+        return
+    await bot.add_cog(WYRBankOwner(bot, guild_id))

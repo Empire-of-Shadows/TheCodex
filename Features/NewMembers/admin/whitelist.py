@@ -100,13 +100,24 @@ class WhitelistReasonModal(discord.ui.Modal, title="Whitelist Member"):
         await interaction.followup.send(embed=embed, ephemeral=True)
 
 
+@app_commands.default_permissions(manage_guild=True)
 class WhitelistGroup(commands.GroupCog, name="whitelist", description="Manage member whitelist for age restrictions"):
     """
     Group cog providing:
     - /whitelist add <user> - Add a user to whitelist (opens modal for reason)
     - /whitelist remove <user> - Remove a user from whitelist
-    - /whitelist list - Show all whitelisted users
-    - /whitelist check <user> - Check if a user is whitelisted
+
+    Both act on one person and take a user argument, which is why they stayed
+    commands. Browsing the list moved to the admin panel (New Members ->
+    Whitelisted Members), and that replaced the old `list` and `check` commands:
+    `list` capped out at 25 entries with no way past it, and once the panel shows
+    everybody there is nothing left to look one person up for.
+
+    ``default_permissions`` is what stops Discord listing these for every member.
+    The real gate is still ``has_whitelist_admin_app`` below, which also honours
+    Panel Access roles; this only sets the DEFAULT visibility. A server that
+    grants Panel Access to a role without Manage Server can hand that role the
+    commands under Server Settings -> Integrations.
     """
 
     def __init__(self, bot: commands.Bot):
@@ -474,174 +485,6 @@ class WhitelistGroup(commands.GroupCog, name="whitelist", description="Manage me
                 color=discord.Color.red()
             )
             await interaction.followup.send(embed=embed, ephemeral=True)
-
-    @app_commands.command(name="list", description="List all whitelisted members")
-    @has_whitelist_admin_app()
-    @app_commands.guild_only()
-    async def list_whitelist(self, interaction: discord.Interaction):
-        """List all whitelisted members."""
-        await interaction.response.defer(ephemeral=True)
-
-        guild = interaction.guild
-
-        try:
-            whitelist_collection = db_manager.get_collection_manager('serverdata_whitelist')
-
-            # Get all active whitelist entries for this guild
-            entries = await whitelist_collection.find_many(
-                {'guild_id': str(guild.id), 'is_active': True},
-                sort=[('added_at', -1)]
-            )
-
-            if not entries:
-                embed = discord.Embed(
-                    title="📋 Whitelist",
-                    description="No members are currently whitelisted.",
-                    color=discord.Color.blue()
-                )
-                await interaction.followup.send(embed=embed, ephemeral=True)
-                return
-
-            # Create embed with list
-            embed = discord.Embed(
-                title=f"📋 Whitelist ({len(entries)} members)",
-                color=discord.Color.blue(),
-                timestamp=datetime.now(timezone.utc)
-            )
-
-            # Group entries for display (max 25 fields)
-            for i, entry in enumerate(entries[:25], 1):
-                username = entry.get('username', 'Unknown')
-                user_id = entry.get('user_id')
-                added_by = entry.get('added_by')
-                added_at = entry.get('added_at')
-                reason = entry.get('reason', 'No reason provided')
-                role_assigned = entry.get('role_assigned', False)
-
-                value = f"**ID:** `{user_id}`\n"
-                value += f"**Added by:** <@{added_by}>\n"
-                value += f"**Date:** <t:{int(added_at.timestamp())}:R>\n"
-                value += f"**Role:** {'✅ Assigned' if role_assigned else '❌ Not assigned'}\n"
-                value += f"**Reason:** {reason[:100]}{'...' if len(reason) > 100 else ''}"
-
-                embed.add_field(
-                    name=f"{i}. {username}",
-                    value=value,
-                    inline=False
-                )
-
-            if len(entries) > 25:
-                embed.set_footer(text=f"Showing 25 of {len(entries)} entries")
-
-            await interaction.followup.send(embed=embed, ephemeral=True)
-
-        except Exception as e:
-            logger.error(f"Error listing whitelist: {e}", exc_info=True)
-            embed = discord.Embed(
-                title="❌ Error",
-                description=f"An error occurred: {str(e)}",
-                color=discord.Color.red()
-            )
-            await interaction.followup.send(embed=embed, ephemeral=True)
-
-    @app_commands.command(name="check", description="Check if a member is whitelisted")
-    @app_commands.describe(user="The member to check (User ID or exact username - case sensitive)")
-    @has_whitelist_admin_app()
-    @app_commands.guild_only()
-    async def check(self, interaction: discord.Interaction, user: str):
-        """Check if a member is whitelisted."""
-        await interaction.response.defer(ephemeral=True)
-
-        guild = interaction.guild
-
-        try:
-            # Resolve user
-            resolution = await self._resolve_user_identifier(guild, user)
-            if not resolution:
-                embed = discord.Embed(
-                    title="❌ User Not Found",
-                    description=f"Could not find user: `{user}`",
-                    color=discord.Color.red()
-                )
-                await interaction.followup.send(embed=embed, ephemeral=True)
-                return
-
-            user_id, username, in_guild = resolution
-
-            # Get whitelist collection
-            whitelist_collection = db_manager.get_collection_manager('serverdata_whitelist')
-
-            # Check whitelist
-            entry = await whitelist_collection.find_one({
-                'guild_id': str(guild.id),
-                'user_id': str(user_id)
-            })
-
-            if not entry or not entry.get('is_active', True):
-                embed = discord.Embed(
-                    title="❌ Not Whitelisted",
-                    description=f"**{username}** (`{user_id}`) is **not** on the whitelist.",
-                    color=discord.Color.red()
-                )
-            else:
-                embed = discord.Embed(
-                    title="✅ Whitelisted",
-                    description=f"**{username}** (`{user_id}`) is on the whitelist.",
-                    color=discord.Color.green(),
-                    timestamp=datetime.now(timezone.utc)
-                )
-
-                embed.add_field(name="Added by", value=f"<@{entry.get('added_by')}>", inline=True)
-                embed.add_field(name="Date", value=f"<t:{int(entry.get('added_at').timestamp())}:F>", inline=True)
-                embed.add_field(name="Role Assigned", value="✅ Yes" if entry.get('role_assigned', False) else "❌ No", inline=True)
-                embed.add_field(name="Reason", value=entry.get('reason', 'No reason provided'), inline=False)
-
-            await interaction.followup.send(embed=embed, ephemeral=True)
-
-        except Exception as e:
-            logger.error(f"Error checking whitelist: {e}", exc_info=True)
-            embed = discord.Embed(
-                title="❌ Error",
-                description=f"An error occurred: {str(e)}",
-                color=discord.Color.red()
-            )
-            await interaction.followup.send(embed=embed, ephemeral=True)
-
-    async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        """Unified error handler for whitelist commands."""
-        try:
-            if isinstance(error, app_commands.CheckFailure):
-                embed = discord.Embed(
-                    title="❌ Permission Denied",
-                    description="You don't have permission to manage the whitelist.\n"
-                                "Required: `Administrator` permission or a configured staff role.\n"
-                                "Use `/config view` to see configured roles.",
-                    color=discord.Color.red()
-                )
-                if interaction.response.is_done():
-                    await interaction.followup.send(embed=embed, ephemeral=True)
-                else:
-                    await interaction.response.send_message(embed=embed, ephemeral=True)
-
-            elif isinstance(error, app_commands.NoPrivateMessage):
-                if interaction.response.is_done():
-                    await interaction.followup.send("❌ This command can only be used in a server.", ephemeral=True)
-                else:
-                    await interaction.response.send_message("❌ This command can only be used in a server.", ephemeral=True)
-
-            else:
-                logger.error(f"Unhandled error in whitelist commands: {error}", exc_info=True)
-                embed = discord.Embed(
-                    title="❌ Unexpected Error",
-                    description="An unexpected error occurred. Please try again later.",
-                    color=discord.Color.red()
-                )
-                if interaction.response.is_done():
-                    await interaction.followup.send(embed=embed, ephemeral=True)
-                else:
-                    await interaction.response.send_message(embed=embed, ephemeral=True)
-        except Exception as inner_e:
-            logger.error(f"Error in whitelist cog error handler: {inner_e}", exc_info=True)
 
 
 async def setup(bot: commands.Bot):
