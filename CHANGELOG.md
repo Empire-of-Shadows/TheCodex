@@ -48,8 +48,22 @@
   greeting built yet, a layout with a mistake in it, or the bot not being allowed to post
   there. `/greeting info` is gone; **New Members -> View Status** already showed everything
   it did.
+- **The boost commands are gone, and boost information moved into the panel.** `/boosters`
+  and `/boosthistory` have been replaced by **Trackers -> View Boosters**, which shows the
+  server's boost count and level, everyone boosting right now with how long they have been
+  at it, and the recent boost starts and stops in one screen instead of two commands. Who
+  is boosting is now something staff look up rather than anything a member can pull into
+  chat. Boost tracking itself is unchanged - starts and stops are still posted to your
+  boost log channel as they happen.
+- The `/help` menu's "Boosts & Drops" section is now just **Drops**, since `/drop` is the
+  only command left in it. It still explains where boost information lives.
 
 ### Fixed
+- **Boost history could come back blank after a restart.** When the bot came back online it
+  compares who is boosting against what it recorded, and working out how long a member had
+  boosted before they stopped could fail outright - so anyone who stopped boosting while the
+  bot was offline was never written into the history. Those catch-ups now go through
+  correctly.
 - **Owner-only tools no longer appear in the command list of every server.** They now
   register to a single private server. If that server is not configured they simply do not
   load, instead of quietly falling back to being visible everywhere.

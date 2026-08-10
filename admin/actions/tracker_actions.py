@@ -4,7 +4,7 @@ Tracker Actions - Business logic for Boost Tracker and Tag Tracker configuration
 All read/write goes through storage.config_manager.py.
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from storage.log import get_logger
 from storage.settings.config_manager import get_config, get_guild_config_manager
@@ -111,6 +111,41 @@ class TrackerActions:
         except Exception as e:
             logger.error(f"Error getting boost stats: {e}", exc_info=True)
             return {"active_boosters": 0, "total_events": 0}
+
+    @staticmethod
+    async def get_stored_boosters(guild_id: int) -> List[Dict[str, Any]]:
+        """Active boosters as the tracker recorded them, longest-boosting first.
+
+        The collection only ever holds current boosters - the tracker deletes the
+        document when a member stops - so every row here is someone boosting now.
+        This is the fallback for the panel display when the guild's member cache is
+        not populated and ``guild.premium_subscribers`` would read as empty.
+        """
+        try:
+            from storage.settings.collections import db_manager
+            boosts_col = db_manager.get_collection_manager('serverdata_boosts')
+            return await boosts_col.find_many(
+                {'guild_id': str(guild_id)},
+                sort=[('boost_start', 1)],
+            )
+        except Exception as e:
+            logger.error(f"Error getting stored boosters: {e}", exc_info=True)
+            return []
+
+    @staticmethod
+    async def get_recent_boost_events(guild_id: int, limit: int = 10) -> List[Dict[str, Any]]:
+        """The guild's most recent boost start/stop events, newest first."""
+        try:
+            from storage.settings.collections import db_manager
+            events_col = db_manager.get_collection_manager('serverdata_boost_events')
+            return await events_col.find_many(
+                {'guild_id': str(guild_id)},
+                sort=[('timestamp', -1)],
+                limit=limit,
+            )
+        except Exception as e:
+            logger.error(f"Error getting recent boost events: {e}", exc_info=True)
+            return []
 
     # -- Overview -----------------------------------------------------------
 

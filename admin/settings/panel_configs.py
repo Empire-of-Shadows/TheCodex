@@ -26,7 +26,7 @@ from ..views.drops_views import format_drops_status
 from ..views.new_member_views import format_new_member_status
 from ..views.wyr_views import format_wyr_status
 from ..views.announcement_views import format_announcement_status
-from ..views.tracker_views import format_tracker_status
+from ..views.tracker_views import format_boosters_display, format_tracker_status
 from ..actions.structure import info_action
 from ..actions.features import panel_roles_pair
 from .panel_branding import PANEL_TITLE, PANEL_DESCRIPTION
@@ -1143,6 +1143,13 @@ async def _render_tracker_status(cog, guild, ctx) -> str:
     return format_tracker_status(overview, guild)
 
 
+async def _render_boosters(cog, guild, ctx) -> str:
+    settings = await TrackerActions.get_boost_tracker_settings(guild.id)
+    stored = await TrackerActions.get_stored_boosters(guild.id)
+    events = await TrackerActions.get_recent_boost_events(guild.id, limit=10)
+    return format_boosters_display(guild, settings, stored, events)
+
+
 NM_STATUS_NODE = info_action(
     key="nm_status",
     label="View Status",
@@ -1172,6 +1179,14 @@ TRACKER_STATUS_NODE = info_action(
     label="View Status",
     description="View tracker configuration and boost stats.",
     render=_render_tracker_status,
+)
+# Replaces the retired /boosters and /boosthistory commands - boost information is
+# admin-panel only now, rather than something any member could pull up in chat.
+BOOSTERS_NODE = info_action(
+    key="boosters",
+    label="View Boosters",
+    description="See who is boosting and the recent boost activity.",
+    render=_render_boosters,
 )
 
 
@@ -1247,6 +1262,7 @@ _TRACKERS_GROUP = PanelNode(
     children={
         "tag_tracker": build_tag_tracker_node(),
         "boost_tracker": build_boost_tracker_node(),
+        "boosters": BOOSTERS_NODE,
         "tracker_status": TRACKER_STATUS_NODE,
     },
 )

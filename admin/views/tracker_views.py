@@ -4,10 +4,17 @@ Tracker Config Views using Discord Components v2.
 Panel views for managing Tag Tracker and Boost Tracker configuration.
 """
 
+import datetime
 import discord
-from typing import Callable, Awaitable, Dict, Any
+from typing import Callable, Awaitable, Dict, Any, List
+
+from Features.trackers.boosts.boost_tracker import as_utc, boost_level_label, format_duration
 
 from .base import AdminLayoutBuilder, cid, readonly_container, editable_container
+
+# TextDisplay caps at 4000 characters and the panel header eats some of that, so the
+# boosters display stops adding rows once the body reaches this length.
+_BOOSTERS_BODY_BUDGET = 3400
 
 
 def build_tag_tracker_settings_view(
@@ -208,6 +215,106 @@ def build_boost_tracker_settings_view(
     builder.add_item(done_row)
 
     return builder.build()
+
+
+def format_boosters_display(
+    guild: discord.Guild,
+    settings: Dict[str, Any],
+    stored_boosters: List[Dict[str, Any]],
+    recent_events: List[Dict[str, Any]],
+    now: datetime.datetime = None,
+) -> str:
+    """Format the read-only "who is boosting" display as markdown.
+
+    This is the admin-panel home of what used to be the ``/boosters`` and
+    ``/boosthistory`` commands: who is boosting right now and how long for, plus the
+    recent boost starts and stops for the whole server.
+
+    Current boosters come from the live member cache, which is the same source the old
+    ``/boosters`` used. A guild whose members are not chunked would read as having none,
+    so in that case the tracker's own collection is used instead - it is reconciled
+    against Discord on every startup and written on every boost change.
+
+    Consumed by the shared ``info_action`` node (see ``panel_configs.py``), which renders
+    the header and Back button around this body.
+    """
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    count = guild.premium_subscription_count
+    enabled = settings.get("boost_enabled", False)
+    channel_id = settings.get("boost_log_channel_id")
+
+    if channel_id:
+        channel = guild.get_channel(channel_id)
+        channel_display = channel.mention if channel else f"Not found ({channel_id})"
+    else:
+        channel_display = "Not configured"
+
+    # (label, started_at) pairs, longest-boosting first.
+    if guild.chunked:
+        boosters = [
+            (member.mention, as_utc(member.premium_since))
+            for member in guild.premium_subscribers
+        ]
+    else:
+        boosters = [
+            (doc.get("username") or f"<@{doc.get('user_id')}>", as_utc(doc.get("boost_start")))
+            for doc in stored_boosters
+        ]
+    boosters.sort(key=lambda pair: pair[1] or now)
+
+    body = (
+        f"**Server:** {guild.name}\n"
+        f"**Boosts:** {count} - {boost_level_label(count)}\n"
+        f"**Boost Tracker:** {'Enabled' if enabled else 'Disabled'}, "
+        f"logging to {channel_display}\n\n"
+        f"**Currently Boosting - {len(boosters)}**\n"
+    )
+
+    if not boosters:
+        body += "Nobody is boosting this server right now.\n"
+    else:
+        shown = 0
+        for label, started in boosters:
+            if started:
+                line = (
+                    f"\N{BULLET} {label} - {format_duration(now - started)} "
+                    f"(since {started.strftime('%Y-%m-%d')})\n"
+                )
+            else:
+                line = f"\N{BULLET} {label} - start date unknown\n"
+            if len(body) + len(line) > _BOOSTERS_BODY_BUDGET:
+                break
+            body += line
+            shown += 1
+        if shown < len(boosters):
+            body += f"\N{HORIZONTAL ELLIPSIS}and {len(boosters) - shown} more.\n"
+
+    body += "\n**Recent Boost Activity**\n"
+    if not recent_events:
+        body += (
+            "No boost events recorded yet. Starts and stops are only logged while "
+            "Boost Tracker is on.\n"
+        )
+        return body
+
+    shown = 0
+    for event in recent_events:
+        stamp = as_utc(event.get("timestamp"))
+        stamp_display = stamp.strftime("%Y-%m-%d %H:%M") if stamp else "?"
+        started = event.get("event_type") == "boost_start"
+        action = "started boosting" if started else "stopped boosting"
+        duration = event.get("duration")
+        extra = f" (lasted {duration})" if duration and not started else ""
+        name = event.get("username") or f"<@{event.get('user_id')}>"
+        line = f"`{stamp_display}` {name} {action}{extra}\n"
+        if len(body) + len(line) > _BOOSTERS_BODY_BUDGET:
+            break
+        body += line
+        shown += 1
+    if shown < len(recent_events):
+        body += f"\N{HORIZONTAL ELLIPSIS}and {len(recent_events) - shown} more.\n"
+
+    return body
 
 
 def format_tracker_status(overview: Dict[str, Any], guild: discord.Guild) -> str:

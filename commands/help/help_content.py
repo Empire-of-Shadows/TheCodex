@@ -178,31 +178,29 @@ WYR = HelpCategory(
     ),
 )
 
-BOOSTS_DROPS = HelpCategory(
-    key="boosts_drops",
-    label="Boosts & Drops",
-    description="Server boosts and free Prime Gaming drops",
-    emoji="\N{ROCKET}",
-    accent=discord.Color.from_rgb(255, 115, 250).value,  # nitro pink, matches the boost embeds
+DROPS = HelpCategory(
+    key="drops",
+    label="Drops",
+    description="Free Prime Gaming drops posted to this server",
+    emoji="\N{VIDEO GAME}",
+    accent=discord.Color.from_rgb(0, 168, 225).value,  # prime blue
     thumbnail=None,
     admin_only=False,
-    blurb="Who is boosting, and what is free to claim right now.",
+    blurb="What is free to claim right now.",
     body=(
         "**`/drop`**\n"
         "Browse the Prime Gaming drops the bot has posted to this server, newest "
         "first, a page at a time. Members with the drops manager role also get "
         "buttons to see unsent drops and to push them out.\n"
         "\n"
-        "**`/boosters`**\n"
-        "Everyone currently boosting the server, longest-boosting first, with the "
-        "server's boost count and level.\n"
-        "\n"
-        "**`/boosthistory [user]`**\n"
-        "A member's boost status, when they started, how long they have been "
-        "boosting, and their recent boost events. Defaults to you.\n"
-        "\n"
         "Drops need a drops channel set up before anything is posted. If the list "
-        "is empty, the bot tells you which of the two it is."
+        "is empty, the bot tells you which of the two it is.\n"
+        "\n"
+        "**About boosts**\n"
+        "Server boosts are still tracked - starts and stops are posted to the "
+        "server's boost log channel as they happen. There is no command for it: "
+        "the full list of who is boosting lives in the admin panel, under "
+        "Trackers \N{RIGHTWARDS ARROW} View Boosters."
     ),
 )
 
@@ -265,6 +263,10 @@ ADMIN = HelpCategory(
         "**New Members**. Take a user ID rather than a username where you can - "
         "usernames are case sensitive.\n"
         "\n"
+        "**Boosters** - in the panel, under **Trackers -> View Boosters**\n"
+        "Who is boosting the server and for how long, plus the recent boost starts "
+        "and stops. Members cannot pull this up themselves.\n"
+        "\n"
         "**Would You Rather** - all in the panel, under **WYR Settings -> Question Bank**\n"
         "Add your own questions one at a time or a whole file at once, review the "
         "suggestions members have sent in, post a question straight away outside the "
@@ -286,7 +288,7 @@ ADMIN = HelpCategory(
 
 CATEGORIES: dict[str, HelpCategory] = {
     c.key: c
-    for c in (OVERVIEW, GUIDE, SUGGESTIONS, WYR, BOOSTS_DROPS, EMBEDS, ADMIN)
+    for c in (OVERVIEW, GUIDE, SUGGESTIONS, WYR, DROPS, EMBEDS, ADMIN)
 }
 CATEGORY_ORDER: list[str] = list(CATEGORIES)
 DEFAULT_CATEGORY = OVERVIEW.key

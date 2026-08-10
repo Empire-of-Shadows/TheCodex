@@ -1,6 +1,5 @@
 import asyncio
 import discord
-from discord import app_commands
 from discord.ext import commands
 import datetime
 
@@ -9,6 +8,42 @@ from storage.settings.config_manager import get_config
 from storage.log import get_logger
 
 logger = get_logger("BoostTracker")
+
+
+def format_duration(delta: datetime.timedelta) -> str:
+    """Human-readable duration, dropping sub-second precision."""
+    return str(delta).split('.')[0]
+
+
+def boost_level_label(boost_count: int) -> str:
+    """The server's boost level for a given boost count."""
+    if boost_count >= 14:
+        return "Level 3 🚀"
+    elif boost_count >= 7:
+        return "Level 2 ⭐"
+    elif boost_count >= 2:
+        return "Level 1 ✨"
+    else:
+        return "No Level"
+
+
+def as_utc(value) -> datetime.datetime | None:
+    """Coerce a stored timestamp to a tz-aware UTC datetime.
+
+    Mongo strips tzinfo on read and some older documents hold an ISO string, so
+    anything read back from a boost collection has to come through here before it
+    can be subtracted from ``datetime.now(timezone.utc)``.
+    """
+    if isinstance(value, str):
+        try:
+            value = datetime.datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    if not isinstance(value, datetime.datetime):
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=datetime.timezone.utc)
+    return value.astimezone(datetime.timezone.utc)
 
 
 class BoostTracker(commands.Cog):
@@ -97,10 +132,8 @@ class BoostTracker(commands.Cog):
                 for user_id, doc in stored_by_id.items():
                     if user_id in live_ids:
                         continue
-                    start = doc.get('boost_start')
-                    if isinstance(start, str):
-                        start = datetime.datetime.fromisoformat(start)
-                    duration = self._format_duration(now - start) if start else "Unknown"
+                    start = as_utc(doc.get('boost_start'))
+                    duration = format_duration(now - start) if start else "Unknown"
                     await boosts_collection.delete_one({'guild_id': gid, 'user_id': user_id})
                     await events_collection.create_one({
                         'guild_id': gid,
@@ -184,7 +217,7 @@ class BoostTracker(commands.Cog):
             f"**User:** {member.mention} (`{member}`)\n"
             f"**Action:** Started boosting the server!\n"
             f"**Total Boosts:** {member.guild.premium_subscription_count}\n"
-            f"**Boost Level:** {self.get_boost_level(member.guild.premium_subscription_count)}\n"
+            f"**Boost Level:** {boost_level_label(member.guild.premium_subscription_count)}\n"
             f"**Time:** {now.strftime('%Y-%m-%d %H:%M:%S')} UTC"
         )
 
@@ -196,7 +229,7 @@ class BoostTracker(commands.Cog):
 
         # Duration from Discord's own boost-start timestamp (no DB read needed).
         if member.premium_since:
-            duration = self._format_duration(now - member.premium_since)
+            duration = format_duration(now - member.premium_since)
         else:
             duration = "Unknown"
 
@@ -230,7 +263,7 @@ class BoostTracker(commands.Cog):
             f"**Action:** Stopped boosting the server\n"
             f"**Boost Duration:** {duration}\n"
             f"**Total Boosts:** {member.guild.premium_subscription_count}\n"
-            f"**Boost Level:** {self.get_boost_level(member.guild.premium_subscription_count)}\n"
+            f"**Boost Level:** {boost_level_label(member.guild.premium_subscription_count)}\n"
             f"**Time:** {now.strftime('%Y-%m-%d %H:%M:%S')} UTC"
         )
 
@@ -252,127 +285,6 @@ class BoostTracker(commands.Cog):
             await log_channel.send(message)
         except discord.Forbidden:
             logger.warning(f"No permission to send messages in {log_channel.name}")
-
-    @staticmethod
-    def _format_duration(delta: datetime.timedelta) -> str:
-        """Human-readable duration, dropping sub-second precision."""
-        return str(delta).split('.')[0]
-
-    def get_boost_level(self, boost_count: int) -> str:
-        """Get the current boost level based on count."""
-        if boost_count >= 14:
-            return "Level 3 🚀"
-        elif boost_count >= 7:
-            return "Level 2 ⭐"
-        elif boost_count >= 2:
-            return "Level 1 ✨"
-        else:
-            return "No Level"
-
-    @app_commands.command(name="boosters", description="List everyone currently boosting this server")
-    @app_commands.guild_only()
-    async def list_boosters(self, interaction: discord.Interaction):
-        """List all current server boosters (live from Discord)."""
-        guild = interaction.guild
-        now = datetime.datetime.now(datetime.timezone.utc)
-
-        # discord.py exposes the boosting members directly.
-        boosters = sorted(
-            guild.premium_subscribers,
-            key=lambda m: m.premium_since or now,  # longest-boosting first
-        )
-
-        if not boosters:
-            await interaction.response.send_message("No active boosters found.", ephemeral=True)
-            return
-
-        lines = []
-        for member in boosters:
-            if member.premium_since:
-                dur = self._format_duration(now - member.premium_since)
-            else:
-                dur = "Unknown"
-            lines.append(f"• {member.mention} - boosting for `{dur}`")
-
-        # Embed description caps at 4096 chars; trim if a server has tons of boosts.
-        description = ""
-        shown = 0
-        for line in lines:
-            if len(description) + len(line) + 1 > 3900:
-                break
-            description += line + "\n"
-            shown += 1
-        if shown < len(lines):
-            description += f"\n…and {len(lines) - shown} more."
-
-        embed = discord.Embed(
-            title=f"🚀 Current Server Boosters - {len(boosters)}",
-            description=description,
-            color=0xff73fa,
-        )
-        embed.set_footer(
-            text=f"{guild.premium_subscription_count} boosts • "
-                 f"{self.get_boost_level(guild.premium_subscription_count)}"
-        )
-        await interaction.response.send_message(embed=embed)
-
-    @app_commands.command(name="boosthistory", description="Show a member's boost status and recent boost events")
-    @app_commands.describe(user="The member to look up (defaults to you)")
-    @app_commands.guild_only()
-    async def boost_history(self, interaction: discord.Interaction, user: discord.Member = None):
-        """Show a user's boost status and recent boost events."""
-        target_user = user or interaction.user
-        now = datetime.datetime.now(datetime.timezone.utc)
-
-        embed = discord.Embed(
-            title=f"Boost History - {target_user.display_name}",
-            color=0xff73fa,
-        )
-
-        # Current status comes straight from the member object.
-        if target_user.premium_since:
-            duration = self._format_duration(now - target_user.premium_since)
-            embed.add_field(name="Status", value="🚀 Currently boosting", inline=False)
-            embed.add_field(
-                name="Started",
-                value=target_user.premium_since.strftime('%Y-%m-%d %H:%M:%S') + " UTC",
-                inline=False,
-            )
-            embed.add_field(name="Duration", value=duration, inline=False)
-        else:
-            embed.add_field(name="Status", value="Not currently boosting", inline=False)
-
-        # Past events from the event log (the real history).
-        try:
-            events_collection = self.db_manager.get_collection_manager('serverdata_boost_events')
-            events = await events_collection.find_many(
-                {'guild_id': str(interaction.guild.id), 'user_id': str(target_user.id)},
-                sort=[('timestamp', -1)],
-                limit=5,
-            )
-        except Exception as e:
-            logger.error(f"Error fetching boost history: {e}", exc_info=True)
-            events = []
-
-        if events:
-            history_lines = []
-            for ev in events:
-                ts = ev.get('timestamp')
-                if isinstance(ts, str):
-                    ts = datetime.datetime.fromisoformat(ts)
-                ts_str = ts.strftime('%Y-%m-%d %H:%M') if ts else "?"
-                label = "Started boosting" if ev.get('event_type') == 'boost_start' else "Stopped boosting"
-                extra = f" (lasted {ev['duration']})" if ev.get('duration') else ""
-                history_lines.append(f"`{ts_str}` - {label}{extra}")
-            embed.add_field(name="Recent Events", value="\n".join(history_lines), inline=False)
-
-        if not target_user.premium_since and not events:
-            await interaction.response.send_message(
-                f"{target_user.mention} has no boost data available.", ephemeral=True
-            )
-            return
-
-        await interaction.response.send_message(embed=embed)
 
 
 async def setup(bot):
