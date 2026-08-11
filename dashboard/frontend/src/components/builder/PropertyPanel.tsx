@@ -9,6 +9,29 @@ function childUid(): string {
 
 const CONTAINER_CHILD_TYPES = ["text", "separator", "section", "action_row", "media_gallery"] as const;
 
+/**
+ * Drop every key whose value is `undefined`, at any depth.
+ *
+ * The editors clear a field by patching it to `undefined` - switching a button
+ * away from "link" sets `url: undefined`, for instance. That leaves the KEY in
+ * place with an undefined value. JSON.stringify drops such keys on save, so the
+ * backend never sees them, but the live validator runs against this in-memory
+ * object and several of its rules are presence checks (`"url" in comp`). A
+ * ghost key therefore failed validation - and a failing validation disables
+ * Save - on a board that was perfectly valid as JSON. Pruning deeply keeps the
+ * edited object identical to what will actually be serialized.
+ */
+function pruneUndefined<T>(value: T): T {
+  if (Array.isArray(value)) return value.map((v) => pruneUndefined(v)) as unknown as T;
+  if (value === null || typeof value !== "object") return value;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (v === undefined) continue;
+    out[k] = pruneUndefined(v);
+  }
+  return out as T;
+}
+
 interface Props {
   component: ComponentDef | null;
   mode: BuilderMode;
@@ -42,11 +65,7 @@ export default function PropertyPanel({ component, mode, pages, channels, roles,
   }
 
   const update = (patch: Partial<ComponentDef>) => {
-    const merged = { ...component, ...patch } as Record<string, unknown>;
-    for (const k of Object.keys(merged)) {
-      if (merged[k] === undefined) delete merged[k];
-    }
-    onChange(merged as ComponentDef);
+    onChange(pruneUndefined({ ...component, ...patch }) as ComponentDef);
   };
 
   const comp = component as Record<string, any>;
@@ -584,11 +603,7 @@ function ContainerProps({ comp, mode, pages, channels, roles, boardResponses, up
 
   const updateChild = (idx: number, patch: any) => {
     const nc = [...children];
-    const merged = { ...nc[idx], ...patch };
-    for (const k of Object.keys(merged)) {
-      if (merged[k] === undefined) delete merged[k];
-    }
-    nc[idx] = merged;
+    nc[idx] = pruneUndefined({ ...nc[idx], ...patch });
     update({ components: nc });
   };
 

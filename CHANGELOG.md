@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased] - 2026-08-11 (buttons built in the dashboard save again)
+
+### Fixed
+- **The builder no longer refuses to save a button that jumps to another page or hands out a
+  role.** Once you picked what a button should do, the builder complained that the button "must
+  not have a url" - even though you had never given it one - and the Save button stayed greyed
+  out. Pasting the very same layout in as JSON worked, which made the whole thing look
+  arbitrary. Choosing a button's action now properly clears the leftover link address, so what
+  you see in the builder is exactly what gets saved.
+- **Link buttons save properly too.** The same fault hit them from the other side: typing a web
+  address into a link button made the builder insist the button "must not have an action", and
+  again refuse to save. Both info boards and the welcome message were affected.
+
 ## [Unreleased] - 2026-08-10 (two pairs of commands became one each)
 
 ### Changed
