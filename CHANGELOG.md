@@ -2,6 +2,11 @@
 
 ## [Unreleased] - 2026-08-11 (buttons built in the dashboard save again)
 
+### Added
+- **An "Edit Board" button on the dashboard.** Your server's page already had shortcuts straight
+  into the guide and the welcome message; the info board now has one too, so you no longer have
+  to open the guide editor first and switch over to the board by hand.
+
 ### Fixed
 - **The builder no longer refuses to save a button that jumps to another page or hands out a
   role.** Once you picked what a button should do, the builder complained that the button "must
