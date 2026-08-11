@@ -12,6 +12,10 @@
 - **Link buttons save properly too.** The same fault hit them from the other side: typing a web
   address into a link button made the builder insist the button "must not have an action", and
   again refuse to save. Both info boards and the welcome message were affected.
+- **You can read the "Unsaved changes" warning again.** When you left the builder with work you
+  had not saved, the pop-up asking whether to stay or leave showed its two buttons as pale
+  boxes with near-invisible white labels, so you had to guess which one was Leave and which was
+  Stay. They now use the same colours as every other button in the dashboard.
 
 ## [Unreleased] - 2026-08-10 (two pairs of commands became one each)
 

@@ -57,13 +57,13 @@ export default function ConfirmDialog({
         <h2 id="confirm-title" className="confirm-title">{title}</h2>
         <p id="confirm-message" className="confirm-message">{message}</p>
         <div className="confirm-actions">
-          <button type="button" className="btn btn--ghost" onClick={onCancel}>
+          <button type="button" className="btn btn-secondary" onClick={onCancel}>
             {cancelLabel}
           </button>
           <button
             ref={confirmRef}
             type="button"
-            className={destructive ? "btn btn--danger" : "btn btn--primary"}
+            className={destructive ? "btn btn-danger" : "btn btn-primary"}
             onClick={onConfirm}
           >
             {confirmLabel}
