@@ -243,17 +243,6 @@ a:focus-visible {
   box-shadow: 0 4px 14px rgba(255, 107, 107, 0.3);
 }
 
-.btn-link {
-  background: transparent;
-  color: var(--text-accent);
-  padding: 0;
-}
-.btn-link:hover {
-  transform: none;
-  filter: none;
-  text-decoration: underline;
-}
-
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -278,27 +267,6 @@ a:focus-visible {
   transform: translateY(-2px);
   border-color: rgba(77, 14, 179, 0.35);
   box-shadow: var(--shadow), 0 0 0 1px rgba(77, 14, 179, 0.15);
-}
-
-/* ── Guild grid ─────────────────────────────────────────────────────── */
-
-.guild-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
-  padding: 24px;
-}
-
-.guild-card {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  cursor: pointer;
-  transition: all 0.25s ease;
-}
-
-.guild-card:hover {
-  border-color: rgba(77, 14, 179, 0.5);
 }
 
 .guild-icon {
@@ -328,30 +296,10 @@ a:focus-visible {
   color: var(--text-1);
 }
 
-.guild-card--setup {
-  opacity: 0.7;
-  border-style: dashed;
-}
-
-.guild-card--setup:hover {
-  opacity: 1;
-  border-color: var(--success);
-}
-
 .guild-invite-hint {
   font-size: 12px;
   color: var(--text-muted);
   margin-top: 2px;
-}
-
-.guild-invite-badge {
-  font-size: 12px;
-  font-weight: 600;
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-  background: var(--success);
-  color: #0f0f12;
-  flex-shrink: 0;
 }
 
 /* ── Builder layout ─────────────────────────────────────────────────── */
@@ -483,27 +431,6 @@ a:focus-visible {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-1);
-}
-.builder-guild-badge .pill-mono {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--brand);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
-  color: white;
-}
-
-.eyebrow-h3 {
-  font-size: 12px;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  margin-bottom: 8px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
 }
 
 /* Builder header - slim toolbar treatment (no Cinzel display title,
@@ -1567,64 +1494,6 @@ a:focus-visible {
   background: #6d29d1;
 }
 
-/* ── Guild filter bar ──────────────────────────────────────────────── */
-
-.guild-filter-bar {
-  display: flex;
-  gap: 8px;
-  padding: 16px 24px 0;
-  overflow-x: auto;
-}
-
-.guild-pill {
-  height: 32px;
-  padding: 0 14px;
-  border-radius: 999px;
-  background: var(--glass-heavy);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-2);
-  font-size: 13px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-  transition: all 0.2s;
-}
-
-.guild-pill:hover {
-  border-color: rgba(77, 14, 179, 0.4);
-}
-
-.guild-pill.active {
-  background: var(--brand-gradient);
-  border-color: transparent;
-  color: white;
-}
-
-.guild-pill img {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-}
-/* Bot-not-installed cue - dashed + dimmed. */
-.guild-pill--setup {
-  opacity: 0.7;
-  border-style: dashed;
-}
-.guild-pill--setup:hover {
-  opacity: 1;
-  border-color: var(--success);
-}
-
-/* ── Activity grid ─────────────────────────────────────────────────── */
-
-.activity-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
-  padding: 16px 24px;
-}
 
 /* ── Dashboard hero (Empire Overview) ─────────────────────────────── */
 
@@ -1770,127 +1639,6 @@ a:focus-visible {
   font-weight: 700;
 }
 
-/* ── Activity cards (v2: sigil tiles + accent bar + featured) ─────── */
-
-.activity-card {
-  position: relative;
-  background: var(--bg-card);
-  backdrop-filter: blur(10px);
-  border-radius: var(--radius);
-  padding: 20px 20px 20px 24px;
-  border: 1px solid var(--border-subtle);
-  box-shadow: var(--shadow);
-  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
-  overflow: hidden;
-}
-
-.activity-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 4px;
-  background: var(--card-accent, var(--brand));
-}
-
-.activity-card:hover {
-  transform: translateY(-3px);
-  border-color: rgba(77, 14, 179, 0.4);
-  box-shadow: var(--shadow), 0 0 0 1px rgba(77, 14, 179, 0.18), 0 0 32px rgba(77, 14, 179, 0.18);
-}
-
-.activity-card--featured {
-  background:
-    linear-gradient(135deg, rgba(77, 14, 179, 0.25) 0%, rgba(122, 61, 240, 0.12) 60%, rgba(255, 255, 255, 0.04) 100%),
-    rgba(255, 255, 255, 0.04);
-  border-color: rgba(122, 61, 240, 0.4);
-  box-shadow: var(--shadow), 0 0 32px rgba(77, 14, 179, 0.30);
-}
-
-.activity-card__header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.activity-card__sigil {
-  width: 36px;
-  height: 36px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  padding: 4px;
-  flex-shrink: 0;
-}
-.activity-card__sigil img { width: 100%; height: 100%; object-fit: contain; }
-
-.activity-card__icon {
-  font-size: 20px;
-}
-
-.activity-card__title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-1);
-}
-
-.activity-card__featured-tag {
-  margin-left: auto;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: var(--eos-fg-accent, #a97dff);
-  background: rgba(169, 125, 255, 0.12);
-  border: 1px solid rgba(169, 125, 255, 0.4);
-  padding: 3px 8px;
-  border-radius: 999px;
-}
-
-.activity-card__stat {
-  font-size: 40px;
-  font-weight: 700;
-  color: var(--text-1);
-  line-height: 1;
-  letter-spacing: -0.01em;
-}
-
-.activity-card__stat-label {
-  font-size: 11px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-top: 4px;
-}
-
-.activity-card__row {
-  display: flex;
-  gap: 24px;
-  margin-bottom: 12px;
-}
-
-.activity-card__detail {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: 8px;
-}
-
-/* ── WYR option bar ────────────────────────────────────────────────── */
-
-.wyr-bar {
-  display: flex;
-  height: 8px;
-  border-radius: 4px;
-  overflow: hidden;
-  background: var(--bg-1);
-  margin-top: 12px;
-}
-
 /* Footer styles live in the shared engine: _engine/components/styles/AppFooter.css */
 
 /* Legal documents (Terms, Privacy Policy): readable prose width */
@@ -1935,32 +1683,6 @@ a:focus-visible {
   color: var(--text-muted);
 }
 
-.wyr-bar__segment {
-  height: 100%;
-  transition: width 0.4s ease;
-}
-
-.wyr-bar__segment--1 { background: var(--brand-light); }
-.wyr-bar__segment--2 { background: var(--success); }
-.wyr-bar__segment--3 { background: var(--warning); }
-/* Questions with answers carry up to five options, so the bar does too. */
-.wyr-bar__segment--4 { background: var(--danger); }
-.wyr-bar__segment--5 { background: var(--text-muted); }
-
-.wyr-sparkline {
-  margin-top: 10px;
-  display: flex;
-  align-items: flex-end;
-  gap: 3px;
-  height: 32px;
-}
-.wyr-sparkline__bar {
-  flex: 1;
-  background: linear-gradient(180deg, rgba(169, 125, 255, 0.95), rgba(77, 14, 179, 0.4));
-  border-radius: 2px;
-  min-height: 4px;
-}
-
 /* ── Status badges ─────────────────────────────────────────────────── */
 
 .status-badges {
@@ -1981,30 +1703,8 @@ a:focus-visible {
 .status-badge--approved, .status-badge--implemented { background: rgba(61, 220, 151, 0.15); color: var(--success); }
 .status-badge--rejected { background: rgba(255, 107, 107, 0.15); color: var(--danger); }
 
-/* ── Streak badge ──────────────────────────────────────────────────── */
-
-.streak-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  padding: 2px 10px;
-  border-radius: 999px;
-  font-weight: 600;
-}
-
-.streak-badge--active { background: var(--brand-gradient); color: white; }
-.streak-badge--inactive { background: var(--glass); color: var(--text-muted); }
-
 /* ── Tag tracker glow ──────────────────────────────────────────────── */
 
-@keyframes tag-glow {
-  0%, 100% { border-color: var(--brand); box-shadow: 0 0 8px rgba(77, 14, 179, 0.3); }
-  50% { border-color: var(--brand-light); box-shadow: 0 0 20px rgba(122, 61, 240, 0.5); }
-}
-
-.activity-card--glowing { animation: tag-glow 2s ease-in-out infinite; }
-.activity-card--dimmed { opacity: 0.5; }
 
 /* ── Tag display ───────────────────────────────────────────────────── */
 
@@ -2020,29 +1720,9 @@ a:focus-visible {
   background: var(--glass-heavy);
 }
 
-/* ── Admin section ─────────────────────────────────────────────────── */
-
-.admin-section {
-  border-top: 1px solid var(--border-subtle);
-  padding: 16px 24px;
-  margin-top: 8px;
-}
-
-.admin-section h3 {
-  font-size: 14px;
-  color: var(--text-1);
-  margin-bottom: 12px;
-}
-
 .admin-actions {
   display: flex;
   gap: 12px;
-}
-
-/* ── Responsive ────────────────────────────────────────────────────── */
-
-@media (max-width: 768px) {
-  .activity-grid { grid-template-columns: 1fr; }
 }
 
 /* ── Docs panel ────────────────────────────────────────────────────── */
@@ -2285,15 +1965,6 @@ a:focus-visible {
   text-align: center;
 }
 
-/* Guild icon fallback */
-.guild-icon-fallback {
-  display: flex; align-items: center; justify-content: center;
-  width: 100%; height: 100%;
-  font-size: 32px; font-weight: 600; color: var(--eos-fg-2, #b8b3c8);
-  background: rgba(255,255,255,0.05);
-  border-radius: inherit;
-}
-
 /* SelectPreview active option */
 .dc-select-option.is-active { background: rgba(255,255,255,0.08); }
 
@@ -2308,32 +1979,6 @@ a:focus-visible {
   color: var(--text-muted);
 }
 
-.admin-settings-page .tabs {
-  display: flex;
-  gap: 4px;
-  border-bottom: 1px solid var(--border-subtle);
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-}
-.admin-settings-page .tab {
-  padding: 10px 16px;
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  font: inherit;
-  font-weight: 600;
-  font-size: 14px;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition: color 0.15s, border-color 0.15s;
-}
-.admin-settings-page .tab:hover {
-  color: var(--text-1);
-}
-.admin-settings-page .tab.active {
-  color: var(--text-1);
-  border-bottom-color: var(--brand-light);
-}
 
 .admin-settings-page .section {
   margin-bottom: 24px;
@@ -2362,16 +2007,6 @@ a:focus-visible {
   margin-bottom: 6px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-}
-.admin-settings-page .field-row {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-  margin-bottom: 4px;
-}
-.admin-settings-page .field-row > * {
-  flex: 1 1 220px;
-  min-width: 220px;
 }
 
 .admin-settings-page .field input[type="text"],
