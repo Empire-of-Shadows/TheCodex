@@ -6,6 +6,7 @@ import type {
   BoardData,
   BoardPosted,
   UserActivity,
+  GuildOverview,
   Channel,
   Role,
   AuditLogResponse,
@@ -30,6 +31,13 @@ export const api = {
   botInviteUrl: () => apiFetch<{ url: string }>("/api/bot-invite-url"),
   getUserActivity: (guildId?: string) =>
     apiFetch<UserActivity>(guildId ? `/api/user-activity?guild_id=${guildId}` : "/api/user-activity"),
+
+  /**
+   * Everything the admin home shows for one guild, in one request.
+   * Panel-access gated; 403 for a member with no admin tier in that guild.
+   */
+  getGuildOverview: (guildId: string) =>
+    apiFetch<GuildOverview>(`/api/guilds/${guildId}/overview`),
 
   getGuide: (guildId: string) =>
     apiFetch<{ guide_data: GuideData | null }>(`/api/guilds/${guildId}/guide`),

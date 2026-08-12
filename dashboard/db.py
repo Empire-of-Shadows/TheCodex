@@ -90,9 +90,38 @@ def wyr_leaderboard():
     return _get_client()["Daily"]["WYR_Leaderboard"]
 
 
+def daily_wyr():
+    """Daily.WYR - the question bank (shared `scope: global` + per-guild `scope: guild`)."""
+    return _get_client()["Daily"]["WYR"]
+
+
+def daily_wyr_votes():
+    """Daily.WYR_Votes - one document per (question, guild, user). `created_at` on insert."""
+    return _get_client()["Daily"]["WYR_Votes"]
+
+
+def daily_wyr_mappings():
+    """Daily.WYR_Mappings - what was posted where: message_id / question_id / channel_id."""
+    return _get_client()["Daily"]["WYR_Mappings"]
+
+
+def daily_wyr_submissions():
+    """Daily.WYR_Submissions - member-submitted questions awaiting a moderator decision."""
+    return _get_client()["Daily"]["WYR_Submissions"]
+
+
 def suggestions_suggestions():
     """Suggestions.Suggestions - user-submitted suggestions."""
     return _get_client()["Suggestions"]["Suggestions"]
+
+
+def suggestions_votes():
+    """Suggestions.Votes - one document per (suggestion, user).
+
+    Carries NO guild_id - the guild is only on the suggestion document, so any
+    guild-scoped vote figure has to join through `suggestion_id`.
+    """
+    return _get_client()["Suggestions"]["Votes"]
 
 
 def suggestions_userstats():
@@ -103,3 +132,33 @@ def suggestions_userstats():
 def serverdata_boosts():
     """ServerData.Boosts - active boost records."""
     return _get_client()["ServerData"]["Boosts"]
+
+
+def serverdata_guilds():
+    """ServerData.Guilds - the guild snapshot root doc, keyed by `id` (string)."""
+    return _get_client()["ServerData"]["Guilds"]
+
+
+def serverdata_members():
+    """ServerData.Members - per-member snapshot rows, keyed by (guild_id, id)."""
+    return _get_client()["ServerData"]["Members"]
+
+
+def serverdata_roles():
+    """ServerData.Roles - per-role snapshot rows, keyed by (guild_id, id)."""
+    return _get_client()["ServerData"]["Roles"]
+
+
+def serverdata_whitelist():
+    """ServerData.Whitelist - new-member whitelist entries (soft-deleted via is_active)."""
+    return _get_client()["ServerData"]["Whitelist"]
+
+
+def updates_monthly():
+    """Updates-Drops.StatsMonthly - drop counts pre-bucketed into a compound _id."""
+    return _get_client()["Updates-Drops"]["StatsMonthly"]
+
+
+def updates_totals():
+    """Updates-Drops.StatsTotals - all-time drop counts per (guild_id, coll)."""
+    return _get_client()["Updates-Drops"]["StatsTotals"]

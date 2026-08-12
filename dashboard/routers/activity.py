@@ -1,7 +1,7 @@
-"""User activity API - aggregates WYR, Suggestions, Tag Tracker, Boost data."""
+"""User activity API - aggregates WYR, Suggestions, Submissions, Tag Tracker, Boost data."""
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -9,6 +9,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from dashboard.auth.dependencies import get_current_user
 from dashboard.config import BOT_TOKEN, DISCORD_API_BASE
 from dashboard.routers.dashboard import _fetch_bot_guild_ids
+from dashboard.services.overview import (
+    TREND_DAYS,
+    consecutive_day_streak,
+    fill_trend,
+    vote_totals,
+)
 from dashboard import db
 from storage.log import get_logger
 
@@ -16,10 +22,60 @@ logger = get_logger("dashboard.routers.activity")
 
 _TAG_TIMEOUT = httpx.Timeout(2.0, connect=2.0)
 
+#: How far back the per-day vote history is read. Bounded because the only index
+#: that can serve a user-scoped WYR_Votes read is the one on ``created_at`` -
+#: the unique index puts user_id third, so it cannot answer a user-only match.
+#: A streak longer than this is not worth the extra scan to prove.
+_VOTE_HISTORY_DAYS = 400
+
+#: The member's own suggestions returned with their outcome.
+_SUGGESTION_ITEMS_LIMIT = 25
+
+#: Submission statuses that are still waiting on a moderator
+#: (``Features/daily/wyr_submissions.py`` OPEN_STATUSES).
+_SUBMISSION_OPEN = ("pending", "reviewing")
+
 router = APIRouter(tags=["activity"])
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
+
+def _guild_scoped_match(user_id: int, guild_ids: list[int]) -> dict:
+    """``{user_id, guild_id?}`` in the stored STRING form.
+
+    An empty guild list means "no scoping", matching the behaviour the WYR
+    leaderboard read has always had - an int id matches nothing, silently.
+    """
+    match: dict = {"user_id": str(user_id)}
+    guild_id_strs = [str(gid) for gid in guild_ids]
+    if guild_id_strs:
+        match["guild_id"] = {"$in": guild_id_strs}
+    return match
+
+
+async def _get_vote_days(user_id: int, guild_ids: list[int]) -> dict[str, int]:
+    """{YYYY-MM-DD: votes} for this member, over the bounded history window.
+
+    Read from ``Daily.WYR_Votes`` (one document per question/guild/user, stamped
+    ``created_at`` on insert), which is the only place a real per-day history
+    exists - the leaderboard document holds running totals with no dates.
+    """
+    match = _guild_scoped_match(user_id, guild_ids)
+    match["created_at"] = {
+        "$gte": datetime.now(timezone.utc) - timedelta(days=_VOTE_HISTORY_DAYS)
+    }
+    pipeline = [
+        {"$match": match},
+        {"$group": {
+            "_id": {"$dateToString": {
+                "format": "%Y-%m-%d", "date": "$created_at", "timezone": "UTC",
+            }},
+            "count": {"$sum": 1},
+        }},
+    ]
+    cursor = await db.daily_wyr_votes().aggregate(pipeline)
+    return {doc["_id"]: doc["count"] async for doc in cursor if doc.get("_id")}
 
 
 async def _get_wyr_activity(user_id: int, guild_ids: list[int]) -> dict:
@@ -47,8 +103,23 @@ async def _get_wyr_activity(user_id: int, guild_ids: list[int]) -> dict:
             "last_vote": {"$max": "$last_vote"},
         }},
     ]
-    cursor = await db.wyr_leaderboard().aggregate(pipeline)
+    cursor, vote_days = await asyncio.gather(
+        db.wyr_leaderboard().aggregate(pipeline),
+        _get_vote_days(user_id, guild_ids),
+    )
     result = await cursor.to_list(1)
+
+    # Real per-day history. `streak_days` is the consecutive-day run and is a
+    # different measurement from `streak_active` below, which only asks whether
+    # the member voted within the last day - both stay on the wire.
+    trend = fill_trend(vote_days, TREND_DAYS)
+    recent_days = {point["date"] for point in trend if point["votes"] > 0}
+    history = {
+        "streak_days": consecutive_day_streak(set(vote_days)),
+        "trend": trend,
+        "days_voted_30d": len(recent_days),
+    }
+
     if not result:
         return {
             "total_votes": 0,
@@ -57,6 +128,7 @@ async def _get_wyr_activity(user_id: int, guild_ids: list[int]) -> dict:
             "first_vote": None,
             "last_vote": None,
             "streak_active": False,
+            **history,
         }
 
     doc = result[0]
@@ -80,6 +152,7 @@ async def _get_wyr_activity(user_id: int, guild_ids: list[int]) -> dict:
         "first_vote": first_vote.isoformat() if first_vote else None,
         "last_vote": last_vote.isoformat() if last_vote else None,
         "streak_active": streak_active,
+        **history,
     }
 
 
@@ -115,12 +188,112 @@ async def _get_suggestions_activity(user_id: int, guild_ids: list[int]) -> dict:
     if user_stats:
         votes_cast = user_stats.get("votes_cast", 0)
 
+    # The member's own suggestions with the outcome they came to see. The vote
+    # figure needs a join: Suggestions.Votes carries no guild_id, only
+    # suggestion_id, so the count starts from these ids and joins back.
+    item_docs = [
+        doc async for doc in db.suggestions_suggestions().find(
+            match,
+            {"suggestion_id": 1, "text": 1, "status": 1, "created_at": 1},
+            sort=[("created_at", -1)],
+            limit=_SUGGESTION_ITEMS_LIMIT,
+        )
+    ]
+    totals = await vote_totals([d["suggestion_id"] for d in item_docs if d.get("suggestion_id")])
+    items = [
+        {
+            "suggestion_id": str(doc.get("suggestion_id") or ""),
+            "text": doc.get("text") or "",
+            "status": doc.get("status") or "Pending",
+            "votes": totals.get(doc.get("suggestion_id"), 0),
+            "created_at": doc["created_at"].isoformat() if doc.get("created_at") else None,
+        }
+        for doc in item_docs
+    ]
+
     return {
         "submitted": total,
         "votes_cast": votes_cast,
         "by_status": by_status,
         "last_activity": last_activity,
+        "items": items,
     }
+
+
+async def _get_submissions_activity(user_id: int, guild_ids: list[int]) -> dict:
+    """The member's own question submissions and what became of them.
+
+    Closes the loop the question bank exists to close: a member who sends in a
+    question can see whether it was used, is still waiting, or was turned down.
+    """
+    match = _guild_scoped_match(user_id, guild_ids)
+
+    status_cursor = await db.daily_wyr_submissions().aggregate([
+        {"$match": match},
+        {"$group": {"_id": "$status", "count": {"$sum": 1}}},
+    ])
+    counts: dict[str, int] = {}
+    async for doc in status_cursor:
+        if doc.get("_id"):
+            counts[doc["_id"]] = counts.get(doc["_id"], 0) + doc["count"]
+
+    sent = sum(counts.values())
+    posted = counts.get("approved", 0)
+    waiting = sum(counts.get(status, 0) for status in _SUBMISSION_OPEN)
+    declined = counts.get("rejected", 0)
+
+    latest_posted = None
+    if posted:
+        approved_match = dict(match)
+        approved_match["status"] = "approved"
+        latest = await db.daily_wyr_submissions().find_one(
+            approved_match,
+            {"question_id": 1, "guild_id": 1},
+            sort=[("reviewed_at", -1)],
+        )
+        if latest:
+            latest_posted = await _resolve_posted_question(
+                latest.get("question_id"), latest.get("guild_id")
+            )
+
+    return {
+        "sent": sent,
+        "posted": posted,
+        "waiting": waiting,
+        "declined": declined,
+        "latest_posted": latest_posted,
+    }
+
+
+async def _resolve_posted_question(question_number, guild_id) -> dict | None:
+    """Look up when an approved submission's question went up, and its votes.
+
+    ``question_id`` on a submission is the INT question number, not the
+    ObjectId - the bank document's ``_id`` is what WYR_Votes stores, so this has
+    to resolve one to the other before it can count anything.
+    """
+    if question_number is None:
+        return None
+    entry: dict = {"question_id": question_number, "posted_at": None, "votes": None}
+    if guild_id is None:
+        return entry
+
+    gid = str(guild_id)
+    question = await db.daily_wyr().find_one(
+        {"id": question_number}, {"guilds": 1}
+    )
+    if not question:
+        # Approved, but the bank document is gone - the number is still true.
+        return entry
+
+    guild_block = (question.get("guilds") or {}).get(gid) or {}
+    last_posted = guild_block.get("last_posted")
+    if isinstance(last_posted, datetime):
+        entry["posted_at"] = last_posted.isoformat()
+    entry["votes"] = await db.daily_wyr_votes().count_documents(
+        {"question_id": question["_id"], "guild_id": gid}
+    )
+    return entry
 
 
 async def _check_tag_role(gid: int, user_id: str, role_id: str) -> bool | None:
@@ -201,14 +374,25 @@ async def _get_boost_status(user_id: int, guild_ids: list[int], guild_name_map: 
         "user_id": str(user_id),
         "guild_id": {"$in": [str(g) for g in guild_ids]},
     })
+    now = datetime.now(timezone.utc)
     boosts = []
     async for doc in cursor:
         gid = int(doc["guild_id"])
         boost_start = doc.get("boost_start")
+        # Whole days boosting. Stored timestamps are UTC; a naive one is read as
+        # UTC rather than dropped, which is what every other reader here does.
+        duration_days = None
+        if isinstance(boost_start, datetime):
+            started = (
+                boost_start.replace(tzinfo=timezone.utc)
+                if boost_start.tzinfo is None else boost_start
+            )
+            duration_days = max((now - started).days, 0)
         boosts.append({
             "guild_id": str(gid),
             "guild_name": guild_name_map.get(gid, "Unknown"),
             "boost_start": boost_start.isoformat() if boost_start else None,
+            "duration_days": duration_days,
         })
 
     return {
@@ -252,11 +436,12 @@ async def user_activity(
         target_ids = [int(gid) for gid in common]
         guild_name_map = {int(gid): session_guilds[gid] for gid in common}
 
-    wyr, suggestions, tags, boost = await asyncio.gather(
+    wyr, suggestions, tags, boost, submissions = await asyncio.gather(
         _get_wyr_activity(user_id_int, target_ids),
         _get_suggestions_activity(user_id_int, target_ids),
         _get_tag_status(user_id_str, target_ids, guild_name_map),
         _get_boost_status(user_id_int, target_ids, guild_name_map),
+        _get_submissions_activity(user_id_int, target_ids),
     )
 
     return {
@@ -264,4 +449,5 @@ async def user_activity(
         "suggestions": suggestions,
         "tag_tracker": tags,
         "boost": boost,
+        "submissions": submissions,
     }

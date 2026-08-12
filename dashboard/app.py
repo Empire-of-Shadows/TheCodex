@@ -27,6 +27,7 @@ from dashboard.routers.docs import router as docs_router
 from dashboard.routers.public_stats import router as public_stats_router
 from dashboard.routers.audit_log import router as audit_log_router
 from dashboard.routers.settings import router as settings_router
+from dashboard.routers.overview import router as overview_router
 from dashboard.routers.user_data import router as user_data_router
 from storage.log import get_logger
 
@@ -117,6 +118,7 @@ app.include_router(docs_router, prefix="/api")
 app.include_router(public_stats_router, prefix="/api")
 app.include_router(audit_log_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
+app.include_router(overview_router, prefix="/api")
 app.include_router(user_data_router, prefix="/api")
 
 

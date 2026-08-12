@@ -22,9 +22,20 @@ export interface Guild {
 
 // ── User Activity ────────────────────────────────────────────────────────
 
+/** One day of a vote trend. `date` is YYYY-MM-DD in UTC. */
+export interface TrendPoint {
+  date: string;
+  votes: number;
+}
+
 export interface WyrActivity {
   total_votes: number;
   // Five options: the poll question format carries up to five answers.
+  //
+  // Still returned by the endpoint, no longer rendered. Summing "option 1
+  // votes" across unrelated questions is meaningless - option order is
+  // arbitrary per question - so the bar that drew it has been removed.
+  // Left on the wire rather than deleted; dropping it is its own change.
   option_breakdown: {
     option1: number;
     option2: number;
@@ -34,7 +45,22 @@ export interface WyrActivity {
   };
   first_vote: string | null;
   last_vote: string | null;
+  /** "voted within the last day". NOT a streak length - see streak_days. */
   streak_active: boolean;
+  /** True consecutive-day count, from Daily.WYR_Votes.created_at. */
+  streak_days: number;
+  /** Real per-day history. Replaces the hardcoded sparkline array. */
+  trend: TrendPoint[];
+  days_voted_30d: number;
+}
+
+/** One of the user's own suggestions, with the outcome they came to see. */
+export interface SuggestionItem {
+  suggestion_id: string;
+  text: string;
+  status: string;
+  votes: number;
+  created_at: string | null;
 }
 
 export interface SuggestionsActivity {
@@ -42,6 +68,25 @@ export interface SuggestionsActivity {
   votes_cast: number;
   by_status: Record<string, number>;
   last_activity: string | null;
+  items: SuggestionItem[];
+}
+
+/**
+ * The member's own question submissions and what became of them.
+ *
+ * This closes the loop the whole question-bank feature exists to close: the
+ * complaint that started it was that submitted questions never visibly get used.
+ */
+export interface SubmissionsActivity {
+  sent: number;
+  posted: number;
+  waiting: number;
+  declined: number;
+  latest_posted: {
+    question_id: number | null;
+    posted_at: string | null;
+    votes: number | null;
+  } | null;
 }
 
 export interface TagTrackerGuild {
@@ -53,7 +98,13 @@ export interface TagTrackerGuild {
 
 export interface BoostActivity {
   is_boosting: boolean;
-  boosts: { guild_id: string; guild_name: string; boost_start: string | null }[];
+  boosts: {
+    guild_id: string;
+    guild_name: string;
+    boost_start: string | null;
+    /** Whole days boosting. The bot already computes this and dropped it. */
+    duration_days: number | null;
+  }[];
 }
 
 export interface UserActivity {
@@ -61,6 +112,151 @@ export interface UserActivity {
   suggestions: SuggestionsActivity;
   tag_tracker: TagTrackerGuild[];
   boost: BoostActivity;
+  submissions: SubmissionsActivity;
+}
+
+// ── Guild overview (admin home) ──────────────────────────────────────────
+
+/**
+ * Whether a feature is doing anything right now.
+ *
+ * "needs_setup" is the load-bearing one: enabled but missing something it
+ * cannot run without (a channel, a role). A bot that looks online and silently
+ * does nothing is the single most common complaint against bot dashboards.
+ */
+export type FeatureState = "on" | "needs_setup" | "off";
+
+export interface FeatureStatus {
+  key: string;
+  label: string;
+  state: FeatureState;
+  /** Short human line: "Posted today - 7 votes", "No channel set". */
+  detail: string;
+  /** Rail key on the settings page, for a deep link. Null if not settable. */
+  settings_key: string | null;
+}
+
+export interface WyrToday {
+  question_id: number | null;
+  text: string;
+  format: string;
+  votes: number;
+  voters: number;
+  posted_at: string | null;
+  /**
+   * The post itself, for a jump link. There is deliberately no thread_id: the
+   * bot never stores one, and deriving it from the message id would produce a
+   * dead link on exactly the servers where opening the thread failed.
+   */
+  message_id: string | null;
+  channel_id: string | null;
+}
+
+export interface WyrBank {
+  /** Shared questions this guild is allowed to draw from. */
+  global: number;
+  /** Questions private to this guild. */
+  guild: number;
+  used_here: number;
+  formats: string[];
+  /**
+   * Questions in the bank whose format this guild does not post - they can
+   * never appear. Zero unless the guild narrowed question_formats.
+   */
+  unpostable: number;
+}
+
+export interface WyrOverview {
+  enabled: boolean;
+  channel_id: string | null;
+  next_post_at: string | null;
+  today: WyrToday | null;
+  trend: TrendPoint[];
+  voters_30d: number;
+  days_posted_30d: number;
+  avg_votes_per_day: number;
+  bank: WyrBank;
+  submissions_pending: number;
+}
+
+export interface PendingSuggestion {
+  suggestion_id: string;
+  text: string;
+  votes: number;
+  created_at: string | null;
+  message_id: string | null;
+}
+
+export interface SuggestionsOverview {
+  total: number;
+  by_status: Record<string, number>;
+  pending: PendingSuggestion[];
+  /**
+   * The configured suggestions channel. A Discord jump link needs a channel as
+   * well as a message, and the suggestion documents only store the message.
+   */
+  channel_id: string | null;
+}
+
+export interface MembersOverview {
+  /** From the guild snapshot; null when no snapshot has been written yet. */
+  total: number | null;
+  joined_30d: number;
+  left_30d: number;
+  whitelisted: number;
+  monthly: { month: string; joined: number }[];
+  /**
+   * When the guild snapshot was last written. ServerData refreshes on member
+   * events, so a quiet server's totals lag - the UI says so rather than
+   * presenting a stale number as current.
+   */
+  snapshot_at: string | null;
+}
+
+export interface DropsOverview {
+  enabled: boolean;
+  this_month: number;
+  all_time: number;
+  /** Category order is stable so colours never move between renders. */
+  categories: string[];
+  monthly: { month: string; counts: Record<string, number> }[];
+}
+
+export interface ContentDoc {
+  exists: boolean;
+  /** Guide pages, board responses, or 1/0 for the greeting. */
+  count: number;
+  updated_at: string | null;
+  updated_by: string | null;
+}
+
+export interface ContentOverview {
+  guide: ContentDoc;
+  board: ContentDoc & { posted_channel_id: string | null; posted_at: string | null };
+  greeting: ContentDoc;
+}
+
+export interface TrackersOverview {
+  tag: { enabled: boolean; server_tag: string | null; wearing: number | null };
+  boost: { count: number; tier: number | null };
+}
+
+/**
+ * Everything the admin home renders, in one round trip.
+ *
+ * Every section is independently nullable: a section that fails returns null
+ * rather than failing the whole page, so one slow or broken collection cannot
+ * blank the dashboard.
+ */
+export interface GuildOverview {
+  guild_id: string;
+  features: FeatureStatus[];
+  wyr: WyrOverview | null;
+  suggestions: SuggestionsOverview | null;
+  members: MembersOverview | null;
+  drops: DropsOverview | null;
+  content: ContentOverview | null;
+  trackers: TrackersOverview | null;
 }
 
 // ── Component V2 types ───────────────────────────────────────────────────

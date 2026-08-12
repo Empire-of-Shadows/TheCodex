@@ -5,8 +5,8 @@ import asyncio
 from fastapi import APIRouter, Depends, HTTPException
 
 from dashboard._engine.discord_cache import discord_cache
-from dashboard.auth.dependencies import get_current_user, require_guild_manage
-from dashboard.auth.panel_role import resolve_panel_role
+from dashboard.auth.dependencies import get_current_user
+from dashboard.auth.panel_role import require_guild_admin, resolve_panel_role
 from dashboard.config import BOT_TOKEN, MANAGE_GUILD_PERMISSION
 from dashboard import db
 from storage.log import get_logger
@@ -157,11 +157,20 @@ async def bot_invite_url():
 
 
 # ── Channel & Role endpoints ─────────────────────────────────────────────
+#
+# Gated on the panel tier, NOT on live MANAGE_GUILD. These two routes exist only
+# to fill the channel and role pickers on the settings form, which is itself
+# gated on `require_panel_access` - so gating them harder meant an admin who
+# holds access through a Panel Access role could open the form and then get 403
+# on both calls that populate it: empty dropdowns, and no error shown anywhere.
+# `require_guild_admin` resolves the same "admin" tier `require_panel_access`
+# accepts (live MANAGE_GUILD OR roles.admin_role_ids), so this matches the page
+# it serves without widening access.
 
 @router.get("/guilds/{guild_id}/channels")
 async def guild_channels(
     guild_id: str,
-    _session: dict = Depends(require_guild_manage),
+    _session: dict = Depends(require_guild_admin),
 ):
     """Return text channels for a guild (engine cache, 60s TTL)."""
     if not BOT_TOKEN:
@@ -172,7 +181,7 @@ async def guild_channels(
 @router.get("/guilds/{guild_id}/roles")
 async def guild_roles(
     guild_id: str,
-    _session: dict = Depends(require_guild_manage),
+    _session: dict = Depends(require_guild_admin),
 ):
     """Return assignable roles for a guild (engine cache, 60s TTL)."""
     if not BOT_TOKEN:

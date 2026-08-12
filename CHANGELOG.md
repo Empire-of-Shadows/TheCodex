@@ -1,5 +1,67 @@
 # Changelog
 
+## [Unreleased] - 2026-08-11 (the dashboard tells you what your server is doing)
+
+### Added
+- **Your server's dashboard now opens on a real overview instead of a row of links.** The first
+  thing on the page is a line for every part of Codex - the daily question, suggestions, new
+  members, the guide, the info board, drops, trackers and announcement threads - each saying
+  whether it is on, off, or switched on but still missing something it needs. That last one
+  matters most: a feature that looks enabled while quietly doing nothing now says so, and takes
+  you straight to the setting that fixes it.
+- **The daily question shows real history.** A day-by-day chart of the last 30 days, including
+  the days nobody voted so a quiet stretch actually looks like one. Alongside it: today's
+  question with its votes and how many people voted, when the next one goes out, and how healthy
+  your question bank is - including how many questions can never be posted because they are in a
+  format your server has switched off.
+- **A "waiting on you" list.** Suggestions still needing a decision and member questions awaiting
+  review, in one place with how long they have been sitting. It links into Discord rather than
+  answering them for you, so there is still only one place a decision gets made.
+- **Your server's own content is on the front page** - how many guide pages and board responses
+  you have, when each was last edited and by whom, and a way straight into the editor.
+- **Your own activity page now shows a real voting streak** as a run of consecutive days, plus a
+  chart of your last 30 days.
+- **You can finally see what happened to questions you sent in.** How many were used, how many
+  are still waiting on a moderator, how many were turned down, and for the most recent one that
+  was used, when it went up and how many people voted on it.
+- **Your suggestions are listed with their outcome and vote count**, instead of just a total.
+- **Boosters can see how long they have been boosting.**
+- **You can search your settings.** Type in the box above the settings list and it narrows to the
+  sections holding a matching setting, by name or by description.
+
+### Changed
+- **The dashboard uses the space on a wide screen.** Everything used to stretch to whatever width
+  your monitor was, so a card holding two numbers could be over a thousand pixels wide and mostly
+  empty. Sections are now sized to what they actually contain, and things that are only a single
+  number - members, boosters, people wearing the server tag - sit together on one line instead of
+  each taking a whole panel.
+- **Server settings is easier to get around.** The row of nine tabs is gone, replaced by a list
+  down the side grouped by what it affects, where each entry shows at a glance whether that
+  feature is on, off, or still missing something. The settings themselves sit in a readable
+  column, and a panel on the right shows what the feature you are looking at is currently doing.
+- **Nothing moved out of reach.** Every setting is still there. The admin channel that used to sit
+  under "General" now lives with Suggestions, which is what it is actually used for. Saving works
+  exactly as before: nothing saves itself, each part has its own Save button, and you are warned
+  before leaving with unsaved edits.
+- **Links into settings land where they should.** The section you are on is part of the page
+  address now, so a link from the overview opens straight to it and a reload keeps you there.
+- **Picking a server is a menu rather than a row of buttons** that ran off the edge of the screen
+  once you were in more than a handful of servers.
+
+### Fixed
+- **Admins who get access through a Panel Access role can use the settings form again.** The
+  channel and role dropdowns came up empty for them with no error to explain why, because those
+  two lists only accepted Manage Server holders while the page around them accepted the role.
+  Both now accept exactly the same people the settings page does.
+- **The channel and role pickers are honest when they cannot load.** They now say so, and keep
+  whatever you already had saved, instead of showing an empty list that reads as "this server has
+  no channels".
+- **The activity chart on your dashboard shows your real voting history.** It was previously a
+  fixed decorative shape that never changed, no matter how much or how little you had voted.
+- **Removed a vote breakdown that never meant anything.** It added up how often you picked "the
+  first option" across every question you had ever answered, but which option comes first is
+  arbitrary from one question to the next, so the bar was showing noise.
+
 ## [Unreleased] - 2026-08-11 (buttons built in the dashboard save again)
 
 ### Added

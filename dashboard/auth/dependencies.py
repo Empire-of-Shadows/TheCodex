@@ -49,6 +49,13 @@ async def require_guild_manage(
     guild_id: str,
     session: dict = Depends(get_current_user),
 ) -> dict:
-    """FastAPI dependency: 401 if anon, 403 if user lacks live MANAGE_GUILD. Returns the session."""
+    """FastAPI dependency: 401 if anon, 403 if user lacks live MANAGE_GUILD. Returns the session.
+
+    This is the NARROWEST gate the dashboard has - strictly live MANAGE_GUILD,
+    with no path for a configured Panel Access role. Anything that serves a page
+    gated on ``require_panel_access`` must NOT use this, or a Panel Access admin
+    opens the page and then gets 403 on the calls that fill it. Use
+    ``dashboard.auth.panel_role.require_guild_admin`` for those.
+    """
     await require_guild_access(session, guild_id)
     return session
