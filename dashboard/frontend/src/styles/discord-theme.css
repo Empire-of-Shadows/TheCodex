@@ -2363,7 +2363,14 @@ a:focus-visible {
   .ov-grid > .s7, .ov-grid > .s8 { grid-column: span 12; }
 }
 @media (max-width: 760px) {
-  .ov-grid > * { grid-column: span 12; }
+  /* Every span class is listed rather than using `.ov-grid > *`. A media query
+     adds no specificity, so the bare universal selector (0,1,0) loses to
+     `.ov-grid > .s4` (0,2,0) above and the phone collapse silently never
+     happened - s4/s5/s6 cards rendered at half a phone screen. */
+  .ov-grid > *,
+  .ov-grid > .s3, .ov-grid > .s4, .ov-grid > .s5,
+  .ov-grid > .s6, .ov-grid > .s7, .ov-grid > .s8,
+  .ov-grid > .s12 { grid-column: span 12; }
   .ov-signals { margin-left: 0; width: 100%; }
   .ov-signal:first-child { padding-left: 0; }
   .page { padding: 0 16px; }
