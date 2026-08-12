@@ -1,42 +1,13 @@
 /**
- * Static option lists for the admin settings form.
+ * Codex-specific select options.
  *
- * These mirror the constants in the bot's `admin/settings/panel_configs.py`.
- * The Discord panel and this dashboard write the same config keys, so a value
- * that exists here but not there (or the other way round) is a real bug -
- * change both together, never one alone.
+ * These mirror the constants in the bot's admin/settings/panel_configs.py, so the
+ * dashboard and the Discord panel offer the same choices.
+ *
+ * The bot-neutral lists (timezones, hours, minutes, Discord's thread auto-archive
+ * values) and the `optionLabel` helper moved to the shared engine at
+ * `_engine/components/settings/options.ts` on 2026-08-12.
  */
-
-export const TIMEZONE_OPTIONS: [string, string][] = [
-  ["America/New_York", "US Eastern"],
-  ["America/Chicago", "US Central"],
-  ["America/Denver", "US Mountain"],
-  ["America/Los_Angeles", "US Pacific"],
-  ["Europe/London", "UK / GMT"],
-  ["Europe/Paris", "Central Europe"],
-  ["Europe/Berlin", "Germany"],
-  ["Asia/Tokyo", "Japan"],
-  ["Australia/Sydney", "Australia Eastern"],
-];
-
-export const HOUR_OPTIONS: [number, string][] = Array.from({ length: 24 }, (_, h) => [
-  h,
-  `${String(h).padStart(2, "0")}:00`,
-]);
-
-export const MINUTE_OPTIONS: [number, string][] = [
-  [0, ":00"],
-  [15, ":15"],
-  [30, ":30"],
-  [45, ":45"],
-];
-
-export const ARCHIVE_OPTIONS: [number, string][] = [
-  [60, "1 Hour"],
-  [1440, "1 Day"],
-  [4320, "3 Days"],
-  [10080, "1 Week"],
-];
 
 export const WYR_CATEGORY_OPTIONS: [string, string][] = [
   ["sfw", "SFW only"],
@@ -86,12 +57,3 @@ export const DROPS_TRACKER_BUCKETS = ["Updates", "Free", "Prime"] as const;
 
 /** How many Panel Access roles a server may hand out. */
 export const PANEL_ACCESS_ROLE_MAX = 10;
-
-/** Look up a label from one of the lists above, falling back to the raw value. */
-export function optionLabel<V extends string | number>(
-  options: [V, string][],
-  value: V,
-): string {
-  const hit = options.find(([v]) => v === value);
-  return hit ? hit[1] : String(value);
-}

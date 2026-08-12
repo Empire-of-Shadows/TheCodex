@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased] - 2026-08-12 (the dashboard fits a phone again)
+
+### Fixed
+- **The dashboard is readable on a phone.** Every panel was being squeezed into half the width of
+  the screen, so headings wrapped mid-word and suggestion titles were cut off after a few letters
+  ("Add a cha..."). On a narrow screen each panel now takes the full width and reads normally.
+
 ## [Unreleased] - 2026-08-11 (the dashboard tells you what your server is doing)
 
 ### Added

@@ -5,9 +5,9 @@ import type { Guild, GuildOverview, User, UserActivity } from "../api/types";
 import AppHeader from "../components/AppHeader";
 import AdminOverview from "../components/overview/AdminOverview";
 import MemberOverview from "../components/overview/MemberOverview";
-import ServerPicker, { pickerMeta } from "../components/overview/ServerPicker";
-import SignalStrip, { type Signal } from "../components/overview/SignalStrip";
-import { formatCount } from "../components/overview/format";
+import ServerPicker, { pickerMeta } from "../_engine/components/overview/ServerPicker";
+import SignalStrip, { type Signal } from "../_engine/components/overview/SignalStrip";
+import { formatCount } from "../_engine/format";
 import { formatError } from "../_engine/api/formatError";
 
 /** What the page is showing for the current selection. */
@@ -185,7 +185,7 @@ export default function DashboardPage() {
             guilds={guilds}
             selectedGuildId={selectedGuildId}
             onSelect={(id) => selectGuild(id, true)}
-            meta={pickerMeta(selectedGuild, guilds.length)}
+            meta={pickerMeta(selectedGuild, guilds.length, "TheCodex")}
           />
           <SignalStrip signals={signalsFor(pane)} />
         </div>

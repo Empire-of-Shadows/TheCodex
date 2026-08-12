@@ -8,10 +8,16 @@ import type {
   SuggestionsOverview,
   WyrOverview,
 } from "../../api/types";
-import AreaChart from "../charts/AreaChart";
-import BarChart, { type BarChartSeries } from "../charts/BarChart";
-import FeatureStrip, { featureCounts } from "./FeatureStrip";
-import { KeyValue, Rule, SectionUnavailable, Stat, Tile } from "./Tile";
+import AreaChart from "../../_engine/components/charts/AreaChart";
+import BarChart, { type BarChartSeries } from "../../_engine/components/charts/BarChart";
+import FeatureStrip, { featureCounts } from "../../_engine/components/overview/FeatureStrip";
+import {
+  KeyValue,
+  Rule,
+  SectionUnavailable,
+  Stat,
+  Tile,
+} from "../../_engine/components/overview/Tile";
 import {
   discordLink,
   formatAge,
@@ -20,13 +26,11 @@ import {
   formatDateTime,
   formatDayLabel,
   formatMonthLabel,
-  formatQuestionKind,
   formatRelative,
   formatRunway,
   formatShortDate,
-  orderedStatuses,
-  statusColour,
-} from "./format";
+} from "../../_engine/format";
+import { formatQuestionKind, orderedStatuses, statusColour } from "./format";
 
 /** The admin home. Every section of the payload can be null on its own. */
 export default function AdminOverview({ overview }: { overview: GuildOverview }) {

@@ -24,15 +24,17 @@ import {
   TextareaField,
   TextField,
   ToggleField,
-} from "./fields";
+} from "../../_engine/components/settings/fields";
 import {
-  ACCOUNT_AGE_OPTIONS,
   ARCHIVE_OPTIONS,
-  DROPS_TRACKER_BUCKETS,
   HOUR_OPTIONS,
   MINUTE_OPTIONS,
-  PANEL_ACCESS_ROLE_MAX,
   TIMEZONE_OPTIONS,
+} from "../../_engine/components/settings/options";
+import {
+  ACCOUNT_AGE_OPTIONS,
+  DROPS_TRACKER_BUCKETS,
+  PANEL_ACCESS_ROLE_MAX,
   WYR_CATEGORY_OPTIONS,
   WYR_CLEANUP_OPTIONS,
   WYR_FORMAT_OPTIONS,

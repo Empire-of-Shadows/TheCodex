@@ -5,10 +5,9 @@ import type {
   GuildSettings,
   Role,
 } from "../../api/types";
+import { optionLabel, TIMEZONE_OPTIONS } from "../../_engine/components/settings/options";
 import {
-  optionLabel,
   PANEL_ACCESS_ROLE_MAX,
-  TIMEZONE_OPTIONS,
   WYR_CATEGORY_OPTIONS,
   WYR_FORMAT_OPTIONS,
   WYR_SOURCE_OPTIONS,

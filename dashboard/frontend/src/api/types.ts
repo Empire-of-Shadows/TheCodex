@@ -1,6 +1,21 @@
 // ── User & Guild ──────────────────────────────────────────────────────────
 
-import type { SessionUser } from "../_engine/api/types";
+import type {
+  Guild as EngineGuild,
+  SessionUser,
+} from "../_engine/api/types";
+
+// Shapes that are the same across the fleet now live in the engine. Re-exported
+// here so codex's own modules keep importing their types from one place.
+export type {
+  Channel,
+  FeatureState,
+  FeatureStatus,
+  PanelRole,
+  Role,
+} from "../_engine/api/types";
+// Also needed in local scope below - a `export type {...}` re-export does not bind.
+import type { FeatureStatus, PanelRole } from "../_engine/api/types";
 
 export interface User extends SessionUser {
   // codex's backend always populates these; narrow them back to non-null.
@@ -10,13 +25,9 @@ export interface User extends SessionUser {
   can_access_settings_any: boolean;
 }
 
-export interface Guild {
-  id: string;
-  name: string;
-  icon: string | null;
-  bot_in_guild: boolean;
-  has_config: boolean;
-  setup_required: boolean;
+// The engine leaves panel_role optional because TheDecree and ImperialReminder
+// omit it. Codex's /api/guilds always sends it, so narrow it back to required.
+export interface Guild extends EngineGuild {
   panel_role: PanelRole;
 }
 
@@ -116,25 +127,6 @@ export interface UserActivity {
 }
 
 // ── Guild overview (admin home) ──────────────────────────────────────────
-
-/**
- * Whether a feature is doing anything right now.
- *
- * "needs_setup" is the load-bearing one: enabled but missing something it
- * cannot run without (a channel, a role). A bot that looks online and silently
- * does nothing is the single most common complaint against bot dashboards.
- */
-export type FeatureState = "on" | "needs_setup" | "off";
-
-export interface FeatureStatus {
-  key: string;
-  label: string;
-  state: FeatureState;
-  /** Short human line: "Posted today - 7 votes", "No channel set". */
-  detail: string;
-  /** Rail key on the settings page, for a deep link. Null if not settable. */
-  settings_key: string | null;
-}
 
 export interface WyrToday {
   question_id: number | null;
@@ -346,20 +338,7 @@ export interface MediaGalleryComponent extends ComponentDef {
 }
 
 // ── Discord resources ────────────────────────────────────────────────────
-
-export interface Channel {
-  id: string;
-  name: string;
-  type: number;
-  position: number;
-}
-
-export interface Role {
-  id: string;
-  name: string;
-  color: number;
-  position: number;
-}
+// Channel and Role are engine-owned; re-exported at the top of this file.
 
 // ── Guide page tree ──────────────────────────────────────────────────────
 
@@ -473,8 +452,7 @@ export interface AuditLogResponse {
 
 // ── Settings ─────────────────────────────────────────────────────────────
 
-// The admin panel and dashboard are admin-only fleet-wide - there is no Mod tier.
-export type PanelRole = "admin" | "none";
+// PanelRole is engine-owned (admin-only fleet-wide, no Mod tier); re-exported above.
 
 export interface RolesSection {
   admin_role_ids: string[];

@@ -1,14 +1,14 @@
 import type { UserActivity } from "../../api/types";
-import AreaChart from "../charts/AreaChart";
-import { Rule, Stat, Tile } from "./Tile";
+import AreaChart from "../../_engine/components/charts/AreaChart";
+import { Rule, Stat, Tile } from "../../_engine/components/overview/Tile";
 import {
   formatCount,
   formatDate,
   formatDayCount,
   formatDayLabel,
   formatShortDate,
-  statusColour,
-} from "./format";
+} from "../../_engine/format";
+import { statusColour } from "./format";
 
 /**
  * The member home.

@@ -13,7 +13,7 @@ import type {
 import AppHeader from "../components/AppHeader";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { formatError } from "../_engine/api/formatError";
-import { PickerStatusProvider } from "../components/settings/fields";
+import { PickerStatusProvider } from "../_engine/components/settings/fields";
 import ContextColumn from "../components/settings/ContextColumn";
 import {
   AnnouncementSectionForm,
