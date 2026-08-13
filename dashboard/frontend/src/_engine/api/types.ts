@@ -44,6 +44,12 @@ export type PanelRole = "admin" | "none";
  *
  * `panel_role` is optional because TheDecree and ImperialReminder omit it from
  * their payloads; bots that always send it should narrow it to required.
+ *
+ * `member_count` is the superset pattern in action: only some dashboards enrich
+ * the listing from their guild snapshot, so it is optional AND nullable (a bot
+ * that sends the field still sends null when it holds no snapshot). Consumers
+ * must have a sensible answer for "absent" - GuildWebScene, for instance, draws
+ * every orb the same size when nobody reports a count.
  */
 export interface Guild {
   id: string;
@@ -53,6 +59,7 @@ export interface Guild {
   has_config: boolean;
   setup_required: boolean;
   panel_role?: PanelRole;
+  member_count?: number | null;
 }
 
 /**

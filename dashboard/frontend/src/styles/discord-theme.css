@@ -2003,104 +2003,34 @@ a:focus-visible {
    see _engine/components/styles/AppShell.css. */
 
 /* ══════════════════════════════════════════════════════════════════════
-   Admin "Guild Web" page
+   Settings - "The Web of Servers"
+
+   The scene itself (strands, orbs, dust, blob vessel) is engine-owned and ships
+   its own stylesheet with the component:
+   _engine/components/styles/GuildWebScene.css. What stays here is the page
+   frame around it and the blob's CONTENT, which is codex's own markup.
    ══════════════════════════════════════════════════════════════════════ */
 
-.guild-web-layout {
-  display: grid;
-  grid-template-columns: 1fr 300px;
-  gap: 16px;
-  align-items: start;
-}
-@media (max-width: 820px) {
-  .guild-web-layout { grid-template-columns: 1fr; }
-}
-
-.guild-web {
+/* The scene fills whatever the header leaves behind. flex:1 inside .app-layout
+   (min-height:100vh, column) is deliberately used instead of
+   calc(100vh - <header height>): the header wraps to two rows on narrow
+   screens, so any hardcoded height is wrong exactly when it matters most.
+   position:relative because the blob panel anchors to this box. */
+.settings-scene {
   position: relative;
-  width: 100%;
-  min-height: 540px;
-  border-radius: var(--radius);
-  border: 1px solid var(--border-subtle);
-  background:
-    radial-gradient(ellipse 60% 50% at 50% 42%, rgba(77, 14, 179, 0.14), transparent 70%),
-    var(--bg-card);
+  flex: 1;
+  min-height: 480px;
   overflow: hidden;
 }
-.guild-web__svg { display: block; width: 100%; height: 100%; }
-.guild-web__field { animation: gw-drift 16s ease-in-out infinite alternate; }
-@keyframes gw-drift {
-  0% { transform: translate(0, 0); }
-  100% { transform: translate(6px, -5px); }
-}
 
-.guild-web__vine {
-  fill: none;
-  stroke: var(--brand-light);
-  stroke-width: 1.5;
-  stroke-opacity: 0.4;
-  stroke-linecap: round;
-  stroke-dasharray: 1;
-  stroke-dashoffset: 1;
-  animation: gw-draw 0.9s ease forwards;
-}
-@keyframes gw-draw { to { stroke-dashoffset: 0; } }
-.guild-web__vine.is-active { stroke-opacity: 0.95; stroke-width: 2.5; }
+/* Error / loading / no-servers states, which have no scene to sit in. */
+.settings-scene__message { padding: 24px; }
 
-.guild-web__hub { filter: drop-shadow(0 0 12px rgba(122, 61, 240, 0.5)); }
-.guild-web__hub-halo {
-  fill: rgba(122, 61, 240, 0.25);
-  animation: gw-pulse 2.4s ease-in-out infinite;
-}
-.guild-web__hub-ring { stroke: var(--brand-light); stroke-width: 2.5; }
-@keyframes gw-pulse {
-  0%, 100% { opacity: 0.5; transform: scale(1); }
-  50% { opacity: 0.9; transform: scale(1.08); }
-}
-
-.guild-web__node { cursor: pointer; transition: opacity 0.2s; }
-.guild-web__node:focus { outline: none; }
-.guild-web__node-bg { fill: var(--bg-2); }
-.guild-web__node-ring { stroke-width: 2.5; }
-.guild-web__node--admin .guild-web__node-ring { stroke: var(--brand-light); }
-.guild-web__node--admin { filter: drop-shadow(0 0 6px rgba(122, 61, 240, 0.35)); }
-.guild-web__node.is-setup .guild-web__node-ring { stroke-dasharray: 4 4; }
-.guild-web__node.is-setup { opacity: 0.8; }
-.guild-web__node.is-dim { opacity: 0.32; }
-.guild-web__node.is-selected .guild-web__node-ring,
-.guild-web__node:hover .guild-web__node-ring { stroke-width: 3.5; }
-.guild-web__node.is-selected { opacity: 1; filter: drop-shadow(0 0 14px rgba(122, 61, 240, 0.6)); }
-.guild-web__node:hover { opacity: 1; }
-.guild-web__node-label {
-  fill: var(--text-2);
-  font-size: 12px;
-  font-weight: 600;
-  pointer-events: none;
-}
-.guild-web__node-initial {
-  fill: var(--text-1);
-  font-size: 20px;
-  font-weight: 700;
-  pointer-events: none;
-}
-
-.guild-web__panel {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  position: sticky;
-  top: 80px;
-}
-.guild-web__panel-head { display: flex; align-items: center; gap: 12px; }
-.guild-web__panel-head .status-badge { margin-top: 4px; display: inline-block; }
-.guild-web__panel-actions { display: flex; flex-direction: column; gap: 8px; }
-.guild-web__panel-actions .btn { width: 100%; }
-
-@media (prefers-reduced-motion: reduce) {
-  .guild-web__field { animation: none; }
-  .guild-web__vine { animation: none; stroke-dashoffset: 0; }
-  .guild-web__hub-halo { animation: none; }
-}
+/* ── Blob contents (codex-owned) ─────────────────────────────────────── */
+.settings-blob__head { display: flex; align-items: center; gap: 12px; }
+.settings-blob__head .status-badge { margin-top: 4px; display: inline-block; }
+.settings-blob__actions { display: flex; flex-direction: column; gap: 8px; }
+.settings-blob__actions .btn { width: 100%; text-align: center; }
 
 /* ══════════════════════════════════════════════════════════════════════
    The overview/settings layout that used to live below this line moved to

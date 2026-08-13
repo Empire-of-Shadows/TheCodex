@@ -27,8 +27,13 @@ export interface User extends SessionUser {
 
 // The engine leaves panel_role optional because TheDecree and ImperialReminder
 // omit it. Codex's /api/guilds always sends it, so narrow it back to required.
+//
+// member_count is the same story with one twist: codex always sends the KEY, but
+// the value is null for a guild with no ServerData snapshot yet - so it narrows
+// to required-and-nullable, not required.
 export interface Guild extends EngineGuild {
   panel_role: PanelRole;
+  member_count: number | null;
 }
 
 // ── User Activity ────────────────────────────────────────────────────────

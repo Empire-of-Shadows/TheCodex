@@ -1,5 +1,29 @@
 # Changelog
 
+## [Unreleased] - 2026-08-13 (the settings page became a living web)
+
+### Changed
+- **Picking a server to manage is now a web you can play with.** The settings page fills the
+  whole screen with your servers strung together on silk strands, drifting slowly and never
+  quite settling. You can grab any server, or the sigil at the centre, drag it around and throw
+  it - it carries on flying and bounces off the edges, and the rest of the web sways after it.
+  Bigger servers feel heavier when you throw them.
+- **Servers are sized by how many members they have,** so your busiest server is the biggest orb
+  in the web. A server Codex has not counted yet just gets the standard size.
+- **A server tells you where it stands at a glance.** Ready servers glow violet, servers that
+  still need setting up have an amber pulse, and a server Codex has not been added to sits dim
+  and faded until you invite it.
+- **Choosing a server grows its menu out of the web itself,** on a glowing strand running back
+  to the server you picked, with Edit Guide, Edit Greeting, Settings and Audit Log inside it
+  (or the invite link, if Codex is not in that server yet). Close it with the x, by picking the
+  same server again, or by clicking anywhere in the empty dark.
+- **On a phone, the menu rises from the bottom of the screen** instead of floating over the web,
+  and the web drifts upward to stay visible above it - the strand still runs from your server
+  down into the menu.
+- **Keyboard still works throughout** - tab to a server, press Enter or Space to open and close
+  its menu. If you have asked your device to reduce motion, the web is drawn settled and still,
+  with no drifting, no flight and no pulses, and everything remains selectable.
+
 ## [Unreleased] - 2026-08-12 (your stats are back, and the embed builder grew up)
 
 ### Fixed

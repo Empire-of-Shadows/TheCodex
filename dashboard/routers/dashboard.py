@@ -72,6 +72,28 @@ async def _guild_ids_with_config(guild_ids: list[str]) -> set[str]:
     return {str(doc["guild_id"]) async for doc in cursor}
 
 
+async def _guild_member_counts(guild_ids: list[str]) -> dict[str, int]:
+    """Member count per guild, from the ServerData guild snapshot.
+
+    One `$in` over the snapshot collection rather than a Discord call per guild:
+    the number is only used to size the server web, so a snapshot that lags by a
+    few minutes is fine and an extra API round trip per guild is not. A guild
+    with no snapshot is simply absent from the result.
+    """
+    if not guild_ids:
+        return {}
+
+    cursor = db.serverdata_guilds().find(
+        {"id": {"$in": [str(gid) for gid in guild_ids]}},
+        {"id": 1, "member_count": 1},
+    )
+    return {
+        str(doc["id"]): int(doc["member_count"])
+        async for doc in cursor
+        if isinstance(doc.get("member_count"), (int, float))
+    }
+
+
 @router.get("/guilds")
 async def guilds(session: dict = Depends(get_current_user)):
     """Return the user's guilds, with bot status + role.
@@ -87,8 +109,10 @@ async def guilds(session: dict = Depends(get_current_user)):
         return []
 
     all_ids = [g["id"] for g in session_guilds]
-    bot_guild_ids, configured_ids = await asyncio.gather(
-        _fetch_bot_guild_ids(), _guild_ids_with_config(all_ids)
+    bot_guild_ids, configured_ids, member_counts = await asyncio.gather(
+        _fetch_bot_guild_ids(),
+        _guild_ids_with_config(all_ids),
+        _guild_member_counts(all_ids),
     )
 
     # Resolve panel roles only for bot-present guilds (role config can't exist
@@ -120,6 +144,8 @@ async def guilds(session: dict = Depends(get_current_user)):
             "has_config": gid in configured_ids,
             "setup_required": not bot_present,
             "panel_role": panel_role if panel_role != "none" else ("admin" if has_manage else "none"),
+            # Null when no snapshot exists yet; the web then draws an even orb.
+            "member_count": member_counts.get(gid),
         })
 
     return out

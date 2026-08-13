@@ -1,9 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import type { Guild, User } from "../api/types";
 import AppHeader from "../components/AppHeader";
-import { GuildWeb } from "../components/GuildWeb";
+import { GuildWebScene } from "../_engine/components/GuildWebScene";
+
+/** Real Discord icon for a guild, or null so the scene draws its generated orb.
+ *  Typed on the two fields it reads rather than on codex's Guild, so it also
+ *  satisfies the scene's callback, which hands over the wider engine Guild. */
+function guildIconUrl(g: { id: string; icon: string | null }): string | null {
+  return g.icon ? `https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=64` : null;
+}
 
 export default function SettingsPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -12,6 +19,9 @@ export default function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const navigate = useNavigate();
+  // The scene draws its tether to this element, so the panel has to be a real
+  // node in the layout even while it is closed.
+  const blobRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     api.me().then(setUser).catch(() => {});
@@ -35,60 +45,77 @@ export default function SettingsPage() {
   }), [webGuilds]);
   const selected = webGuilds.find((g) => g.id === selectedId) ?? null;
 
+  const message = error ? (
+    <div className="alert danger">{error}</div>
+  ) : !guilds ? (
+    <p className="eos-muted">Loading servers...</p>
+  ) : webGuilds.length === 0 ? (
+    <div className="card">
+      <h3>No manageable servers</h3>
+      <p className="eos-muted">
+        You need MANAGE_SERVER permission (or a configured panel role) in a Discord
+        server to manage TheCodex.
+        {inviteUrl && (
+          <>
+            {" "}
+            <a href={inviteUrl} target="_blank" rel="noreferrer">Invite TheCodex to a server</a>.
+          </>
+        )}
+      </p>
+    </div>
+  ) : null;
+
   return (
     <div className="app-layout">
       <AppHeader user={user} />
 
-      <section className="dash-hero">
-        <div className="dash-hero__orb" />
-        <img className="dash-hero__sigil" src="/brand/logo-mark.png" alt="" />
-        <div className="dash-hero__copy">
-          <span className="dash-hero__eyebrow">Configuration</span>
-          <h1 className="dash-hero__title">The Web of Servers</h1>
-          <p className="dash-hero__sub">
-            Every server you steward, woven together. Pluck a node to manage it.
-          </p>
-        </div>
-        <div className="dash-hero__strip">
-          <div className="empire-stat">
-            <div className="empire-stat__value">{counts.total}</div>
-            <div className="empire-stat__label">Servers</div>
-          </div>
-          <div className="empire-stat">
-            <div className="empire-stat__value">{counts.admin}</div>
-            <div className="empire-stat__label">Admin</div>
-          </div>
-        </div>
-      </section>
+      <div className="settings-scene">
+        {message ? (
+          <div className="settings-scene__message">{message}</div>
+        ) : (
+          <>
+            <GuildWebScene
+              guilds={webGuilds}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              tetherTo={blobRef}
+              iconUrl={guildIconUrl}
+              hubIcon="/brand/logo-mark.png"
+            >
+              <span className="gw-eyebrow">Configuration</span>
+              <h1 className="gw-title" data-gw-collide>The Web of Servers</h1>
+              <p className="gw-sub" data-gw-collide>
+                Every server you steward, woven together. Pluck a node to manage it.
+              </p>
+              <p className="gw-counts">
+                {counts.total} servers - {counts.admin} admin
+              </p>
+            </GuildWebScene>
 
-      <div style={{ padding: "0 24px 24px" }}>
-        {error ? (
-          <div className="alert danger">{error}</div>
-        ) : !guilds ? (
-          <p className="eos-muted">Loading servers...</p>
-        ) : webGuilds.length === 0 ? (
-          <div className="card">
-            <h3>No manageable servers</h3>
-            <p className="eos-muted">
-              You need MANAGE_SERVER permission (or a configured panel role) in a Discord
-              server to manage TheCodex.
-              {inviteUrl && (
+            <aside
+              ref={blobRef}
+              className={"gw-blob" + (selected ? " is-show" : "")}
+              aria-live="polite"
+            >
+              {selected && (
                 <>
-                  {" "}
-                  <a href={inviteUrl} target="_blank" rel="noreferrer">Invite TheCodex to a server</a>.
+                  <button
+                    type="button"
+                    className="gw-blob-close"
+                    aria-label="Close"
+                    onClick={() => setSelectedId(null)}
+                  >
+                    x
+                  </button>
+                  <SettingsActionPanel
+                    guild={selected}
+                    inviteUrl={inviteUrl}
+                    onNavigate={(path) => navigate(path)}
+                  />
                 </>
               )}
-            </p>
-          </div>
-        ) : (
-          <div className="guild-web-layout">
-            <GuildWeb guilds={webGuilds} selectedId={selectedId} onSelect={setSelectedId} />
-            <SettingsActionPanel
-              guild={selected}
-              inviteUrl={inviteUrl}
-              onNavigate={(path) => navigate(path)}
-            />
-          </div>
+            </aside>
+          </>
         )}
       </div>
     </div>
@@ -100,25 +127,15 @@ function SettingsActionPanel({
   inviteUrl,
   onNavigate,
 }: {
-  guild: Guild | null;
+  guild: Guild;
   inviteUrl: string | null;
   onNavigate: (path: string) => void;
 }) {
-  if (!guild) {
-    return (
-      <aside className="card guild-web__panel guild-web__panel--empty">
-        <p className="eos-muted" style={{ margin: 0 }}>Select a server node to manage it.</p>
-      </aside>
-    );
-  }
-
-  const iconUrl = guild.icon
-    ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=64`
-    : null;
+  const iconUrl = guildIconUrl(guild);
 
   return (
-    <aside className="card guild-web__panel">
-      <div className="guild-web__panel-head">
+    <>
+      <div className="settings-blob__head">
         <div className="guild-icon" style={{ width: 44, height: 44 }}>
           {iconUrl ? <img src={iconUrl} alt="" /> : (guild.name ?? "?")[0]}
         </div>
@@ -130,7 +147,7 @@ function SettingsActionPanel({
         </div>
       </div>
 
-      <div className="guild-web__panel-actions">
+      <div className="settings-blob__actions">
         {!guild.bot_in_guild ? (
           inviteUrl && (
             <a
@@ -165,6 +182,6 @@ function SettingsActionPanel({
           Bot not in this server yet. Use the link above to add it, then return here.
         </p>
       )}
-    </aside>
+    </>
   );
 }
