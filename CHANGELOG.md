@@ -1,5 +1,36 @@
 # Changelog
 
+## [Unreleased] - 2026-08-13 (your data, your call)
+
+### Added
+- **You can now tell Codex to stop collecting data about you.** The dashboard's Privacy & Data
+  page has a switch for everything at once, and one each for Would You Rather, suggestions,
+  boost tracking, and the cached copy of your server profile. Your choice applies to your
+  account in every server that uses Codex and takes effect within about a minute.
+- **What turning collection off means, honestly:** your votes on daily questions and on
+  suggestions are acknowledged but not saved; sending in a Would You Rather question is politely
+  refused, because a submission has to store who sent it; your suggestions still post, but
+  always anonymously - no status messages, no record tied to you, and no editing them later;
+  boosts are no longer recorded or announced; and you are left out of the server member
+  snapshot.
+- **Turning collection off never deletes anything by itself.** It stops new records from that
+  moment on. Erasing what is already stored is still the separate Delete button on the same
+  page.
+
+### Changed
+- **Downloading your data now really includes everything Codex holds about you**, not just part
+  of it: votes, questions you sent in, suggestions and suggestion votes, notification
+  preferences, your member profile snapshot, boost history, your whitelist entry if staff added
+  one, and admin changes you made.
+- **Deleting your data covers all of that too**, and the page now says plainly what stays and
+  why: a whitelist entry written by staff (it is also what grants your access), the admin change
+  log, anonymous suggestions (nothing links them to you), and your privacy choices themselves -
+  so wiping your data can never quietly turn collection back on. Questions you submitted stay in
+  the question bank with your name taken off them.
+- **The Privacy & Data page has been rebuilt to match the rest of the dashboard**, its delete
+  confirmation still asks you to type DELETE before anything happens, and its server picker now
+  lists every server where Codex holds anything of yours.
+
 ## [Unreleased] - 2026-08-13 (the settings page became a living web)
 
 ### Changed

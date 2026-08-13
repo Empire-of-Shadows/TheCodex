@@ -61,6 +61,31 @@ class BoostTracker(commands.Cog):
         if self._reconcile_task and not self._reconcile_task.done():
             self._reconcile_task.cancel()
 
+    async def _opted_out(self, user_id) -> bool:
+        """Whether this member has turned off data collection for boosts.
+
+        Fails OPEN: if the preference cache never attached (its startup wiring
+        failed), boost tracking behaves exactly as it did before the opt-out
+        existed. ``is_opted_out`` already folds in the "all" master switch.
+
+        The id is coerced to ``str`` here, in the bot's own seam. The preference
+        document stores it as a string like every other snowflake in codex, and
+        the engine cache queries with the id exactly as handed over, so an int
+        would match nothing and read as "not opted out". Coercing in the one
+        place also unifies the callers: the reconcile pass already holds string
+        ids while the live listener holds ints.
+        """
+        prefs = getattr(self.bot, "privacy_prefs", None)
+        if prefs is None:
+            return False
+        try:
+            return await prefs.is_opted_out(str(user_id), "boosts")
+        except Exception as e:
+            logger.error(
+                f"Could not read privacy preferences for {user_id}: {e}", exc_info=True
+            )
+            return False
+
     async def _reconcile_on_ready(self):
         """Sync the active-boosters collection with live Discord state after a restart.
 
@@ -104,6 +129,11 @@ class BoostTracker(commands.Cog):
                 for member in guild.premium_subscribers:
                     if str(member.id) in stored_by_id:
                         continue
+                    # Turning data collection off applies to the catch-up pass
+                    # too, or a restart would quietly record what the live
+                    # listener is no longer allowed to.
+                    if await self._opted_out(member.id):
+                        continue
                     boost_start = member.premium_since or now
                     await boosts_collection.update_one(
                         {'guild_id': gid, 'user_id': str(member.id)},
@@ -131,6 +161,11 @@ class BoostTracker(commands.Cog):
                 # Stopped boosting while offline → in DB, gone from Discord.
                 for user_id, doc in stored_by_id.items():
                     if user_id in live_ids:
+                        continue
+                    # The opt-out is forward-only: it stops new writes and never
+                    # removes what was stored before it was set, so a row left
+                    # behind here is deliberate, not a missed cleanup.
+                    if await self._opted_out(user_id):
                         continue
                     start = as_utc(doc.get('boost_start'))
                     duration = format_duration(now - start) if start else "Unknown"
@@ -161,6 +196,17 @@ class BoostTracker(commands.Cog):
 
         config = await get_config(after.guild.id)
         if not config.boost.get("enabled", False):
+            return
+
+        # Nothing is stored and nothing is announced for a member who has turned
+        # data collection off. The announcement goes too, deliberately: it prints
+        # the very details that are not being kept, so posting it while not
+        # collecting would be incoherent.
+        if await self._opted_out(after.id):
+            logger.info(
+                f"Boost change for {after.id} in guild {after.guild.id} not tracked: "
+                f"data collection is turned off for this member"
+            )
             return
 
         if not before.premium_since and after.premium_since:

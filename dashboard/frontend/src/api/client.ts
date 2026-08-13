@@ -26,6 +26,21 @@ export {
   logoutUrl,
 } from "../_engine/api/http";
 
+/**
+ * The member's data collection opt-outs.
+ *
+ * `true` means "stop collecting", so the whole map defaults to false. `all` is
+ * the master switch and wins over the four feature flags, which keep whatever
+ * they were set to underneath it.
+ */
+export interface PrivacyFeatures {
+  all: boolean;
+  wyr: boolean;
+  suggestions: boolean;
+  boosts: boolean;
+  member_snapshot: boolean;
+}
+
 export const api = {
   me: () => apiFetch<User>("/api/me", { suppressAuthHandler: true }),
   guilds: () => apiFetch<Guild[]>("/api/guilds"),
@@ -115,6 +130,14 @@ export const api = {
       `/api/guilds/${guildId}/audit-log?${params.toString()}`,
     );
   },
+
+  /** Account-wide data collection opt-outs, not scoped to a guild. */
+  getUserPrivacy: () => apiFetch<{ features: PrivacyFeatures }>("/api/user/privacy"),
+  saveUserPrivacy: (features: PrivacyFeatures) =>
+    apiFetch<{ features: PrivacyFeatures }>("/api/user/privacy", {
+      method: "PUT",
+      body: JSON.stringify({ features }),
+    }),
 
   userDataGuilds: () =>
     apiFetch<{ id: string; name: string | null; icon: string | null }[]>(

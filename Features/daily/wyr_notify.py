@@ -24,6 +24,7 @@ from datetime import datetime, timedelta, timezone
 
 import discord
 
+from startup.bot import bot
 from storage.log import get_logger
 from storage.settings.collections import db_manager
 from storage.settings.config_manager import get_config
@@ -41,6 +42,32 @@ _PROMPT_COOLDOWN = timedelta(hours=20)
 
 SUBSCRIBE_LABEL = "🔔 Notify Me"
 UNSUBSCRIBE_LABEL = "🔕 Turn Off Pings"
+
+async def _opted_out(user_id) -> bool:
+    """Whether this member has turned off data collection for WYR.
+
+    Fails OPEN: if the preference cache never attached, prompts and preference
+    writes behave exactly as they did before the opt-out existed. Note that a
+    member who has opted out can still join and leave the ping role - that is
+    Discord state, not something stored here - they simply get no prompt and
+    nothing about them is written to the preferences collection.
+
+    The id is coerced to ``str`` here, in the bot's own seam: the preference
+    document stores it as a string like every other snowflake in codex, and the
+    engine cache queries with the id exactly as handed over, so an int would
+    match nothing and read as "not opted out".
+    """
+    prefs = getattr(bot, "privacy_prefs", None)
+    if prefs is None:
+        return False
+    try:
+        return await prefs.is_opted_out(str(user_id), "wyr")
+    except Exception as e:
+        logger.error(
+            f"Could not read privacy preferences for {user_id}: {e}", exc_info=True
+        )
+        return False
+
 
 async def _not_available(
     guild: discord.Guild | None,
@@ -128,6 +155,12 @@ async def _get_prefs(guild_id: int, user_id: int) -> dict:
 
 
 async def _write_prefs(guild_id: int, user_id: int, changes: dict) -> None:
+    # Nothing about an opted-out member is stored here. This is the single gate
+    # for every write to the preferences collection, so the dismissal record and
+    # the "last advertised" stamp are both covered by it.
+    if await _opted_out(user_id):
+        return
+
     now = datetime.now(timezone.utc)
     try:
         await db_manager.daily_wyr_notify_prefs.update_one(
@@ -164,6 +197,10 @@ def _as_utc(value) -> datetime | None:
 async def _should_advertise(member: discord.Member, role: discord.Role | None) -> bool:
     """Whether this member should see the subscribe offer right now."""
     if role is None or not isinstance(member, discord.Member) or member.bot:
+        return False
+    # Checked before the preferences document is read or written: showing the
+    # offer means stamping "last advertised" on a member we store nothing about.
+    if await _opted_out(member.id):
         return False
     if role in member.roles:
         # Already subscribed - never advertise something they have.

@@ -80,6 +80,48 @@ DEFAULT_QUESTION_FORMATS = ("wyr",)
 
 logger = get_logger("WYR")
 
+#: What an opted-out member is told when their vote is not saved.
+OPTED_OUT_VOTE_NOTICE = (
+    "Your vote was not recorded. You have turned off data collection, so votes "
+    "cannot be saved against your account. You can turn it back on any time on "
+    "the privacy page of the dashboard."
+)
+
+#: What an opted-out member is told when they try to suggest a question.
+OPTED_OUT_SUBMIT_NOTICE = (
+    "Your question was not sent. Suggesting a question stores your Discord ID "
+    "with it so a moderator knows who to reply to, and you have turned off data "
+    "collection. You can turn it back on any time on the privacy page of the "
+    "dashboard."
+)
+
+
+async def _opted_out(client, user_id, feature: str = "wyr") -> bool:
+    """Whether this member has turned off data collection for ``feature``.
+
+    Fails OPEN. If the preference cache never attached (its startup wiring
+    failed), voting and suggesting carry on exactly as they did before the
+    opt-out existed rather than every write path in the feature going dark.
+    ``is_opted_out`` already folds in the "all" master switch.
+
+    The id is coerced to ``str`` HERE, in the bot's own seam, because the
+    preference document stores it the way this bot's dashboard writes it - as a
+    string, like every other snowflake in codex. The engine cache queries with
+    the id exactly as it is handed over, so an int would match nothing and
+    silently read as "not opted out". The coercion cannot move into the engine:
+    another bot on the same class stores that field as an int.
+    """
+    prefs = getattr(client, "privacy_prefs", None)
+    if prefs is None:
+        return False
+    try:
+        return await prefs.is_opted_out(str(user_id), feature)
+    except Exception as e:
+        logger.error(
+            f"Could not read privacy preferences for {user_id}: {e}", exc_info=True
+        )
+        return False
+
 
 def _channel_allows_nsfw(channel) -> bool:
     """Whether NSFW questions may be posted in this channel.
@@ -187,6 +229,15 @@ class WYRCommandGroup(app_commands.Group):
         logger.info(f"WYR submit opened by {interaction.user} in guild {interaction.guild_id}")
 
         try:
+            # Refused before the builder even opens: a suggestion cannot exist
+            # without the submitter's id attached to it, so there is no version
+            # of this that respects the opt-out.
+            if await _opted_out(interaction.client, interaction.user.id, "wyr"):
+                await interaction.response.send_message(
+                    OPTED_OUT_SUBMIT_NOTICE, ephemeral=True
+                )
+                return
+
             settings = await WYRQuestionActions.get_submission_settings(interaction.guild_id)
 
             if not settings["enabled"]:
@@ -967,6 +1018,15 @@ class WYR(commands.Cog):
         """
         guild_id = interaction.guild_id
         try:
+            # Re-checked here as well as on `/wyr submit`: the builder is
+            # ephemeral and long-lived, so the member may have turned data
+            # collection off while it sat open.
+            if await _opted_out(interaction.client, interaction.user.id, "wyr"):
+                await interaction.response.send_message(
+                    OPTED_OUT_SUBMIT_NOTICE, ephemeral=True
+                )
+                return
+
             ok, cleaned, error = validate_question(question_format, text, options, tags)
             if not ok:
                 await interaction.response.send_message(f"❌ {error}", ephemeral=True)
@@ -2065,6 +2125,20 @@ class WYRView(discord.ui.View):
     async def handle_vote(self, interaction: discord.Interaction, option):
         try:
             with PerformanceLogger(logger, f"handle_vote_{option}"):
+                # Checked before anything is read or written. A vote cannot be
+                # stored without the voter's id, so an opted-out member is told
+                # plainly rather than having a vote quietly dropped: no vote
+                # document, no per-option count, no leaderboard row.
+                if await _opted_out(interaction.client, interaction.user.id, "wyr"):
+                    logger.info(
+                        f"Vote from {interaction.user} (ID: {interaction.user.id}) not "
+                        f"recorded: data collection is turned off for this member"
+                    )
+                    await interaction.response.send_message(
+                        OPTED_OUT_VOTE_NOTICE, ephemeral=True
+                    )
+                    return
+
                 # Get the cog instance dynamically
                 cog = self._get_cog(interaction)
 

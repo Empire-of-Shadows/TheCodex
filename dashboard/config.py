@@ -83,6 +83,10 @@ RATE_LIMITS: list[tuple[str, str, int, int]] = [
     ("/auth/discord", "oauth_start", 20, 60),
     ("/api/me", "me", 100, 60),
     ("/api/stats/public", "public_stats", 30, 60),
+    # Privacy page: the export builds a whole-account dump and the delete is
+    # destructive, so both are worth a ceiling even behind session auth. The
+    # trailing slash keeps this off /api/user-entitlements and /api/user-activity.
+    ("/api/user/", "user_data", 30, 60),
 ]
 
 # Reverse proxies whose X-Forwarded-For header may be trusted for client-IP

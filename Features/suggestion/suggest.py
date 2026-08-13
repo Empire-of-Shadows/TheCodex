@@ -41,6 +41,39 @@ SUGGESTION_STATUSES = [
 BROWSE_CATEGORY_OPTIONS = ["All"] + SUGGESTION_CATEGORIES
 BROWSE_STATUS_OPTIONS = ["All"] + SUGGESTION_STATUSES
 
+#: What an opted-out member is told when their vote is not saved.
+OPTED_OUT_VOTE_NOTICE = (
+    "Your vote was not recorded. You have turned off data collection, so votes "
+    "cannot be saved against your account. You can turn it back on any time on "
+    "the privacy page of the dashboard."
+)
+
+
+async def _opted_out(client, user_id) -> bool:
+    """Whether this member has turned off data collection for suggestions.
+
+    Fails OPEN. If the preference cache never attached (its startup wiring
+    failed), suggestions behave exactly as they did before the opt-out existed
+    rather than every submission silently turning anonymous. ``is_opted_out``
+    already folds in the "all" master switch.
+
+    The id is coerced to ``str`` here, in the bot's own seam: the preference
+    document stores it as a string like every other snowflake in codex, and the
+    engine cache queries with the id exactly as handed over, so an int would
+    match nothing and read as "not opted out".
+    """
+    prefs = getattr(client, "privacy_prefs", None)
+    if prefs is None:
+        return False
+    try:
+        return await prefs.is_opted_out(str(user_id), "suggestions")
+    except Exception as e:
+        logger.error(
+            f"Could not read privacy preferences for {user_id}: {e}", exc_info=True
+        )
+        return False
+
+
 class SuggestionView(discord.ui.View):
     def __init__(self, suggestion_id: str, db_manager):
         super().__init__(timeout=None)
@@ -70,6 +103,19 @@ class SuggestionView(discord.ui.View):
     async def _handle_vote(self, interaction: discord.Interaction, vote_type: str):
         with PerformanceLogger(logger, f"handle_vote_{vote_type}"):
             user_id = interaction.user.id
+
+            # A vote is stored against the voter's id, so there is no way to
+            # count one for a member who has turned data collection off. Nothing
+            # is written: no vote row, no tally change, no user stats.
+            if await _opted_out(interaction.client, user_id):
+                logger.info(
+                    f"Vote from user {user_id} not recorded: data collection is "
+                    f"turned off for this member"
+                )
+                await interaction.response.send_message(
+                    OPTED_OUT_VOTE_NOTICE, ephemeral=True
+                )
+                return
 
             # The persistent view registered on startup carries no suggestion_id,
             # so after a restart recover it from the message the buttons are on.
@@ -1316,6 +1362,15 @@ class SuggestionCog(commands.Cog):
         """
         with log_context(logger, f"process_suggestion_{category}"):
             user = interaction.user
+
+            # A member who has turned data collection off can still suggest, but
+            # the suggestion cannot carry their id, so it is forced anonymous
+            # whatever they picked. Decided here, before the defer, so the post,
+            # the thread and the confirmation all follow the one path.
+            forced_anonymous = await _opted_out(interaction.client, user.id)
+            if forced_anonymous:
+                anonymous = True
+
             logger.info(
                 f"Processing suggestion from user {user.id} - Category: {category}, Anonymous: {anonymous}, Length: {len(suggestion_text)} chars")
 
@@ -1350,7 +1405,10 @@ class SuggestionCog(commands.Cog):
                 async def continue_anyway(interaction_inner):
                     logger.info(f"User {user.id} chose to submit despite similar suggestions")
                     await interaction_inner.response.defer()
-                    await self._create_suggestion_post(interaction, suggestion_text, anonymous, category)
+                    await self._create_suggestion_post(
+                        interaction, suggestion_text, anonymous, category,
+                        forced_anonymous=forced_anonymous,
+                    )
 
                 async def cancel_suggestion(interaction_inner):
                     logger.info(f"User {user.id} cancelled submission after seeing similar suggestions")
@@ -1369,7 +1427,10 @@ class SuggestionCog(commands.Cog):
                 await interaction.followup.send(embed=embed, view=view, ephemeral=True)
             else:
                 logger.info(f"No similar suggestions found for user {user.id}'s submission, proceeding directly")
-                await self._create_suggestion_post(interaction, suggestion_text, anonymous, category)
+                await self._create_suggestion_post(
+                    interaction, suggestion_text, anonymous, category,
+                    forced_anonymous=forced_anonymous,
+                )
 
     async def _require_suggestions_channel(self, interaction: discord.Interaction):
         """Return the guild's suggestions channel, or None after telling the member why not.
@@ -1398,8 +1459,16 @@ class SuggestionCog(commands.Cog):
         return None
 
     async def _create_suggestion_post(self, interaction: discord.Interaction,
-                                      suggestion_text: str, anonymous: bool, category: str):
-        """Create the actual suggestion post"""
+                                      suggestion_text: str, anonymous: bool, category: str,
+                                      forced_anonymous: bool = False):
+        """Create the actual suggestion post.
+
+        ``forced_anonymous`` means the member did not choose anonymity, it was
+        applied because they have turned data collection off. It changes nothing
+        about what is stored (that is already the plain anonymous path) - it only
+        changes the confirmation, so nobody is left wondering why their name is
+        missing or why the status DMs never arrive.
+        """
         with PerformanceLogger(logger, "create_suggestion_post"):
             user = interaction.user
             logger.info(f"Creating suggestion post for user {user.id} - Category: {category}, Anonymous: {anonymous}")
@@ -1518,6 +1587,16 @@ class SuggestionCog(commands.Cog):
 
                 # Notify user
                 success_message = f"✅ Your {'anonymous ' if anonymous else ''}suggestion has been posted! (ID: {suggestion_id[:8]})"
+                if forced_anonymous:
+                    success_message += (
+                        "\n\nIt was posted anonymously because you have turned off "
+                        "data collection, so it is not linked to your account. That "
+                        "means you will not get status updates by direct message, it "
+                        "will not show up in your stats or under your own "
+                        "suggestions, and you cannot edit it. You can turn data "
+                        "collection back on any time on the privacy page of the "
+                        "dashboard."
+                    )
 
                 if hasattr(interaction, 'followup'):
                     await interaction.followup.send(success_message, ephemeral=True)

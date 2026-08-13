@@ -433,6 +433,24 @@ COLLECTIONS: dict[str, CollectionConfig] = {
         ]
     ),
 
+    # Per-user data-collection opt-out. Account-wide, NOT per-guild: one
+    # document per person, holding a feature flag map plus the `all` master
+    # switch. A missing document (or a missing key) means the member has not
+    # opted out of anything, so every read path can treat absence as consent.
+    # Forward-only - opting out stops future collection and never deletes what
+    # was already stored.
+    'settings_user_privacy': CollectionConfig(
+        name='UserPrivacy',
+        database='Settings',
+        connection='primary',
+        indexes=[
+            # One privacy document per person. Every read is a point lookup on
+            # this key, and the uniqueness is what keeps two half-written
+            # documents from disagreeing about the same member.
+            IndexModel([('user_id', 1)], unique=True, name='user_id_unique'),
+        ]
+    ),
+
     # Color Set collections
     'color_color_sets': CollectionConfig(
         name='ColorSets',

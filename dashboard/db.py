@@ -72,6 +72,17 @@ def audit_log():
     return _get_client()["Settings"]["AuditLog"]
 
 
+def user_privacy():
+    """Settings.UserPrivacy - per-user data-collection opt-out, one document per user.
+
+    Bot-side registry key `settings_user_privacy`. Keyed by `user_id` (string, unique
+    index declared bot side); `features` holds the five opt-out booleans. A missing
+    document means every toggle is off, so the absence of a document is a valid state
+    and must never be treated as an error.
+    """
+    return _get_client()["Settings"]["UserPrivacy"]
+
+
 def shared_sessions():
     """WebSessions.SharedSessions - cross-subdomain OAuth session storage (shared client)."""
     return _get_shared_client()["WebSessions"]["SharedSessions"]
@@ -110,6 +121,11 @@ def daily_wyr_submissions():
     return _get_client()["Daily"]["WYR_Submissions"]
 
 
+def daily_wyr_notify_prefs():
+    """Daily.WYR_NotifyPrefs - per-member WYR notification preferences, one per (guild, user)."""
+    return _get_client()["Daily"]["WYR_NotifyPrefs"]
+
+
 def suggestions_suggestions():
     """Suggestions.Suggestions - user-submitted suggestions."""
     return _get_client()["Suggestions"]["Suggestions"]
@@ -129,9 +145,23 @@ def suggestions_userstats():
     return _get_client()["Suggestions"]["UserStats"]
 
 
+def suggestions_notification_queue():
+    """Suggestions.NotificationQueue - queued suggestion DMs.
+
+    Carries NO guild_id, exactly like Suggestions.Votes - the guild only exists on
+    the suggestion document, so guild scoping has to join through `suggestion_id`.
+    """
+    return _get_client()["Suggestions"]["NotificationQueue"]
+
+
 def serverdata_boosts():
     """ServerData.Boosts - active boost records."""
     return _get_client()["ServerData"]["Boosts"]
+
+
+def serverdata_boost_events():
+    """ServerData.Boost_Events - the boost start/stop event history per (guild, user)."""
+    return _get_client()["ServerData"]["Boost_Events"]
 
 
 def serverdata_guilds():

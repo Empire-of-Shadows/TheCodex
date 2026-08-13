@@ -55,18 +55,30 @@ export default function PrivacyPolicyPage() {
               you fill in, not from reading your messages.
             </li>
             <li>
-              <strong>Would-You-Rather votes:</strong> which of the two options you picked, and the
-              running totals. The questions come from a question bank we write, not from members.
+              <strong>Would-You-Rather votes:</strong> which of the two options you picked, when
+              you picked it, and the running totals. Questions come from a question bank we write
+              and from members: a question you submit is{" "}
+              <strong>stored</strong> with your Discord ID so staff can review it and so you can
+              be credited if it goes out.
+            </li>
+            <li>
+              <strong>Notification preferences,</strong> such as whether you asked to be pinged
+              when a new Would-You-Rather question is posted.
             </li>
             <li><strong>Server-boost records</strong> for the servers you boost.</li>
             <li>
               <strong>Member whitelist entries</strong> used to control who may use certain
-              features.
+              features. These are written by server staff, not by you.
+            </li>
+            <li>
+              <strong>An audit log</strong> of admin actions, recording who changed a setting and
+              when, for servers you help manage.
             </li>
             <li>
               <strong>A cached copy of server structure</strong> - member, role, and channel lists
               for the servers the bot is in - kept so the dashboard and bot can resolve names and
-              permissions quickly, along with usage analytics.
+              permissions quickly, along with usage analytics. Your part of that cache is a
+              snapshot of your server profile: your nickname, your roles, and when you joined.
             </li>
             <li><strong>A session cookie</strong> that keeps you signed in to the dashboard.</li>
           </ul>
@@ -110,9 +122,13 @@ export default function PrivacyPolicyPage() {
         <section className="section card">
           <h2 className="section-title" style={{ marginTop: 0 }}>6. Data retention</h2>
           <p>
-            We keep your votes, suggestions, and boost records until you delete them (see your
-            choices below). Login sessions expire automatically. If the bot is removed from a
-            server, related configuration may be cleaned up.
+            We keep the records described above until you delete them from the Privacy &amp; Data
+            panel (see your choices below). Two kinds of records are kept even then: whitelist
+            entries, which are written by staff and also control your access to the server, and
+            the admin audit log, which expires on its own after one year. Turning data collection
+            off stops new records from being written but does not remove existing ones. Login
+            sessions expire automatically. If the bot is removed from a server, the data it
+            stored for that server is deleted after a short grace period.
           </p>
         </section>
 
@@ -120,11 +136,40 @@ export default function PrivacyPolicyPage() {
           <h2 className="section-title" style={{ marginTop: 0 }}>7. Your choices and rights</h2>
           <p>From the dashboard you can:</p>
           <ul>
+            <li>Turn off data collection, for one feature or for everything.</li>
             <li>Export a copy of the data we hold for you.</li>
             <li>Delete your data, for one server or across all servers.</li>
           </ul>
+
+          <h3 className="section-title" style={{ fontSize: "1rem" }}>
+            Turning off data collection
+          </h3>
+          <p>
+            You can tell Codex to stop recording new data about you, either all of it at once or
+            one feature at a time: Would-You-Rather, suggestions, boost tracking, and the member
+            snapshot. These choices are tied to your account, so they apply in{" "}
+            <strong>every server</strong> that uses Codex, and they take effect within about a
+            minute.
+          </p>
+          <p>
+            Opting out is <strong>forward-looking only</strong>. It stops future collection and
+            never removes what is already stored - deleting your data is the separate control for
+            that. With a feature turned off: your Would-You-Rather votes are acknowledged but not
+            counted and you cannot submit questions; your suggestions still post but always
+            anonymously, with no status messages, no record tied to you, and no editing them
+            afterwards; boost records and the member snapshot simply stop being written.
+          </p>
+          <p>
+            Two things survive a delete request. Your whitelist entry, if a server's staff added
+            one, is a moderation record they wrote and is also what grants your access, so only
+            staff can remove it - it is still included in your export. Audit entries for admin
+            actions stay so servers keep a complete history of who changed what. Suggestions you
+            sent anonymously cannot be exported or deleted either, because nothing links them to
+            you.
+          </p>
           <p className="eos-muted">
-            Manage these from the <Link to="/me/privacy">Privacy &amp; Data</Link> panel after signing in.
+            Manage all of these from the <Link to="/me/privacy">Privacy &amp; Data</Link> panel
+            after signing in.
           </p>
         </section>
 

@@ -62,11 +62,50 @@ async def attach_databases():
             failed_logs.append(f"{s}❌ db_manager → Error: {db_error}\n")
             raise  # Can't continue without db_manager
 
+        # Per-user data-collection opt-out. Account-wide (not per-guild) and read on
+        # every user-keyed write path, so it is a short-TTL cache rather than a query
+        # per event. ``is_opted_out(user_id, key)`` already ORs in the "all" master
+        # switch - no caller needs to check that separately.
+        try:
+            from storage.services import UserPreferenceCache
+            privacy_prefs = UserPreferenceCache(
+                db_manager.get_collection_manager("settings_user_privacy"),
+                flags_field="features",
+                keys=("wyr", "suggestions", "boosts", "member_snapshot"),
+                global_key="all",
+            )
+            result, is_success = await attach_attribute(bot, "privacy_prefs", privacy_prefs)
+            (success_logs if is_success else failed_logs).append(result)
+        except Exception as privacy_error:
+            failed_logs.append(f"{s}❌ privacy_prefs → Error: {privacy_error}\n")
+
         # Guild snapshot service (snapshots discord objects into the ServerData collections)
         try:
             from storage.discord import create_guild_snapshot_service, GuildSnapshotConfig
+
+            privacy_collection = db_manager.get_collection_manager("settings_user_privacy")
+
+            async def _snapshot_opt_outs(guild):
+                """Members who asked to be left out of the member snapshot.
+
+                One query per snapshot, not one per member. The opt-out is
+                account-wide, so the guild is not part of the filter; either the
+                member-snapshot flag or the "all" master switch is enough. The
+                engine logs and ignores a failure here, so a snapshot never breaks
+                because this could not be read.
+                """
+                docs = await privacy_collection.find_many(
+                    {"$or": [
+                        {"features.member_snapshot": True},
+                        {"features.all": True},
+                    ]},
+                    projection={"user_id": 1},
+                )
+                return {str(doc["user_id"]) for doc in docs if doc.get("user_id")}
+
             guild_snapshots = create_guild_snapshot_service(
-                db_manager, config=GuildSnapshotConfig(timezone="America/Chicago"))
+                db_manager, config=GuildSnapshotConfig(timezone="America/Chicago"),
+                member_exclude=_snapshot_opt_outs)
             result, is_success = await attach_attribute(bot, "guild_snapshots", guild_snapshots)
             (success_logs if is_success else failed_logs).append(result)
         except Exception as snapshot_error:
