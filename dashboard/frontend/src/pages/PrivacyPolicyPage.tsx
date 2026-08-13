@@ -4,7 +4,7 @@ import { api } from "../api/client";
 import type { User } from "../api/types";
 import AppHeader from "../components/AppHeader";
 
-const EFFECTIVE_DATE = "August 1, 2026";
+const EFFECTIVE_DATE = "August 13, 2026";
 
 export default function PrivacyPolicyPage() {
   const [user, setUser] = useState<User | null>(null);

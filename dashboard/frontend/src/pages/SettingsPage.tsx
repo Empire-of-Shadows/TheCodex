@@ -171,7 +171,7 @@ function SettingsActionPanel({
               Settings
             </button>
             <button className="btn btn-secondary" onClick={() => onNavigate(`/settings/${guild.id}/audit-log`)}>
-              Audit Log
+              Change history
             </button>
           </>
         )}

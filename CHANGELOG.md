@@ -1,5 +1,22 @@
 # Changelog
 
+## [Unreleased] - 2026-08-13 (the change history grew up)
+
+### Changed
+- **The change history page now looks like the rest of the dashboard.** It has the usual header
+  and a Settings button to get back where you came from, instead of the bare page it used to be.
+- **It opens with the totals for the whole log,** not just the page of changes on screen: how
+  many changes have been recorded, how many people have made one, how many came from the
+  dashboard and how many from the panel in Discord, a bar for each part of your settings so you
+  can see what actually gets changed around here, and the date of the oldest change still held.
+  Changes are kept for a year and then drop off on their own.
+- **The section filter and the table now use the same names as the settings page,** so you pick
+  "Would You Rather" instead of "wyr".
+- On a narrow screen the table slides sideways on its own rather than stretching the whole page,
+  so the rest of the page stays where you left it.
+- The privacy page now shows its real effective date of August 13, 2026 - the day the data
+  collection choices went in.
+
 ## [Unreleased] - 2026-08-13 (your data, your call)
 
 ### Added

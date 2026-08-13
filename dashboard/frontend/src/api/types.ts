@@ -532,6 +532,20 @@ export interface AuditLogResponse {
   next_cursor: string | null;
 }
 
+/**
+ * Totals over the whole audit log for one guild, independent of the page of
+ * entries on screen. `by_source` and `by_section` only carry keys that actually
+ * occur, so an untouched section is absent rather than zero.
+ */
+export interface AuditLogSummary {
+  total: number;
+  by_source: Record<string, number>;
+  by_section: Record<string, number>;
+  distinct_actors: number;
+  oldest_at: string | null;
+  retention_days: number;
+}
+
 
 // ── Settings ─────────────────────────────────────────────────────────────
 

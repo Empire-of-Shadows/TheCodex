@@ -11,6 +11,7 @@ import type {
   Channel,
   Role,
   AuditLogResponse,
+  AuditLogSummary,
   SettingsResponse,
   SettingsPatch,
   GuildSettings,
@@ -130,6 +131,10 @@ export const api = {
       `/api/guilds/${guildId}/audit-log?${params.toString()}`,
     );
   },
+
+  /** Totals over the whole log, for the summary tile. Same admin gate as auditLog. */
+  auditLogSummary: (guildId: string) =>
+    apiFetch<AuditLogSummary>(`/api/guilds/${guildId}/audit-log/summary`),
 
   /** Account-wide data collection opt-outs, not scoped to a guild. */
   getUserPrivacy: () => apiFetch<{ features: PrivacyFeatures }>("/api/user/privacy"),

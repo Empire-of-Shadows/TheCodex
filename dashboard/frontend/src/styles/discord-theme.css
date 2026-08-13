@@ -2003,6 +2003,74 @@ a:focus-visible {
    see _engine/components/styles/AppShell.css. */
 
 /* ══════════════════════════════════════════════════════════════════════
+   Change history (the audit log page)
+
+   The entry table is wider than a phone and there is nothing in it to drop -
+   every column is part of "what changed" - so it scrolls sideways inside its
+   own tile instead of squeezing. The min-width on the table is what makes the
+   wrapper's overflow-x fire at all; without it the columns simply collapse and
+   the page itself is what ends up scrolling.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* This page has no command row, so the grid supplies the top padding that
+   .ov-command gives every other page. */
+.audit-grid { padding-top: 22px; }
+
+.audit-filters {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+/* The tile's flex gap already spaces these, and the field's own trailing
+   margin would push the row off the filters' baseline. */
+.audit-filters .eos-field {
+  margin-bottom: 0;
+  flex: 1 1 200px;
+  max-width: 280px;
+}
+
+.audit-scroll {
+  overflow-x: auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.audit-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.audit-table th {
+  text-align: left;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--text-muted);
+  padding: 0 12px 8px 0;
+  white-space: nowrap;
+}
+.audit-table td {
+  padding: 8px 12px 8px 0;
+  color: var(--text-2);
+  border-top: 1px solid var(--border-subtle);
+  vertical-align: top;
+}
+.audit-table td:first-child {
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.audit-table code {
+  font-family: var(--eos-font-mono);
+  font-size: 12px;
+  color: var(--text-1);
+  word-break: break-word;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
    Settings - "The Web of Servers"
 
    The scene itself (strands, orbs, dust, blob vessel) is engine-owned and ships

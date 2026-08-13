@@ -178,6 +178,7 @@ function parseSlug(raw: string | null): Slug {
 
 /** Terms that reach the audit-log link in the rail search. */
 const AUDIT_LOG_SEARCH = [
+  "Change history",
   "Audit log",
   "History of changes",
   "Who changed a setting and when",
@@ -485,7 +486,7 @@ export default function AdminSettingsPage() {
                         className="set-rail__item"
                         to={`/settings/${guildId}/audit-log`}
                       >
-                        <span>Audit log</span>
+                        <span>Change history</span>
                       </Link>
                     )}
                   </Fragment>
