@@ -61,7 +61,7 @@ export default function TermsPage() {
             <li>Attempt to disrupt, overload, reverse engineer, or gain unauthorized access to the service.</li>
             <li>Use the service in violation of the Discord Terms of Service or the rules of the server you are in.</li>
           </ul>
-          <p className="muted">
+          <p className="eos-muted">
             Server administrators configure where and how the bot runs in their server and may
             restrict access to features at their discretion.
           </p>

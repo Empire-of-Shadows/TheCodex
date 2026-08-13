@@ -33,7 +33,7 @@ export default function LoginPage() {
         <a href="/auth/discord" className="cta">
           Login with Discord
         </a>
-        <p className="muted" style={{ marginTop: "0.75rem", fontSize: "0.85rem" }}>
+        <p className="eos-muted" style={{ marginTop: "0.75rem", fontSize: "0.85rem" }}>
           One login covers every Empire of Shadows dashboard, so by signing in you agree to the{" "}
           <a
             href="https://eosofficial.club/privacy"
@@ -45,7 +45,7 @@ export default function LoginPage() {
           , which covers every bot, dashboard, and tool in the ecosystem. TheCodex has its own{" "}
           <Link to="/privacy">privacy page</Link> for the detail specific to this bot.
         </p>
-        <p className="muted" style={{ fontSize: "0.85rem" }}>
+        <p className="eos-muted" style={{ fontSize: "0.85rem" }}>
           New here?{" "}
           <a
             href="https://eosofficial.club/about"

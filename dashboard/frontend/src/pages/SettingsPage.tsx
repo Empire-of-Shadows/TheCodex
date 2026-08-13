@@ -65,11 +65,11 @@ export default function SettingsPage() {
         {error ? (
           <div className="alert danger">{error}</div>
         ) : !guilds ? (
-          <p className="muted">Loading servers...</p>
+          <p className="eos-muted">Loading servers...</p>
         ) : webGuilds.length === 0 ? (
           <div className="card">
             <h3>No manageable servers</h3>
-            <p className="muted">
+            <p className="eos-muted">
               You need MANAGE_SERVER permission (or a configured panel role) in a Discord
               server to manage TheCodex.
               {inviteUrl && (
@@ -107,7 +107,7 @@ function SettingsActionPanel({
   if (!guild) {
     return (
       <aside className="card guild-web__panel guild-web__panel--empty">
-        <p className="muted" style={{ margin: 0 }}>Select a server node to manage it.</p>
+        <p className="eos-muted" style={{ margin: 0 }}>Select a server node to manage it.</p>
       </aside>
     );
   }

@@ -133,19 +133,10 @@ a:focus-visible {
   overflow: hidden;
 }
 
-.app-header {
-  position: sticky;
-  top: 0;
-  z-index: 50;
-  background: linear-gradient(180deg, rgba(15, 15, 18, 0.85) 0%, rgba(15, 15, 18, 0.7) 100%);
-  backdrop-filter: saturate(140%) blur(8px);
-  -webkit-backdrop-filter: saturate(140%) blur(8px);
-  padding: 12px 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--border-subtle);
-}
+/* .app-header, .nav-links, .nav-button and .user-info moved to the engine on
+   2026-08-12 - AppShell renders them, so AppShell ships their CSS
+   (_engine/components/styles/AppShell.css). Only the brand slot below stays
+   here, because the brand is what this bot renders into the shell. */
 
 .app-header h1 {
   font-size: 18px;
@@ -165,23 +156,6 @@ a:focus-visible {
   font-family: var(--eos-font-display);
   font-weight: 700;
   letter-spacing: 0.04em;
-}
-
-.app-header .user-info,
-.user-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  color: var(--text-muted);
-  font-size: 14px;
-}
-
-.app-header .user-info img,
-.user-info > img {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 2px solid var(--glass-heavy);
 }
 
 /* ── Buttons ────────────────────────────────────────────────────────── */
@@ -1995,96 +1969,9 @@ a:focus-visible {
   margin: 0 0 12px;
 }
 
-.admin-settings-page .field {
-  margin-bottom: 16px;
-  min-width: 0;
-}
-.admin-settings-page .field > label:not(.toggle) {
-  display: block;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-muted);
-  margin-bottom: 6px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.admin-settings-page .field input[type="text"],
-.admin-settings-page .field input[type="number"],
-.admin-settings-page .field select,
-.admin-settings-page .field textarea {
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: 6px;
-  border: 1px solid var(--border-subtle);
-  background: rgba(20, 15, 38, 0.6);
-  color: var(--text-1);
-  font: inherit;
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-.admin-settings-page .field input:focus,
-.admin-settings-page .field select:focus,
-.admin-settings-page .field textarea:focus {
-  border-color: var(--brand-light);
-  box-shadow: 0 0 0 3px rgba(125, 74, 255, 0.25);
-}
-.admin-settings-page .field select option {
-  background: #1a1a1f;
-  color: var(--text-1);
-}
-.admin-settings-page .field textarea {
-  resize: vertical;
-  min-height: 80px;
-  font-family: var(--eos-font-mono, ui-monospace, monospace);
-}
-
-/* Pill-switch toggle (matches TheHost pattern). */
-.admin-settings-page .toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  user-select: none;
-  font-size: 14px;
-  color: var(--text-1);
-  text-transform: none;
-  letter-spacing: 0;
-  font-weight: 500;
-}
-.admin-settings-page .toggle input[type="checkbox"] {
-  appearance: none;
-  width: 38px;
-  height: 22px;
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 999px;
-  position: relative;
-  cursor: pointer;
-  transition: background 0.2s;
-  margin: 0;
-}
-.admin-settings-page .toggle input[type="checkbox"]::after {
-  content: "";
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 16px;
-  height: 16px;
-  background: #fff;
-  border-radius: 50%;
-  transition: transform 0.2s;
-}
-.admin-settings-page .toggle input[type="checkbox"]:checked {
-  background: var(--brand);
-}
-.admin-settings-page .toggle input[type="checkbox"]:checked::after {
-  transform: translateX(16px);
-}
-.admin-settings-page .toggle input[type="checkbox"]:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+/* .field and .toggle moved to the engine on 2026-08-12 as .eos-field/.eos-toggle
+   (_engine/styles/eos-layout.css), because the field renderers that use them are
+   now engine-owned. .muted above stays - bot-owned pages still use it. */
 
 /* Alerts (shared shape; also fixes AdminAuditLogPage). */
 .alert {
@@ -2112,38 +1999,8 @@ a:focus-visible {
   color: var(--warning);
 }
 
-/* ══════════════════════════════════════════════════════════════════════
-   Header nav (parity with TheHost)
-   ══════════════════════════════════════════════════════════════════════ */
-
-.nav-links {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.nav-button {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.5rem 1rem;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-2);
-  border: 2px solid transparent;
-  font-weight: 600;
-  font-size: 0.9rem;
-  cursor: pointer;
-  text-decoration: none;
-  transition: all 0.2s ease;
-}
-.nav-button:hover {
-  color: var(--text-1);
-  background: rgba(255, 255, 255, 0.05);
-}
-.nav-button.active {
-  color: var(--text-1);
-  border-color: var(--brand);
-  background: rgba(77, 14, 179, 0.15);
-}
+/* Header nav (.nav-links / .nav-button) moved to the engine on 2026-08-12 -
+   see _engine/components/styles/AppShell.css. */
 
 /* ══════════════════════════════════════════════════════════════════════
    Admin "Guild Web" page

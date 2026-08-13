@@ -70,7 +70,7 @@ export default function PrivacyPolicyPage() {
             </li>
             <li><strong>A session cookie</strong> that keeps you signed in to the dashboard.</li>
           </ul>
-          <p className="muted">
+          <p className="eos-muted">
             Tag-tracker status is read live from your Discord roles and is not stored. The bot reads
             message text in three places and stores none of it: the words after a mention of the bot
             become a search query for the guide, an announcement's text is used to name the
@@ -123,7 +123,7 @@ export default function PrivacyPolicyPage() {
             <li>Export a copy of the data we hold for you.</li>
             <li>Delete your data, for one server or across all servers.</li>
           </ul>
-          <p className="muted">
+          <p className="eos-muted">
             Manage these from the <Link to="/me/privacy">Privacy &amp; Data</Link> panel after signing in.
           </p>
         </section>
