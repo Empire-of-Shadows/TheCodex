@@ -47,6 +47,26 @@ OPTION3_EMOJI = "3️⃣"  # Reaction for option 3
 #: ceiling here and ``MAX_OPTIONS`` move together.
 OPTION_EMOJI = {1: OPTION1_EMOJI, 2: OPTION2_EMOJI, 3: OPTION3_EMOJI, 4: "4️⃣", 5: "5️⃣"}
 
+_OPTION_PREFIX = "option"
+
+
+def _option_label(option) -> str:
+    """Human label for a vote option key: ``"option4"`` -> ``"Option 4"``.
+
+    Derived from the key rather than looked up in a table, so it covers every
+    option a view can build - the poll format goes up to ``MAX_OPTIONS``, and a
+    fixed three-entry table raised KeyError on option 4 and 5 AFTER the vote had
+    already been saved, telling the member their vote failed when it had not.
+
+    Anything that is not an ``optionN`` key falls back to the key itself, which
+    is still a usable confirmation rather than a lost vote.
+    """
+    text = str(option)
+    number = text[len(_OPTION_PREFIX):]
+    if text.startswith(_OPTION_PREFIX) and number.isdigit():
+        return f"Option {int(number)}"
+    return text
+
 # Outcomes of a scheduled post attempt. The distinction that matters is
 # NO_CONTENT vs FAILED: the first is settled for the day, the second retries on
 # the next tick.
@@ -1645,16 +1665,27 @@ class WYR(commands.Cog):
                     return  # nothing changed
 
                 now = datetime.now(timezone.utc)
+                on_insert = {
+                    "question_id": question_id,
+                    "guild_id": gid,
+                    "user_id": uid,
+                    "created_at": now,
+                }
+                # The question's format travels with the vote, so anything
+                # reading votes knows what kind of question was answered without
+                # going back to the bank for it. Taken from the bank document
+                # already loaded above - no extra query. A document with no
+                # format is left without the field rather than guessed at, since
+                # a wrong value is worse than a missing one.
+                question_format = existing_question.get("format")
+                if question_format:
+                    on_insert["format"] = question_format
+
                 await db_manager.daily_wyr_votes.update_one(
                     {"question_id": question_id, "guild_id": gid, "user_id": uid},
                     {
                         "$set": {"option": option, "updated_at": now},
-                        "$setOnInsert": {
-                            "question_id": question_id,
-                            "guild_id": gid,
-                            "user_id": uid,
-                            "created_at": now,
-                        },
+                        "$setOnInsert": on_insert,
                     },
                     upsert=True,
                 )
@@ -2050,7 +2081,9 @@ class WYRView(discord.ui.View):
 
                 await cog.record_vote(question_id, interaction.user.id, interaction.guild_id, option)
 
-                option_text = {"option1": "Option 1", "option2": "Option 2", "option3": "Option 3"}[option]
+                # Matches how the buttons themselves are labelled ("Option 4"),
+                # for every option a poll can carry.
+                option_text = _option_label(option)
                 embed = discord.Embed(
                     title="✅ Vote Recorded!",
                     description=f"You voted for **{option_text}**",

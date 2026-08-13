@@ -1,10 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
-import type { Guild, GuildOverview, User, UserActivity } from "../api/types";
+import type {
+  Guild,
+  GuildOverview,
+  User,
+  UserActivity,
+  UserEntitlements,
+} from "../api/types";
 import AppHeader from "../components/AppHeader";
 import AdminOverview from "../components/overview/AdminOverview";
 import MemberOverview from "../components/overview/MemberOverview";
+import MemberEntitlements from "../components/overview/MemberEntitlements";
 import ServerPicker, { pickerMeta } from "../_engine/components/overview/ServerPicker";
 import SignalStrip, { type Signal } from "../_engine/components/overview/SignalStrip";
 import { formatCount } from "../_engine/format";
@@ -12,8 +19,13 @@ import { formatError } from "../_engine/api/formatError";
 
 /** What the page is showing for the current selection. */
 type Pane =
-  | { kind: "admin"; overview: GuildOverview }
-  | { kind: "member"; activity: UserActivity }
+  | {
+      kind: "admin";
+      overview: GuildOverview;
+      activity: UserActivity | null;
+      entitlements: UserEntitlements | null;
+    }
+  | { kind: "member"; activity: UserActivity; entitlements: UserEntitlements | null }
   | { kind: "none" };
 
 export default function DashboardPage() {
@@ -96,15 +108,49 @@ export default function DashboardPage() {
     setPaneLoading(true);
     setPaneError(null);
 
+    // Entitlements are guild-scoped and additive: no guild selected (or the
+    // bot missing) means no section, and a failed fetch never takes the rest
+    // of the page down with it.
+    const entitlementsRequest: Promise<UserEntitlements | null> =
+      selectedGuild && selectedGuild.bot_in_guild && !selectedGuild.setup_required
+        ? api.getUserEntitlements(selectedGuild.id).then(
+            (entitlements) => entitlements,
+            (e) => {
+              console.error("Entitlements fetch failed", e);
+              return null;
+            },
+          )
+        : Promise.resolve(null);
+
     const request: Promise<Pane> =
       isAdminPane && selectedGuild
-        ? api.getGuildOverview(selectedGuild.id).then((overview) => ({
+        ? Promise.all([
+            api.getGuildOverview(selectedGuild.id),
+            // Admins get their personal section too. It is additive: if it
+            // fails, the server overview still renders alone rather than
+            // taking the page down with it.
+            api.getUserActivity(selectedGuild.id).then(
+              (activity) => activity,
+              (e) => {
+                console.error("Personal activity fetch failed", e);
+                return null;
+              },
+            ),
+            entitlementsRequest,
+          ]).then(([overview, activity, entitlements]) => ({
             kind: "admin" as const,
             overview,
+            activity,
+            entitlements,
           }))
-        : api
-            .getUserActivity(selectedGuildId ?? undefined)
-            .then((activity) => ({ kind: "member" as const, activity }));
+        : Promise.all([
+            api.getUserActivity(selectedGuildId ?? undefined),
+            entitlementsRequest,
+          ]).then(([activity, entitlements]) => ({
+            kind: "member" as const,
+            activity,
+            entitlements,
+          }));
 
     request
       .then((next) => {
@@ -166,7 +212,8 @@ export default function DashboardPage() {
                 <span className="ov-card__title">No servers</span>
               </div>
               <p className="ov-body">
-                No servers found where you have Manage Server permission.
+                No servers to show yet. Servers appear here when you share one
+                with the bot, or when you have Manage Server permission.
               </p>
             </section>
           </div>
@@ -238,9 +285,37 @@ export default function DashboardPage() {
             </section>
           </div>
         ) : pane.kind === "admin" ? (
-          <AdminOverview overview={pane.overview} />
+          <>
+            <AdminOverview overview={pane.overview} />
+            {pane.activity && (
+              <>
+                <h2 className="section-title" style={{ margin: "28px 0 12px" }}>
+                  Your activity
+                </h2>
+                <MemberOverview activity={pane.activity} />
+              </>
+            )}
+            {pane.entitlements && (
+              <>
+                <h2 className="section-title" style={{ margin: "28px 0 12px" }}>
+                  What you can use
+                </h2>
+                <MemberEntitlements entitlements={pane.entitlements} />
+              </>
+            )}
+          </>
         ) : pane.kind === "member" ? (
-          <MemberOverview activity={pane.activity} />
+          <>
+            <MemberOverview activity={pane.activity} />
+            {pane.entitlements && (
+              <>
+                <h2 className="section-title" style={{ margin: "28px 0 12px" }}>
+                  What you can use
+                </h2>
+                <MemberEntitlements entitlements={pane.entitlements} />
+              </>
+            )}
+          </>
         ) : (
           <div className="empty-state" role="status" style={{ padding: "32px 24px" }}>
             No activity yet - once you use Codex features (WYR, suggestions, tag tracker, boosts),

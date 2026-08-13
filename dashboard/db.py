@@ -154,6 +154,16 @@ def serverdata_whitelist():
     return _get_client()["ServerData"]["Whitelist"]
 
 
+def color_sets():
+    """Settings.ColorSets - named embed colour palettes, per guild."""
+    return _get_client()["Settings"]["ColorSets"]
+
+
+def color_set_assignments():
+    """Settings.ColorSetAssignments - which tier/role a colour set is granted to."""
+    return _get_client()["Settings"]["ColorSetAssignments"]
+
+
 def updates_monthly():
     """Updates-Drops.StatsMonthly - drop counts pre-bucketed into a compound _id."""
     return _get_client()["Updates-Drops"]["StatsMonthly"]

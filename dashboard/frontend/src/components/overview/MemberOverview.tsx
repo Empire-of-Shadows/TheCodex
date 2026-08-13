@@ -1,4 +1,4 @@
-import type { UserActivity } from "../../api/types";
+import type { SubmissionsActivity, UserActivity } from "../../api/types";
 import AreaChart from "../../_engine/components/charts/AreaChart";
 import { Rule, Stat, Tile } from "../../_engine/components/overview/Tile";
 import {
@@ -8,7 +8,7 @@ import {
   formatDayLabel,
   formatShortDate,
 } from "../../_engine/format";
-import { statusColour } from "./format";
+import { formatQuestionKind, statusColour } from "./format";
 
 /**
  * The member home.
@@ -59,6 +59,26 @@ function YourVoting({ activity }: { activity: UserActivity }) {
           label="First vote"
         />
       </div>
+      <div className="ov-statrow">
+        <Stat
+          small
+          value={formatCount(wyr.format_breakdown.wyr)}
+          label={formatQuestionKind("wyr")}
+        />
+        <Stat
+          small
+          value={formatCount(wyr.format_breakdown.poll)}
+          label={formatQuestionKind("poll")}
+        />
+        <Stat small value="-" label="Open-ended · not counted" />
+      </div>
+      {wyr.format_breakdown.unclassified > 0 && (
+        <p className="ov-muted">
+          {formatCount(wyr.format_breakdown.unclassified)} earlier
+          {wyr.format_breakdown.unclassified === 1 ? " vote is" : " votes are"} not
+          classified by question type.
+        </p>
+      )}
       <AreaChart
         points={points}
         ariaLabel="Your votes on the daily question for each of the last 30 days"
@@ -159,6 +179,9 @@ function YourQuestions({ activity }: { activity: UserActivity }) {
         <Stat small value={formatCount(submissions.waiting)} label="Waiting" />
         <Stat small value={formatCount(submissions.declined)} label="Not used" />
       </div>
+      {submissions.sent > 0 && submissionFormatLine(submissions.by_format) && (
+        <p className="ov-muted">By type: {submissionFormatLine(submissions.by_format)}</p>
+      )}
       {submissions.sent === 0 ? (
         <p className="ov-muted">
           You have not sent a question in yet. Servers with submissions turned on take them from
@@ -175,4 +198,12 @@ function YourQuestions({ activity }: { activity: UserActivity }) {
       )}
     </Tile>
   );
+}
+
+/** "2 Would You Rather · 1 Open-ended" - only the formats actually used. */
+function submissionFormatLine(byFormat: SubmissionsActivity["by_format"]): string {
+  return (["wyr", "poll", "open"] as const)
+    .filter((key) => byFormat[key] > 0)
+    .map((key) => `${formatCount(byFormat[key])} ${formatQuestionKind(key)}`)
+    .join(" · ");
 }

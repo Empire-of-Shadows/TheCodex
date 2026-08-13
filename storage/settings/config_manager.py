@@ -221,6 +221,10 @@ def _default_embed() -> Dict[str, Any]:
         "role_tier": {},
         "description_limits": {"default_limit": 500, "limits": {}},
         "feature_access": {},
+        # Owner opt-in (ruled 2026-08-12): every member may use any embed
+        # colour, bypassing the palette assignments. Readers default a missing
+        # key to False, so this is documentation as much as behaviour.
+        "free_color_access": False,
     }
 
 

@@ -4,12 +4,17 @@ import re
 from typing import Optional, Set, Callable, Awaitable, TYPE_CHECKING
 import discord
 
+from Features.ce_utilities.helpers.embed_confirm import EmbedConfirmView, PREVIEW_TEXT
+from Features.ce_utilities.helpers.embed_config_loader import EMBED_FEATURES
 from storage.log import get_logger, log_context, log_performance
 
 if TYPE_CHECKING:
     from Features.ce_utilities.helpers.embed_config_loader import EmbedConfigLoader
 
 logger = get_logger("EmbedModal", level=logging.INFO)
+
+# Discord's ceiling for an embed footer.
+MAX_FOOTER_LENGTH = 2048
 
 # Will be set by create_embed.py when the cog loads
 _embed_config: Optional['EmbedConfigLoader'] = None
@@ -18,6 +23,21 @@ def set_embed_config(config: 'EmbedConfigLoader') -> None:
     """Set the global embed config loader instance."""
     global _embed_config
     _embed_config = config
+
+
+def resolve_features(allowed_features: Optional[Set[str]]) -> Set[str]:
+    """Normalize a caller-supplied entitlement set.
+
+    Entitlements are decided per FEATURE against the guild's config (see
+    ``EmbedConfigLoader.describe_feature_access``), so membership here is
+    literal: a feature absent from the set is denied. ``None`` means the caller
+    did not resolve anything and is only used by direct constructions in tests
+    and by defaults - it opens every feature, and the submit path re-resolves
+    from the guild config regardless, so it can never widen real access.
+    """
+    if allowed_features is None:
+        return set(EMBED_FEATURES)
+    return set(allowed_features)
 
 
 async def get_max_description_length(guild_id: int, user_roles: Set[int]) -> int:
@@ -49,6 +69,34 @@ async def get_allowed_colors(guild_id: int, user_roles: Set[int]) -> dict[str, i
         allowed_colors = await _embed_config.get_available_colors(guild_id, user_roles)
         logger.info(f"User has access to {len(allowed_colors)} colors in guild {guild_id}")
         return allowed_colors
+
+
+async def get_user_color_sets(guild_id: int, user_roles: Set[int]) -> list[dict]:
+    """Get the color sets a user's roles/tiers grant, dropping empty ones.
+
+    An empty result means no set restricts the member, which is what puts the
+    free-rein hex field in the modal instead of the color pickers on the
+    confirm step.
+    """
+    if _embed_config is None:
+        raise RuntimeError("Embed config not initialized. Call set_embed_config() first.")
+
+    sets = await _embed_config.get_user_color_sets(guild_id, user_roles)
+    return [cs for cs in sets if cs.get("colors")]
+
+
+async def get_allowed_features(guild_id: int, user_roles: Set[int]) -> Set[str]:
+    """Get the embed features this member may use in this guild."""
+    if _embed_config is None:
+        raise RuntimeError("Embed config not initialized. Call set_embed_config() first.")
+    return await _embed_config.get_allowed_features(guild_id, user_roles)
+
+
+async def get_free_color_access(guild_id: int) -> bool:
+    """Whether this guild lets every member use any hex color."""
+    if _embed_config is None:
+        raise RuntimeError("Embed config not initialized. Call set_embed_config() first.")
+    return await _embed_config.get_free_color_access(guild_id)
 
 
 async def get_default_color(guild_id: int) -> Optional[int]:
@@ -116,17 +164,26 @@ def _parse_color_to_int(color_str: str) -> Optional[int]:
 
 class EmbedModal(discord.ui.Modal):
     def __init__(self, guild_id: int, max_length: int, user_roles: Set[int],
-                 user_features: Optional[Set[str]] = None,
+                 allowed_features: Optional[Set[str]] = None,
                  default_color: Optional[int] = None,
+                 color_sets: Optional[list[dict]] = None,
+                 free_color_access: bool = False,
                  cache_update_callback: Optional[Callable[[int, int], Awaitable[None]]] = None):
         """
-        Modal for creating an embed.
+        Modal for creating an embed. Text only - color pickers and the timestamp
+        toggle live on the confirm step that this modal's submit opens, because a
+        modal's own components are static until submit.
 
         :param guild_id: The guild ID for per-guild config lookups.
         :param max_length: Pre-computed max description length.
         :param user_roles: The roles of the user invoking the modal.
-        :param user_features: Pre-computed set of feature names the user can access.
+        :param allowed_features: Features this member may use, resolved against
+                                 the guild's per-feature config.
         :param default_color: Server default embed color (int), or None.
+        :param color_sets: Color sets assigned to this member's roles/tiers.
+        :param free_color_access: Guild-wide opt-out that lets every member type
+                                  any hex. Off by default, in which case colors
+                                  follow the assigned sets strictly.
         :param cache_update_callback: A callback function to update the authorization cache.
         """
         with log_context(logger, "Initializing EmbedModal", level=logging.DEBUG):
@@ -134,9 +191,19 @@ class EmbedModal(discord.ui.Modal):
 
             logger.info(f"EmbedModal initialized with {len(user_roles)} user roles, max_length={max_length}")
 
+            features = resolve_features(allowed_features)
+
             self.guild_id = guild_id
             self.default_color = default_color
-            self.has_image_field = user_features is None or "image_field" in user_features
+            self.color_sets = [cs for cs in (color_sets or []) if cs.get("colors")]
+            self.free_color_access = bool(free_color_access)
+            self.has_image_field = "image_field" in features
+            self.has_footer_field = "footer_field" in features
+            self.has_timestamp = "timestamp" in features
+            # The hex field is the guild-wide opt-out only. With it off, colors
+            # come from the member's assigned sets on the confirm step - and a
+            # member with no sets gets no color control at all.
+            self.has_hex_input = self.free_color_access
 
             # Title input
             self.title_input = discord.ui.TextInput(
@@ -167,14 +234,28 @@ class EmbedModal(discord.ui.Modal):
                 )
                 self.add_item(self.thumbnail_input)
 
-            # Color input
-            self.color_input = discord.ui.TextInput(
-                label="Color",
-                placeholder="Enter hex (e.g., #FF0000) or allowed name",
-                required=False,
-                max_length=32,
-            )
-            self.add_item(self.color_input)
+            # Footer input (gated by footer_field feature)
+            self.footer_input = None
+            if self.has_footer_field:
+                self.footer_input = discord.ui.TextInput(
+                    label="Footer",
+                    placeholder="Footer text (optional)",
+                    style=discord.TextStyle.paragraph,
+                    required=False,
+                    max_length=MAX_FOOTER_LENGTH,
+                )
+                self.add_item(self.footer_input)
+
+            # Color input - only when the guild has opened colors up to everyone.
+            self.color_input = None
+            if self.has_hex_input:
+                self.color_input = discord.ui.TextInput(
+                    label="Color",
+                    placeholder="Enter hex (e.g., #FF0000) or allowed name",
+                    required=False,
+                    max_length=32,
+                )
+                self.add_item(self.color_input)
 
             self.user_roles = user_roles
             self.cache_update_callback = cache_update_callback
@@ -198,14 +279,27 @@ class EmbedModal(discord.ui.Modal):
                     allowed_colors = await get_allowed_colors(self.guild_id, self.user_roles)
                     logger.debug(f"User has access to {len(allowed_colors)} allowed colors")
 
+                # Entitlements are re-resolved here rather than trusted from the
+                # modal's construction: roles can change between opening the
+                # modal and submitting it, and the gated fields must be enforced
+                # on the way in, not only hidden on the way out.
+                with log_context(logger, "Re-checking feature entitlements", level=logging.DEBUG):
+                    current_features = await get_allowed_features(self.guild_id, self.user_roles)
+                    may_use_image = "image_field" in current_features
+                    may_use_footer = "footer_field" in current_features
+                    may_use_timestamp = "timestamp" in current_features
+                    free_colors = await get_free_color_access(self.guild_id)
+
                 # Retrieve and log field values
                 with log_context(logger, "Processing input field values", level=logging.DEBUG):
                     title = self.title_input.value or None
                     description = self.description_input.value
-                    color_input_raw = (self.color_input.value or "").strip()
+                    color_input_raw = (self.color_input.value or "").strip() if self.color_input else ""
+                    footer_raw = (self.footer_input.value or "").strip() if self.footer_input else ""
 
                     logger.debug(f"Input values - Title: {'Set' if title else 'None'}, "
                                  f"Description: {len(description)} chars, "
+                                 f"Footer: {len(footer_raw)} chars, "
                                  f"Color: '{color_input_raw}' {'Set' if color_input_raw else 'None'}")
 
                 # Validate and process color
@@ -226,7 +320,10 @@ class EmbedModal(discord.ui.Modal):
                                 logger.warning(f"Color validation failed for user {interaction.user}: {error_msg}")
                                 await interaction.response.send_message(f"❌ {error_msg}", ephemeral=True)
                                 return
-                            if allowed_colors and parsed not in allowed_colors.values():
+                            # With free color access on, any hex is legitimate.
+                            # With it off, a typed color must be one the member's
+                            # assigned sets actually contain.
+                            if not free_colors and parsed not in allowed_colors.values():
                                 error_msg = f"You are not authorized to use the color '{color_input_raw}'."
                                 logger.warning(
                                     f"Color authorization failed for user {interaction.user}: {error_msg} - Color: 0x{parsed:06X}")
@@ -241,8 +338,13 @@ class EmbedModal(discord.ui.Modal):
 
                 # Set thumbnail logic (only if image_field feature is enabled)
                 with log_context(logger, "Processing thumbnail configuration"):
-                    if self.has_image_field:
-                        thumbnail_url_raw = (self.thumbnail_input.value or "").strip() if self.thumbnail_input else ""
+                    thumbnail_url_raw = (self.thumbnail_input.value or "").strip() if self.thumbnail_input else ""
+                    if thumbnail_url_raw and not may_use_image:
+                        error_msg = "Your role does not have access to embed images."
+                        logger.warning(f"Thumbnail rejected for user {interaction.user}: not entitled")
+                        await interaction.response.send_message(f"❌ {error_msg}", ephemeral=True)
+                        return
+                    if may_use_image:
                         if thumbnail_url_raw.lower() in ("none", ""):
                             logger.debug("No thumbnail - field empty or set to 'none'")
                         elif thumbnail_url_raw.lower() == "pp":
@@ -259,16 +361,37 @@ class EmbedModal(discord.ui.Modal):
                                 return
                             embed.set_thumbnail(url=thumbnail_url_raw)
 
-                # Send embed
-                with log_context(logger, "Sending embed message"):
-                    await interaction.response.defer()
-                    message = await interaction.followup.send(embed=embed)
-                    logger.info(
-                        f"Embed message sent successfully - Message ID: {message.id}")
+                # Footer (gated by footer_field, enforced here as well as hidden)
+                with log_context(logger, "Processing footer configuration"):
+                    if footer_raw:
+                        if not may_use_footer:
+                            error_msg = "Your role does not have access to embed footers."
+                            logger.warning(f"Footer rejected for user {interaction.user}: not entitled")
+                            await interaction.response.send_message(f"❌ {error_msg}", ephemeral=True)
+                            return
+                        if len(footer_raw) > MAX_FOOTER_LENGTH:
+                            error_msg = f"Footer text is limited to {MAX_FOOTER_LENGTH} characters."
+                            logger.warning(f"Footer too long for user {interaction.user}")
+                            await interaction.response.send_message(f"❌ {error_msg}", ephemeral=True)
+                            return
+                        embed.set_footer(text=footer_raw)
 
-                # Update cache if callback provided
-                if self.cache_update_callback:
-                    await self.cache_update_callback(interaction.user.id, message.id)
+                # Confirm step: the real embed as a live preview, plus the
+                # controls that a modal cannot carry (dependent color selects,
+                # the timestamp toggle, Post/Cancel).
+                with log_context(logger, "Presenting embed confirm step"):
+                    view = EmbedConfirmView(
+                        embed=embed,
+                        author_id=interaction.user.id,
+                        color_sets=self.color_sets,
+                        allow_timestamp=may_use_timestamp,
+                        cache_update_callback=self.cache_update_callback,
+                    )
+                    await interaction.response.send_message(
+                        content=PREVIEW_TEXT, embed=embed, view=view, ephemeral=True
+                    )
+                    view.bind_source(interaction)
+                    logger.info(f"Embed confirm step shown to {interaction.user} ({interaction.user.id})")
 
             except discord.Forbidden as e:
                 logger.error(f"Permission error during embed submission by {interaction.user}: {e}", exc_info=True)

@@ -6,6 +6,7 @@ import type {
   BoardData,
   BoardPosted,
   UserActivity,
+  UserEntitlements,
   GuildOverview,
   Channel,
   Role,
@@ -31,6 +32,10 @@ export const api = {
   botInviteUrl: () => apiFetch<{ url: string }>("/api/bot-invite-url"),
   getUserActivity: (guildId?: string) =>
     apiFetch<UserActivity>(guildId ? `/api/user-activity?guild_id=${guildId}` : "/api/user-activity"),
+
+  /** What the member can use in one guild. Guild-scoped; any member of it may ask. */
+  getUserEntitlements: (guildId: string) =>
+    apiFetch<UserEntitlements>(`/api/user-entitlements?guild_id=${guildId}`),
 
   /**
    * Everything the admin home shows for one guild, in one request.

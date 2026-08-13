@@ -212,20 +212,56 @@ class WYRQuestionActions:
     async def reset_member_stats(guild_id: int, user_id: int) -> bool:
         """Wipe one member's voting record in this guild.
 
+        A reset clears everything personal the daily questions hold about that
+        member in THIS server: their leaderboard totals, the individual votes
+        behind those totals, and their notification-prompt preferences. Leaving
+        the votes behind used to mean a "reset" member still could not change a
+        vote they had already cast, and the counts on old questions still
+        included them.
+
+        Deliberately NOT cleared: questions the member submitted. Those are
+        server content once they are in the bank, not personal statistics, and
+        deleting them would silently shrink the guild's question bank.
+
         Scoped to the guild, so resetting someone here never touches their
-        record in another server.
+        record in another server. Every id is stored as a string.
         """
         from storage.settings.collections import db_manager
+
+        uid, gid = str(user_id), str(guild_id)
+        scope = {"user_id": uid, "guild_id": gid}
+        removed = False
+
+        # Each collection is cleared independently: a failure on one must not
+        # leave the others untouched, or a retry would be the only way to finish
+        # a reset that was reported as done.
         try:
-            return await db_manager.daily_wyr_leaderboard.delete_one(
-                {"user_id": str(user_id), "guild_id": str(guild_id)}
-            )
+            removed = bool(await db_manager.daily_wyr_leaderboard.delete_one(dict(scope)))
         except Exception as e:
             logger.error(
-                f"Failed to reset WYR stats for {user_id} in guild {guild_id}: {e}",
+                f"Failed to reset WYR leaderboard for {user_id} in guild {guild_id}: {e}",
                 exc_info=True,
             )
-            return False
+
+        try:
+            votes = await db_manager.daily_wyr_votes.delete_many(dict(scope))
+            removed = removed or bool(votes)
+        except Exception as e:
+            logger.error(
+                f"Failed to reset WYR votes for {user_id} in guild {guild_id}: {e}",
+                exc_info=True,
+            )
+
+        try:
+            prefs = await db_manager.daily_wyr_notify_prefs.delete_many(dict(scope))
+            removed = removed or bool(prefs)
+        except Exception as e:
+            logger.error(
+                f"Failed to reset WYR notification prefs for {user_id} in guild {guild_id}: {e}",
+                exc_info=True,
+            )
+
+        return removed
 
     @staticmethod
     async def can_review(member) -> bool:

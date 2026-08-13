@@ -54,6 +54,18 @@ export interface WyrActivity {
     option4: number;
     option5: number;
   };
+  /**
+   * Votes by question format, from the format stamped on each vote document.
+   * Open-ended questions post no vote buttons, so an "open" vote is never
+   * recorded - the UI says "not counted", never zero. `unclassified` covers
+   * votes from before the stamp existed whose question was deleted before the
+   * backfill could classify them; render it only when non-zero.
+   */
+  format_breakdown: {
+    wyr: number;
+    poll: number;
+    unclassified: number;
+  };
   first_vote: string | null;
   last_vote: string | null;
   /** "voted within the last day". NOT a streak length - see streak_days. */
@@ -93,6 +105,13 @@ export interface SubmissionsActivity {
   posted: number;
   waiting: number;
   declined: number;
+  /** Submissions by intended question format, recorded at submit time. */
+  by_format: {
+    wyr: number;
+    poll: number;
+    open: number;
+    unclassified?: number;
+  };
   latest_posted: {
     question_id: number | null;
     posted_at: string | null;
@@ -124,6 +143,65 @@ export interface UserActivity {
   tag_tracker: TagTrackerGuild[];
   boost: BoostActivity;
   submissions: SubmissionsActivity;
+}
+
+// ── Member entitlements ──────────────────────────────────────────────────
+
+export interface EmbedFeatureEntitlement {
+  key: string;
+  label: string;
+  /** Whether THIS member can use it, under the guild-keyed rule. */
+  available: boolean;
+  /** Whether the guild restricted it to specific tiers at all. */
+  restricted: boolean;
+}
+
+export interface EmbedEntitlements {
+  /** May open the embed builder at all (admin, or holds any tier role). */
+  access: boolean;
+  enabled: boolean;
+  tiers: string[];
+  features: EmbedFeatureEntitlement[];
+  colors: {
+    /**
+     * "free" = the guild opted into free colour access for everyone;
+     * "palette" = the member's assigned sets below; "default_only" = no
+     * palette assigned, embeds post with the server default colour.
+     */
+    mode: "free" | "palette" | "default_only";
+    default_color: string | null;
+    sets: { name: string; colors: Record<string, string> }[];
+  };
+  description_limit: number;
+}
+
+export interface CapabilityEntitlement {
+  key: string;
+  label: string;
+  granted: boolean;
+}
+
+export interface ToggleRole {
+  source: "board" | "guide";
+  role_id: string;
+  name: string | null;
+  held: boolean;
+}
+
+export interface UserEntitlements {
+  guild_id: string;
+  /** Every section independently nullable - one failure never blanks the page. */
+  embed: EmbedEntitlements | null;
+  capabilities: CapabilityEntitlement[] | null;
+  self_serve: {
+    wyr_ping: { available: boolean; subscribed: boolean };
+    toggle_roles: ToggleRole[];
+  } | null;
+  status: {
+    screening_whitelisted: boolean;
+    whitelist_role_held: boolean;
+  } | null;
+  submissions: { enabled: boolean; pending: number; max: number } | null;
 }
 
 // ── Guild overview (admin home) ──────────────────────────────────────────

@@ -31,7 +31,7 @@ from ..actions.structure import info_action
 from ..actions.features import panel_roles_pair
 from .panel_branding import PANEL_TITLE, PANEL_DESCRIPTION
 from storage.settings.config_manager import get_config_manager
-from ..actions.embed_config_actions import EmbedConfigActions
+from ..actions.embed_config_actions import EmbedConfigActions, build_free_color_access_node
 from ..actions.wyr_actions import WYRConfigActions
 from ..actions.new_member_actions import NewMemberActions
 from ..actions.announcement_actions import AnnouncementActions
@@ -428,6 +428,11 @@ ROLE_TIER_CONFIG = PanelNode(
 
 # ── Feature Access ────────────────────────────────────────────────────────────
 
+# Flags the embed builder does not honour. Offering one would let an admin
+# configure something that changes nothing. ``author_field`` was never
+# implemented and was retired 2026-08-12.
+_RETIRED_EMBED_FEATURES = {"author_field"}
+
 FEATURE_ACCESS_CONFIG = PanelNode(
     key="feature_access",
     label="Feature Access",
@@ -447,6 +452,7 @@ FEATURE_ACCESS_CONFIG = PanelNode(
             max_values=len(TIER_NAMES),
         )
         for key, label, _ in FEATURE_OPTIONS
+        if key not in _RETIRED_EMBED_FEATURES
     },
 )
 
@@ -1097,7 +1103,6 @@ ADMIN_ROLES_CONFIG.category_group = "main"
 # NOTE: there are no label-only `_stub()` nodes left. A `kind="menu"` PanelNode with no
 # children is a DEAD END in Discord - the engine's _show_menu renders its description and
 # a Back button and nothing else - so do not reintroduce one to "reserve" a panel slot.
-# See .docs/TheCodex/ADMIN_PANEL_PLACEHOLDERS.md.
 
 DROPS_MANAGER_ROLE_CONFIG = role_leaf(
     "drops_manager_role",
@@ -1213,6 +1218,7 @@ _EMBED_SETTINGS_GROUP = PanelNode(
         "role_tiers": ROLE_TIER_CONFIG,
         "description_limits": DESCRIPTION_LIMITS_CONFIG,
         "color_tiers": build_color_tiers_node(),
+        "free_color_access": build_free_color_access_node(),
         "feature_access": FEATURE_ACCESS_CONFIG,
     },
 )

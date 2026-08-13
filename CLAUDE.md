@@ -58,8 +58,9 @@ the owner and Manage Server holders.
 ### Admin panel / PanelNode
 
 - **A childless `kind="menu"` node is a dead end.** It renders its description and a Back button
-  and nothing else - no controls, no error. Six panel entries shipped like this as label-only
-  "reserved slots"; see `.docs/TheCodex/ADMIN_PANEL_PLACEHOLDERS.md`. Never create one.
+  and nothing else - no controls, no error. Six panel entries once shipped like this as
+  label-only "reserved slots" (found and removed in the 2026-07-29 placeholder audit; its
+  `.docs` write-up was deleted in the 2026-08-08 docs cleanup). Never create one.
 - **`kind="action"` covers two unrelated things.** Stateless one-shots (View Status, Export,
   Publish, Reset) *and* bespoke settings editors that own real config. A stateful one needs
   **three** things or it half-works:

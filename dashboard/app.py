@@ -29,6 +29,7 @@ from dashboard.routers.audit_log import router as audit_log_router
 from dashboard.routers.settings import router as settings_router
 from dashboard.routers.overview import router as overview_router
 from dashboard.routers.user_data import router as user_data_router
+from dashboard.routers.entitlements import router as entitlements_router
 from storage.log import get_logger
 
 # Configure the sinks before anything logs. Without this the process keeps
@@ -120,6 +121,7 @@ app.include_router(audit_log_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
 app.include_router(overview_router, prefix="/api")
 app.include_router(user_data_router, prefix="/api")
+app.include_router(entitlements_router, prefix="/api")
 
 
 @app.get("/health")

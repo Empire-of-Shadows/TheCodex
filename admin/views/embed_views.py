@@ -23,7 +23,6 @@ TIER_LABELS = {
 FEATURE_OPTIONS = [
     ("basic_embed", "Basic Embed", "Create basic embeds with title and description"),
     ("image_field", "Image Field", "Add images and thumbnails"),
-    ("author_field", "Author Field", "Add author name and icon"),
     ("footer_field", "Footer Field", "Add footer text"),
     ("timestamp", "Timestamp", "Add timestamps to embeds"),
 ]

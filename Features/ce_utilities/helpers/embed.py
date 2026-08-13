@@ -4,7 +4,11 @@ import re
 from typing import Optional, Set
 
 import discord
-from Features.ce_utilities.helpers.embed_modal import get_allowed_colors, get_max_description_length
+from Features.ce_utilities.helpers.embed_modal import (
+	get_allowed_colors,
+	get_max_description_length,
+	resolve_features,
+)
 from storage.log import get_logger, log_context
 
 logger = get_logger("EmbedEditModal")
@@ -55,14 +59,20 @@ def _parse_color(color_str: str) -> Optional[int]:
 
 class EditEmbedModal(discord.ui.Modal, title="Edit Embed"):
 	def __init__(self, message: discord.Message, guild_id: int, max_length: int, user_roles: Set[int],
-	             user_features: Optional[Set[str]] = None, default_color: Optional[int] = None):
+	             allowed_features: Optional[Set[str]] = None, default_color: Optional[int] = None,
+	             has_color_sets: bool = False, free_color_access: bool = False):
 		super().__init__()
 		self.message = message
 		self.guild_id = guild_id
 		self.user_roles = user_roles
 		self.max_length = max_length
 		self.default_color = default_color
-		self.has_image_field = user_features is None or "image_field" in user_features
+		self.free_color_access = bool(free_color_access)
+		self.has_image_field = "image_field" in resolve_features(allowed_features)
+		# Colors follow the same rule as the create flow: the guild-wide opt-out,
+		# or a palette assigned to one of this member's roles. With neither, there
+		# is nothing to choose from, so the field is not offered at all.
+		self.has_color_field = self.free_color_access or bool(has_color_sets)
 		embed = message.embeds[0] if message.embeds else discord.Embed()
 
 		logger.info(f"Initializing embed edit modal for message {message.id}, guild {guild_id}, max_length={max_length}")
@@ -93,19 +103,23 @@ class EditEmbedModal(discord.ui.Modal, title="Edit Embed"):
 				required=False,
 			)
 
-		self.color_input = discord.ui.TextInput(
-			label="New color",
-			placeholder="Choose a new color by hex (#RRGGBB) or allowed name",
-			default=(f"#{embed.color.value:06x}" if embed.color else ""),
-			required=False,
-			max_length=32,
-		)
+		# Color input (gated by free color access or an assigned palette)
+		self.color_input = None
+		if self.has_color_field:
+			self.color_input = discord.ui.TextInput(
+				label="New color",
+				placeholder="Choose a new color by hex (#RRGGBB) or allowed name",
+				default=(f"#{embed.color.value:06x}" if embed.color else ""),
+				required=False,
+				max_length=32,
+			)
 
 		self.add_item(self.title_input)
 		self.add_item(self.description_input)
 		if self.thumbnail_input:
 			self.add_item(self.thumbnail_input)
-		self.add_item(self.color_input)
+		if self.color_input:
+			self.add_item(self.color_input)
 
 	async def on_submit(self, interaction: discord.Interaction):
 		with log_context(logger, f"embed edit submission for message {self.message.id}", logging.INFO):
@@ -164,7 +178,7 @@ class EditEmbedModal(discord.ui.Modal, title="Edit Embed"):
 			# Handle Color (per-guild)
 			allowed_colors = await get_allowed_colors(self.guild_id, self.user_roles)
 
-			if self.color_input.value:
+			if self.color_input is not None and self.color_input.value:
 				color_str = self.color_input.value.strip()
 				color_key = color_str.lower()
 
@@ -180,7 +194,9 @@ class EditEmbedModal(discord.ui.Modal, title="Edit Embed"):
 						return
 					new_color_val = parsed
 
-					if allowed_colors and new_color_val not in allowed_colors.values():
+					# Any hex is fine when the guild has opened colors up; with
+					# that off, it has to be one of the member's palette colors.
+					if not self.free_color_access and new_color_val not in allowed_colors.values():
 						await interaction.response.send_message(
 							f"❌ Color '{color_str}' is not authorized for your roles.",
 							ephemeral=True,

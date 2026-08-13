@@ -74,11 +74,13 @@ async def _guild_ids_with_config(guild_ids: list[str]) -> set[str]:
 
 @router.get("/guilds")
 async def guilds(session: dict = Depends(get_current_user)):
-    """Return guilds the user can manage, with bot status + role.
+    """Return the user's guilds, with bot status + role.
 
     Includes every session guild where the user holds MANAGE_GUILD (shown even
-    when the bot is absent so they can invite it) or a configured Panel Access
-    role. Each entry carries its resolved `panel_role`.
+    when the bot is absent so they can invite it), holds a configured Panel
+    Access role, or is simply a member of a bot-present guild - members get
+    `panel_role: "none"` and see their personal stats. Guilds where the user
+    is a plain member and the bot is absent are dropped (nothing to show).
     """
     session_guilds = session.get("guilds", [])
     if not session_guilds:
@@ -107,9 +109,9 @@ async def guilds(session: dict = Depends(get_current_user)):
         perms = int(guild.get("permissions", 0))
         has_manage = (perms & MANAGE_GUILD_PERMISSION) == MANAGE_GUILD_PERMISSION
         panel_role = panel_roles.get(gid, "none")
-        if not has_manage and panel_role == "none":
-            continue
         bot_present = gid in bot_guild_ids
+        if not has_manage and panel_role == "none" and not bot_present:
+            continue
         out.append({
             "id": gid,
             "name": guild["name"],

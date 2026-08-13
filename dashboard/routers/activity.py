@@ -78,6 +78,29 @@ async def _get_vote_days(user_id: int, guild_ids: list[int]) -> dict[str, int]:
     return {doc["_id"]: doc["count"] async for doc in cursor if doc.get("_id")}
 
 
+async def _get_vote_format_counts(user_id: int, guild_ids: list[int]) -> dict[str, int]:
+    """Votes grouped by the question format stamped on the vote document.
+
+    Open questions post no vote buttons, so no "open" vote is ever recorded -
+    the UI must say "not counted" for them rather than zero. Votes written
+    before the format stamp existed, or whose bank question was deleted before
+    the backfill could classify them, group under "unclassified".
+    """
+    pipeline = [
+        {"$match": _guild_scoped_match(user_id, guild_ids)},
+        {"$group": {
+            "_id": {"$ifNull": ["$format", "unclassified"]},
+            "count": {"$sum": 1},
+        }},
+    ]
+    cursor = await db.daily_wyr_votes().aggregate(pipeline)
+    counts = {"wyr": 0, "poll": 0, "unclassified": 0}
+    async for doc in cursor:
+        key = doc.get("_id") or "unclassified"
+        counts[key] = counts.get(key, 0) + doc["count"]
+    return counts
+
+
 async def _get_wyr_activity(user_id: int, guild_ids: list[int]) -> dict:
     """Aggregate WYR voting stats for the user across the specified guilds."""
     guild_id_strs = [str(gid) for gid in guild_ids]
@@ -103,9 +126,10 @@ async def _get_wyr_activity(user_id: int, guild_ids: list[int]) -> dict:
             "last_vote": {"$max": "$last_vote"},
         }},
     ]
-    cursor, vote_days = await asyncio.gather(
+    cursor, vote_days, format_counts = await asyncio.gather(
         db.wyr_leaderboard().aggregate(pipeline),
         _get_vote_days(user_id, guild_ids),
+        _get_vote_format_counts(user_id, guild_ids),
     )
     result = await cursor.to_list(1)
 
@@ -125,6 +149,7 @@ async def _get_wyr_activity(user_id: int, guild_ids: list[int]) -> dict:
             "total_votes": 0,
             "option_breakdown": {"option1": 0, "option2": 0, "option3": 0,
                                  "option4": 0, "option5": 0},
+            "format_breakdown": format_counts,
             "first_vote": None,
             "last_vote": None,
             "streak_active": False,
@@ -149,6 +174,7 @@ async def _get_wyr_activity(user_id: int, guild_ids: list[int]) -> dict:
             "option4": doc["option4"],
             "option5": doc["option5"],
         },
+        "format_breakdown": format_counts,
         "first_vote": first_vote.isoformat() if first_vote else None,
         "last_vote": last_vote.isoformat() if last_vote else None,
         "streak_active": streak_active,
@@ -228,14 +254,30 @@ async def _get_submissions_activity(user_id: int, guild_ids: list[int]) -> dict:
     """
     match = _guild_scoped_match(user_id, guild_ids)
 
-    status_cursor = await db.daily_wyr_submissions().aggregate([
-        {"$match": match},
-        {"$group": {"_id": "$status", "count": {"$sum": 1}}},
-    ])
+    status_cursor, format_cursor = await asyncio.gather(
+        db.daily_wyr_submissions().aggregate([
+            {"$match": match},
+            {"$group": {"_id": "$status", "count": {"$sum": 1}}},
+        ]),
+        # Submissions record their intended format on write, so this needs no
+        # join and no backfill - unlike votes.
+        db.daily_wyr_submissions().aggregate([
+            {"$match": match},
+            {"$group": {
+                "_id": {"$ifNull": ["$format", "unclassified"]},
+                "count": {"$sum": 1},
+            }},
+        ]),
+    )
     counts: dict[str, int] = {}
     async for doc in status_cursor:
         if doc.get("_id"):
             counts[doc["_id"]] = counts.get(doc["_id"], 0) + doc["count"]
+
+    by_format = {"wyr": 0, "poll": 0, "open": 0}
+    async for doc in format_cursor:
+        key = doc.get("_id") or "unclassified"
+        by_format[key] = by_format.get(key, 0) + doc["count"]
 
     sent = sum(counts.values())
     posted = counts.get("approved", 0)
@@ -261,6 +303,7 @@ async def _get_submissions_activity(user_id: int, guild_ids: list[int]) -> dict:
         "posted": posted,
         "waiting": waiting,
         "declined": declined,
+        "by_format": by_format,
         "latest_posted": latest_posted,
     }
 

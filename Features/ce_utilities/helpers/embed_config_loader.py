@@ -13,6 +13,16 @@ logger = get_logger("EmbedConfigLoader")
 MAX_CACHE_ENTRIES = 2000
 CACHE_DURATION = 3600
 
+# The embed feature flags that are actually honoured by the builder. Anything
+# outside this tuple is inert, so it must not be offered in the panel or listed
+# by /embed features.
+EMBED_FEATURES = ("basic_embed", "image_field", "footer_field", "timestamp")
+
+# Flags that used to exist and were never implemented. Stored guild configs can
+# still carry them until the clean-up migration runs, so they are dropped during
+# resolution - otherwise a retired flag keeps deciding who counts as "restricted".
+RETIRED_EMBED_FEATURES = ("author_field",)
+
 
 class EmbedConfigLoader:
     """Load and manage embed settings from GuildConfigManager and Color Set DB."""
@@ -140,6 +150,14 @@ class EmbedConfigLoader:
         logger.debug(f"Available colors for user in guild {guild_id}: {len(available)} colors")
         return available
 
+    async def get_user_color_sets(self, guild_id: int, user_roles: Set[int]) -> list[dict]:
+        """Public accessor for the color sets a user's tiers/roles grant.
+
+        Returns the raw set dicts ("name", "set_id", "colors") so the builder can
+        offer a set picker whose color options rebuild from the chosen set.
+        """
+        return await self._resolve_user_color_sets(guild_id, user_roles)
+
     async def get_colors_grouped_by_set(
         self, guild_id: int, user_roles: Set[int],
     ) -> Dict[str, Dict[str, int]]:
@@ -181,19 +199,66 @@ class EmbedConfigLoader:
             for tier_name in tier_names:
                 tier_to_roles.setdefault(tier_name, set()).add(int(role_id_str))
 
-        # Expand each feature's tier list to role IDs
+        # Expand each feature's tier list to role IDs. Retired flags are dropped
+        # here so leftover stored data cannot influence any entitlement decision.
         result: Dict[str, Set[int]] = {}
         for feat, tier_names in raw_features.items():
+            if feat in RETIRED_EMBED_FEATURES:
+                continue
             role_ids: Set[int] = set()
             for tier_name in tier_names:
                 role_ids.update(tier_to_roles.get(tier_name, set()))
             result[feat] = role_ids
         return result
 
-    async def get_user_features(self, guild_id: int, user_roles: Set[int]) -> Set[str]:
-        """Get the set of feature names accessible to a user."""
-        feature_access = await self.get_feature_access(guild_id)
-        return {
-            feat for feat, allowed_roles in feature_access.items()
-            if not user_roles.isdisjoint(allowed_roles)
-        }
+    async def describe_feature_access(
+        self, guild_id: int, user_roles: Set[int],
+    ) -> Dict[str, str]:
+        """Classify every embed feature for one member (guild-keyed rule).
+
+        The rule is per FEATURE, not per member: a feature nobody was granted is
+        open to everyone; a feature that names granting roles belongs only to the
+        members holding one of them. That is why an empty resolved set does NOT
+        mean "unrestricted member" - it means "unconfigured feature".
+
+        Returns {feature: state} where state is one of:
+          "open"    - nothing restricts this feature, everyone has it
+          "granted" - restricted, and this member holds a granting role
+          "denied"  - restricted, and this member does not
+        """
+        access = await self.get_feature_access(guild_id)
+        states: Dict[str, str] = {}
+        for feature in EMBED_FEATURES:
+            granting_roles = access.get(feature) or set()
+            if not granting_roles:
+                states[feature] = "open"
+            elif not user_roles.isdisjoint(granting_roles):
+                states[feature] = "granted"
+            else:
+                states[feature] = "denied"
+        return states
+
+    async def get_allowed_features(self, guild_id: int, user_roles: Set[int]) -> Set[str]:
+        """The embed features this member may actually use."""
+        states = await self.describe_feature_access(guild_id, user_roles)
+        return {feature for feature, state in states.items() if state != "denied"}
+
+    async def is_feature_allowed(
+        self, guild_id: int, user_roles: Set[int], feature: str,
+    ) -> bool:
+        """Whether this member may use one embed feature."""
+        states = await self.describe_feature_access(guild_id, user_roles)
+        return states.get(feature) != "denied"
+
+    # ── Free Color Access ────────────────────────────────────────────
+
+    async def get_free_color_access(self, guild_id: int) -> bool:
+        """Whether every member may use any hex color in this guild.
+
+        Defaults to False: colors follow the color-set assignments unless an
+        admin has deliberately opened them up. A missing key reads False, so no
+        migration is needed to introduce it.
+        """
+        gcm = await self._get_gcm()
+        config = await gcm.get_config(guild_id)
+        return bool(config.embed.get("free_color_access", False))

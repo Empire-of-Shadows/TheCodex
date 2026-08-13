@@ -1,5 +1,45 @@
 # Changelog
 
+## [Unreleased] - 2026-08-12 (your stats are back, and the embed builder grew up)
+
+### Fixed
+- **Voting on the fourth or fifth answer of a poll works now.** It used to say your vote had
+  failed even though it had been counted, and clicking again gave the same error every time.
+- **Everyone can open the dashboard again, not just admins.** If you share a server with Codex,
+  it now shows up when you log in, with your own stats - the redesign had accidentally locked
+  members out entirely.
+
+### Added
+- **Your personal stats are on the dashboard for real this time** - votes cast, day streak, your
+  suggestions with their outcomes, and what happened to questions you sent in. Admins see them
+  too, right under the server overview, so running the server does not cost you your own page.
+- **Your votes are broken down by question type** - Would You Rather and answer-style polls each
+  get their own count. Open-ended discussion questions do not have vote buttons, so they read
+  "not counted" instead of pretending to be zero.
+- **A "What you can use" section on the dashboard** shows what your roles unlock here: which
+  embed features you have, your colour palettes with the actual colours shown, your description
+  length limit, whether you can review questions or manage drops, the roles you can give
+  yourself, and your screening status.
+- **Building an embed now happens in two steps**: you fill in the text, then you get a private
+  preview of the real embed - pick your colour from dropdowns, switch the timestamp on or off,
+  and press Post when it looks right (or Cancel and nothing gets posted).
+- **Footers work now.** If your roles allow it, there is a Footer box in the embed builder.
+- **Embeds can show the time they were created**, next to the footer, if your roles allow it.
+- **New server setting: "Free Color Access".** Admins can let everyone pick any colour they
+  like. It is off to begin with, and the panel asks for confirmation before turning it on.
+
+### Changed
+- **Embed features are handed out per feature.** Anything an admin has not restricted is open to
+  everyone; anything they have restricted belongs to those roles only. `/embed features` now
+  tells you which is which instead of listing switches that did nothing.
+- **Embed colours follow the palettes your roles give you.** If none of your roles has a
+  palette, your embeds use the server's default colour, and `/embed colors` explains that
+  instead of showing an empty list.
+- **"Author Field" is gone from the embed feature list** - it never did anything.
+- **Resetting a member's voting record in the admin panel now clears everything it should**:
+  their leaderboard totals, the individual votes behind them, and their notification prompt
+  settings. Questions they suggested are kept, since those belong to the server.
+
 ## [Unreleased] - 2026-08-12 (the dashboard fits a phone again)
 
 ### Fixed

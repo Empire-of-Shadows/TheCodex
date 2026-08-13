@@ -8,7 +8,16 @@ from discord.ext import commands, tasks
 
 from Features.ce_utilities.helpers.embed_config_loader import EmbedConfigLoader
 from Features.ce_utilities.helpers.embed import EditEmbedModal
-from Features.ce_utilities.helpers.embed_modal import EmbedModal, get_max_description_length, get_allowed_colors, get_default_color
+from Features.ce_utilities.helpers.embed_config_loader import EMBED_FEATURES
+from Features.ce_utilities.helpers.embed_modal import (
+    EmbedModal,
+    get_allowed_colors,
+    get_allowed_features,
+    get_default_color,
+    get_free_color_access,
+    get_max_description_length,
+    get_user_color_sets,
+)
 from storage.log import get_logger, log_context, log_performance
 from storage.settings.config_manager import get_config
 from admin.setup_notice import send_setup_notice, setup_notice_embed
@@ -106,6 +115,55 @@ async def _build_colors_embed(guild_id: int, user_roles: Set[int]) -> discord.Em
     return embed
 
 
+def _build_unrestricted_colors_embed() -> discord.Embed:
+    """The listing shown when this server has turned on free color access.
+
+    Every member may type any hex in that state, so the listing has to say so.
+    """
+    embed = discord.Embed(
+        title="Available Colors",
+        description=(
+            "This server lets everyone pick their own embed color, so you can use "
+            "**any** color you like.\n\n"
+            "Type a hex code in the Color field, for example `#FF0000` or `#5865F2`."
+        ),
+        color=discord.Color.blurple(),
+    )
+    embed.set_footer(text="If your roles also come with color palettes, you can pick from those too.")
+    return embed
+
+
+def _build_no_palette_colors_embed() -> discord.Embed:
+    """The listing shown when colors are role-restricted and the member has none.
+
+    Strict is the default: with no palette assigned to any of their roles, the
+    member gets no color choice at all and their embeds use the server's default
+    color. Saying that plainly beats showing an empty list.
+    """
+    embed = discord.Embed(
+        title="Available Colors",
+        description=(
+            "Embed colors on this server come with your roles, and none of yours "
+            "has a color palette yet.\n\n"
+            "Your embeds will use the server's default color. If you think you "
+            "should have a palette, ask a server admin."
+        ),
+        color=discord.Color.blurple(),
+    )
+    embed.set_footer(text="Color palettes are handed out per role by the server admins.")
+    return embed
+
+
+# Only the flags the builder actually honours are listed. Anything not here does
+# nothing, so advertising it would be a promise the builder cannot keep.
+FEATURE_DESCRIPTIONS = {
+    "basic_embed": "Create embeds with a title, description, and color",
+    "image_field": "Add a thumbnail image to your embed",
+    "footer_field": "Add footer text to your embed",
+    "timestamp": "Show the time your embed was created, next to the footer",
+}
+
+
 async def _build_features_embed(
     guild_id: int,
     user_roles: Set[int],
@@ -114,60 +172,47 @@ async def _build_features_embed(
     viewer: Optional[discord.Member] = None,
 ) -> discord.Embed:
     """
-    Build an embed showing available features for the user (per-guild).
+    Build an embed showing which embed features the member can use.
 
-    guild/viewer are only needed for the "nothing configured yet" branch, which
-    renders a setup notice instead of a feature list.
+    Access is decided per feature, not per member: a feature no role was given
+    is open to everyone, and a feature that was given to roles belongs only to
+    the members holding one. The listing shows all three outcomes so a member
+    can tell "everyone gets this" from "you earned this" from "not yours yet".
+
+    guild/viewer are kept on the signature for the caller; they are no longer
+    read now that every state has a plain-language line of its own.
     """
-    feature_access = await embed_config.get_feature_access(guild_id)
-    user_features = {
-        feature_name
-        for feature_name, allowed_roles in feature_access.items()
-        if not user_roles.isdisjoint(allowed_roles)
-    }
+    states = await embed_config.describe_feature_access(guild_id, user_roles)
 
-    embed = discord.Embed(
-        title="Available Features",
-        description="Here are the embed features you can access based on your roles:",
-        color=discord.Color.green(),
-    )
+    available_lines = []
+    locked_lines = []
+    for name in EMBED_FEATURES:
+        description = FEATURE_DESCRIPTIONS[name]
+        state = states.get(name, "open")
+        if state == "open":
+            available_lines.append(f"{description} - open to everyone")
+        elif state == "granted":
+            available_lines.append(f"{description} - unlocked by your roles")
+        else:
+            locked_lines.append(f"{description} - needs a role you do not have yet")
 
-    feature_descriptions = {
-        "basic_embed": "Create basic embeds with title, description, and color",
-        "image_field": "Add images and thumbnails to embeds",
-        "author_field": "Add author field with name and icon",
-        "footer_field": "Add footer text to embeds",
-        "timestamp": "Add timestamps to embeds"
-    }
+    embed = discord.Embed(title="Available Features", color=discord.Color.green())
 
-    features_text = []
-    for feature in sorted(user_features):
-        if feature in feature_descriptions:
-            features_text.append(feature_descriptions[feature])
+    if available_lines:
+        embed.description = "Embed features you can use right now:\n\n" + "\n".join(available_lines)
+    else:
+        embed.description = "None of the embed features are available to your roles yet."
 
-    if features_text:
-        embed.description += "\n\n" + "\n".join(features_text)
-        embed.set_footer(text="Upgrade your role to unlock more features!")
-        return embed
-
-    # Nothing available: on a configured server that means "your role is too low",
-    # but on a fresh one it means nobody has mapped roles to tiers yet. Say so and
-    # point at the panel rather than telling the member to chase a role upgrade.
-    if not feature_access:
-        return await setup_notice_embed(
-            guild,
-            what="embed features",
-            path="Embed Settings -> Feature Access",
-            viewer=viewer,
-            detail=(
-                "Nothing has been assigned to any role yet, so no one can use the "
-                "embed builder."
-            ),
-            title="Available Features",
+    if locked_lines:
+        embed.add_field(
+            name="Not available to you yet",
+            value="\n".join(locked_lines),
+            inline=False,
         )
+        embed.set_footer(text="Upgrade your role to unlock more features!")
+    else:
+        embed.set_footer(text="You have every embed feature this server offers.")
 
-    embed.description = "No features available for your role."
-    embed.set_footer(text="Upgrade your role to unlock more features!")
     return embed
 
 
@@ -282,18 +327,25 @@ class EmbedGroup(commands.GroupCog, name="embed", description="Create and edit e
                     )
                     return
 
-                # Check basic_embed feature access
-                user_features = await embed_config.get_user_features(guild_id, user_roles)
-                if user_features and "basic_embed" not in user_features:
+                # Check basic_embed feature access. Guild-keyed: a feature nobody
+                # was granted is open to everyone, but once it names roles only
+                # those role holders have it.
+                allowed_features = await get_allowed_features(guild_id, user_roles)
+                if "basic_embed" not in allowed_features:
                     await interaction.response.send_message(
                         "Your role does not have access to embed creation.", ephemeral=True
                     )
                     return
 
-                # Pre-compute max_length and default color before constructing modal
+                # Pre-compute everything the modal cannot await for itself
                 max_length = await get_max_description_length(guild_id, user_roles)
                 default_color = await get_default_color(guild_id)
-                await self._open_create_modal(interaction, guild_id, max_length, user_roles, user_features, default_color)
+                color_sets = await get_user_color_sets(guild_id, user_roles)
+                free_colors = await get_free_color_access(guild_id)
+                await self._open_create_modal(
+                    interaction, guild_id, max_length, user_roles, allowed_features,
+                    default_color, color_sets, free_colors,
+                )
             except Exception as e:
                 logger.error(f"Error presenting create modal to {interaction.user}: {e}", exc_info=True)
                 if not interaction.response.is_done():
@@ -313,22 +365,15 @@ class EmbedGroup(commands.GroupCog, name="embed", description="Create and edit e
             user_roles = {role.id for role in interaction.user.roles}
             guild_id = interaction.guild.id
 
-            allowed_colors = await get_allowed_colors(guild_id, user_roles)
-            if not allowed_colors:
-                await send_setup_notice(
-                    interaction,
-                    what="embed colors",
-                    path="Embed Settings -> Color Tiers",
-                    detail=(
-                        "No colors are available to your roles yet. Colors are handed "
-                        "out per tier, so a tier needs roles mapped to it and a palette "
-                        "assigned."
-                    ),
-                    title="No Colors Available",
-                )
-                return
-
-            embed = await _build_colors_embed(guild_id, user_roles)
+            # Three states, and the listing must match what the builder does:
+            # free access on -> any color; off with a palette -> that palette;
+            # off without one -> no color choice at all.
+            if await get_free_color_access(guild_id):
+                embed = _build_unrestricted_colors_embed()
+            elif await get_allowed_colors(guild_id, user_roles):
+                embed = await _build_colors_embed(guild_id, user_roles)
+            else:
+                embed = _build_no_palette_colors_embed()
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
     # /embed features
@@ -419,14 +464,21 @@ class EmbedGroup(commands.GroupCog, name="embed", description="Create and edit e
             user_roles = {role.id for role in interaction.user.roles}
             guild_id = interaction.guild.id
 
-            # Pre-compute max_length, features, and default color before constructing modal
+            # Pre-compute max_length, features, colors and default color before
+            # constructing the modal - the same gates the create flow applies.
             max_length = await get_max_description_length(guild_id, user_roles)
-            user_features = await embed_config.get_user_features(guild_id, user_roles)
+            allowed_features = await get_allowed_features(guild_id, user_roles)
             default_color = await get_default_color(guild_id)
+            color_sets = await get_user_color_sets(guild_id, user_roles)
+            free_colors = await get_free_color_access(guild_id)
 
             try:
                 await interaction.response.send_modal(
-                    EditEmbedModal(message, guild_id, max_length, user_roles, user_features, default_color)
+                    EditEmbedModal(
+                        message, guild_id, max_length, user_roles, allowed_features,
+                        default_color, has_color_sets=bool(color_sets),
+                        free_color_access=free_colors,
+                    )
                 )
             except Exception as e:
                 logger.error(f"Failed to send edit modal: {e}", exc_info=True)
@@ -434,16 +486,20 @@ class EmbedGroup(commands.GroupCog, name="embed", description="Create and edit e
                     await interaction.response.send_message("❌ Failed to process the edit modal.", ephemeral=True)
 
     async def _open_create_modal(self, interaction: discord.Interaction, guild_id: int, max_length: int,
-                                user_roles: Set[int], user_features: Optional[Set[str]] = None,
-                                default_color: Optional[int] = None):
+                                user_roles: Set[int], allowed_features: Optional[Set[str]] = None,
+                                default_color: Optional[int] = None,
+                                color_sets: Optional[list] = None,
+                                free_color_access: bool = False):
         """Present the embed creation modal and attach a callback to update the authorization cache."""
         try:
             modal = EmbedModal(
                 guild_id=guild_id,
                 max_length=max_length,
                 user_roles=user_roles,
-                user_features=user_features,
+                allowed_features=allowed_features,
                 default_color=default_color,
+                color_sets=color_sets,
+                free_color_access=free_color_access,
                 cache_update_callback=self.update_cache,
             )
             await interaction.response.send_modal(modal)
