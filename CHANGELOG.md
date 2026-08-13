@@ -33,6 +33,11 @@
 
 ## [Unreleased] - 2026-08-13 (the settings page became a living web)
 
+### Fixed
+- On phones, the server panel on the settings hub now shows its close button and its server
+  icon in full instead of cutting them off at the panel's rounded edge, and the close button
+  stays put while you scroll the panel.
+
 ### Changed
 - **Picking a server to manage is now a web you can play with.** The settings page fills the
   whole screen with your servers strung together on silk strands, drifting slowly and never

@@ -419,13 +419,17 @@ a.ov-qrow:hover, button.ov-qrow:hover { background: var(--eos-glass-heavy); }
   padding-bottom: 40px;
   align-items: start;
 }
+/* Below 1160px the context column wraps under the form (it stays visible), and
+   below 780px the rail stays a vertical list. Both are deliberate (ruled
+   2026-08-13): earlier hide-the-context and row-rail declarations here were dead
+   on cascade order against the base rules further down and never rendered in any
+   bot, so the live behavior was kept and the dead declarations removed. */
 @media (max-width: 1160px) {
   .set-layout { grid-template-columns: 196px minmax(0, 1fr); }
-  .set-ctx { display: none; }
 }
 @media (max-width: 780px) {
   .set-layout { grid-template-columns: minmax(0, 1fr); }
-  .set-rail { flex-direction: row; overflow-x: auto; position: static; padding-bottom: 6px; }
+  .set-rail { overflow-x: auto; position: static; padding-bottom: 6px; }
   .set-rail__grp { display: none; }
 }
 
