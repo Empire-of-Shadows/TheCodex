@@ -286,15 +286,20 @@ export default function DashboardPage() {
           </div>
         ) : pane.kind === "admin" ? (
           <>
-            <AdminOverview overview={pane.overview} />
+            {/* Owner ruling 2026-08-13: an admin is a member first - their own
+                stats sit above the server sections. */}
             {pane.activity && (
               <>
-                <h2 className="section-title" style={{ margin: "28px 0 12px" }}>
+                <h2 className="section-title" style={{ margin: "4px 0 12px" }}>
                   Your activity
                 </h2>
                 <MemberOverview activity={pane.activity} />
               </>
             )}
+            <h2 className="section-title" style={{ margin: "28px 0 12px" }}>
+              Server overview
+            </h2>
+            <AdminOverview overview={pane.overview} />
             {pane.entitlements && (
               <>
                 <h2 className="section-title" style={{ margin: "28px 0 12px" }}>

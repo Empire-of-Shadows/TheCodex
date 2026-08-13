@@ -12,7 +12,8 @@
 ### Added
 - **Your personal stats are on the dashboard for real this time** - votes cast, day streak, your
   suggestions with their outcomes, and what happened to questions you sent in. Admins see them
-  too, right under the server overview, so running the server does not cost you your own page.
+  too, first on the page with the server overview right below, so running the server does not
+  cost you your own page.
 - **Your votes are broken down by question type** - Would You Rather and answer-style polls each
   get their own count. Open-ended discussion questions do not have vote buttons, so they read
   "not counted" instead of pretending to be zero.
