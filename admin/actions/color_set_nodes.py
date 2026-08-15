@@ -19,6 +19,7 @@ Navigation map (all in-place edits of message 2):
       +- Color Sets menu
            +- Create Color Set (modal)
            +- Change Default Color (modal)
+           +- Free Colors toggle (enabling -> confirm; disabling is immediate)
            +- <a set> -> set detail
                           +- Add Colors (modal)
                           +- Remove a color / Remove an assignment
@@ -36,7 +37,7 @@ from __future__ import annotations
 import discord
 
 from storage.log import get_logger
-from ..views.panel_engine import PanelNode, ActionContext
+from ..views.panel_engine import PanelNode, ActionContext, build_confirm_view
 from ..views.base import build_notice_layout
 from ..views.color_views import (
     TIER_LABELS,
@@ -51,6 +52,7 @@ from ..views.color_views import (
     build_tier_assign_view,
 )
 from .color_set_actions import ColorSetActions
+from .embed_config_actions import EmbedConfigActions
 from .panel_flow import PanelFlow
 
 from Features.ce_utilities.color_normalizer import (
@@ -73,10 +75,10 @@ _MIN_COLORS_PER_SET = 1
 async def color_tiers_summary_values(guild_id: int) -> list:
     """Return a non-empty marker list when Color Tiers is configured.
 
-    Considered configured if a server default color is set OR any color sets exist.
-    Drives the "configured" side of the parent menu's progress badge via
-    ``PanelNode.get_values``; the human-readable text comes from
-    ``color_tiers_summary_text`` below.
+    Considered configured if a server default color is set, any color sets exist,
+    OR free color access has been switched on. Drives the "configured" side of the
+    parent menu's progress badge via ``PanelNode.get_values``; the human-readable
+    text comes from ``color_tiers_summary_text`` below.
     """
     out: list = []
     try:
@@ -90,6 +92,11 @@ async def color_tiers_summary_values(guild_id: int) -> list:
             out.append(f"sets:{len(sets)}")
     except Exception:
         logger.debug("color_tiers summary: set listing failed", exc_info=True)
+    try:
+        if await EmbedConfigActions.get_free_color_access(guild_id):
+            out.append("free_color_access")
+    except Exception:
+        logger.debug("color_tiers summary: free color lookup failed", exc_info=True)
     return out
 
 
@@ -103,16 +110,19 @@ async def color_tiers_summary_text(guild_id: int) -> str:
     try:
         default_color = await ColorSetActions.get_default_color(guild_id)
         sets = await ColorSetActions.list_color_sets(guild_id)
+        free_access = await EmbedConfigActions.get_free_color_access(guild_id)
     except Exception:
         logger.debug("color_tiers summary text failed", exc_info=True)
         return "Not configured"
 
-    if default_color is None and not sets:
+    if default_color is None and not sets and not free_access:
         return "Not configured"
     parts = []
     if default_color is not None:
         parts.append(f"default {color_int_to_hex(default_color)}")
     parts.append(f"{len(sets)} set(s)" if sets else "no sets yet")
+    if free_access:
+        parts.append("free colors on")
     return ", ".join(parts)
 
 
@@ -209,6 +219,7 @@ class _ColorTiersFlow(PanelFlow):
         sets = await ColorSetActions.list_color_sets(self.guild.id)
         assignments = await ColorSetActions.list_assignments(self.guild.id)
         default_color = await ColorSetActions.get_default_color(self.guild.id)
+        free_access = await EmbedConfigActions.get_free_color_access(self.guild.id)
 
         counts: dict[str, int] = {}
         tier_per_set: dict[str, str | None] = {}
@@ -223,15 +234,70 @@ class _ColorTiersFlow(PanelFlow):
             assignment_counts=counts,
             default_color=default_color or 0,
             tier_per_set=tier_per_set,
+            free_color_access=free_access,
             on_create=self._open_create_modal,
             on_select_set=self._open_set,
             on_change_default=self._open_default_modal,
+            on_toggle_free_color=self._toggle_free_color,
             on_cancel=self._back_to_parent,
         )
 
     async def _show_menu(self, interaction: discord.Interaction) -> None:
         self.set_id = None
         await self._render(interaction, await self._menu_layout())
+
+    # -- free color access --------------------------------------------------
+    # One stored bool (embed.free_color_access) surfaced as a toggle button on
+    # the Color Sets menu. Turning it ON hands every member free rein over
+    # embed colors, so that direction goes through a confirmation screen;
+    # turning it back OFF is immediate - tightening a permission never needs
+    # a confirmation step.
+
+    async def _toggle_free_color(self, interaction: discord.Interaction) -> None:
+        if await EmbedConfigActions.get_free_color_access(self.guild.id):
+            await self._set_free_color(interaction, False)
+            return
+        layout = build_confirm_view(
+            "Give every member free color access?",
+            (
+                "Turning this on lets **anyone** who can build an embed use **any** "
+                "color, including colors you have not put in a palette. Your color "
+                "sets and tier assignments stay exactly as they are, but they stop "
+                "limiting anyone.\n\n"
+                "You can turn this back off at any time."
+            ),
+            self._enable_free_color,
+            self._show_menu,
+            confirm_label="Yes, allow any color",
+            key="free_color_access",
+        )
+        await self._render(interaction, layout)
+
+    async def _enable_free_color(self, interaction: discord.Interaction) -> None:
+        await self._set_free_color(interaction, True)
+
+    async def _set_free_color(self, interaction: discord.Interaction, enabled: bool) -> None:
+        if not self._allowed(interaction):
+            await self._too_fast(interaction)
+            return
+
+        previous = await EmbedConfigActions.get_free_color_access(self.guild.id)
+        if not await EmbedConfigActions.set_free_color_access(self.guild.id, enabled):
+            await self._notice(
+                interaction, "Failed to Save",
+                "Could not change free color access. Please try again.",
+            )
+            return
+
+        await self._after_write(
+            interaction, "free_colors_on" if enabled else "free_colors_off",
+            previous, enabled,
+        )
+        logger.info(
+            f"Free color access set to {enabled} in guild {self.guild.id} "
+            f"by {interaction.user} ({interaction.user.id})"
+        )
+        await self._show_menu(interaction)
 
     async def _open_create_modal(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_modal(ColorSetCreateModal(callback=self._submit_create))

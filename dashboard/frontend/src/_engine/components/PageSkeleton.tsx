@@ -22,7 +22,7 @@ export default function PageSkeleton() {
         <div className="skeleton-card" />
         <div className="skeleton-card" />
       </div>
-      <span className="visually-hidden">Loading…</span>
+      <span className="visually-hidden">Loading...</span>
     </div>
   );
 }

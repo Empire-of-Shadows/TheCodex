@@ -1,5 +1,22 @@
 # Changelog
 
+## [Unreleased] - 2026-08-15 (color settings in one place)
+
+### Changed
+- **Free Color Access now lives inside Color Tiers.** It is no longer a separate entry in the
+  admin panel's Embed Settings list - open Color Tiers and it is a button right on the color
+  sets screen, next to the palettes it affects. The screen also says plainly whether it is on
+  or off and what that means for your members. Turning it on still asks you to confirm first,
+  and turning it off is still instant. Nothing changes for servers that already have it on.
+
+### Fixed
+- **The admin panel no longer fails to open a menu when a summary line gets long.** If a
+  dropdown entry's summary grew past what Discord allows - for example a tier with many roles
+  assigned to it - the whole screen failed with an error instead of showing. Long summaries now switch to a
+  compact form such as "12 roles assigned" - the full list still appears in the text right
+  above - and the menu always opens. Also, a few settings descriptions on the main panel screen
+  were tightened so they display in full instead of being cut off mid-sentence.
+
 ## [Unreleased] - 2026-08-13 (the change history grew up)
 
 ### Changed

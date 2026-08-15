@@ -31,7 +31,7 @@ from ..actions.structure import info_action
 from ..actions.features import panel_roles_pair
 from .panel_branding import PANEL_TITLE, PANEL_DESCRIPTION
 from storage.settings.config_manager import get_config_manager
-from ..actions.embed_config_actions import EmbedConfigActions, build_free_color_access_node
+from ..actions.embed_config_actions import EmbedConfigActions
 from ..actions.wyr_actions import WYRConfigActions
 from ..actions.new_member_actions import NewMemberActions
 from ..actions.announcement_actions import AnnouncementActions
@@ -1218,7 +1218,6 @@ _EMBED_SETTINGS_GROUP = PanelNode(
         "role_tiers": ROLE_TIER_CONFIG,
         "description_limits": DESCRIPTION_LIMITS_CONFIG,
         "color_tiers": build_color_tiers_node(),
-        "free_color_access": build_free_color_access_node(),
         "feature_access": FEATURE_ACCESS_CONFIG,
     },
 )

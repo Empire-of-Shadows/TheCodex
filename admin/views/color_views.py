@@ -166,29 +166,44 @@ def build_color_sets_menu(
     assignment_counts: dict[str, int],
     default_color: int,
     tier_per_set: dict[str, str | None],
+    free_color_access: bool,
     on_create: Callable[[discord.Interaction], Awaitable[None]],
     on_select_set: Callable[[discord.Interaction, str], Awaitable[None]],
     on_change_default: Callable[[discord.Interaction], Awaitable[None]],
+    on_toggle_free_color: Callable[[discord.Interaction], Awaitable[None]],
     on_cancel: Callable[[discord.Interaction], Awaitable[None]],
 ) -> discord.ui.LayoutView:
     """Build the top-level Color Sets menu.
 
     Args:
-        sets:               List of color set dicts from ColorSetActions.
-        assignment_counts:  {set_id: count} pre-computed assignment counts.
-        default_color:      Server default color int (always available to all members).
-        tier_per_set:       {set_id: tier_name | None} - the tier each set is assigned to.
-        on_create:          Callback for the "Create Color Set" button.
-        on_select_set:      Async callback (interaction, set_id) when a set is selected.
-        on_change_default:  Callback to open the change-default-color modal.
-        on_cancel:          Callback for the "Back" button (returns to parent group).
+        sets:                 List of color set dicts from ColorSetActions.
+        assignment_counts:    {set_id: count} pre-computed assignment counts.
+        default_color:        Server default color int (always available to all members).
+        tier_per_set:         {set_id: tier_name | None} - the tier each set is assigned to.
+        free_color_access:    Whether every member may currently use any color.
+        on_create:            Callback for the "Create Color Set" button.
+        on_select_set:        Async callback (interaction, set_id) when a set is selected.
+        on_change_default:    Callback to open the change-default-color modal.
+        on_toggle_free_color: Callback for the "Free Colors" toggle button.
+        on_cancel:            Callback for the "Back" button (returns to parent group).
     """
     builder = AdminLayoutBuilder()
 
     builder.add_header("## Color Sets")
+    if free_color_access:
+        free_color_line = (
+            "**Free Color Access:** On - every member can use any color, "
+            "so the palettes below are not limiting anyone right now."
+        )
+    else:
+        free_color_line = (
+            "**Free Color Access:** Off - members only get the palettes "
+            "their roles grant."
+        )
     builder.add_text(
         f"**Server Default Color:** `{color_int_to_hex(default_color)}` "
-        f"*(available to all members)*"
+        f"*(available to all members)*\n"
+        f"{free_color_line}"
     )
 
     if sets:
@@ -251,6 +266,13 @@ def build_color_sets_menu(
     )
     change_default_btn.callback = on_change_default
 
+    free_color_btn = discord.ui.Button(
+        label="Free Colors: On" if free_color_access else "Free Colors: Off",
+        style=discord.ButtonStyle.success if free_color_access else discord.ButtonStyle.secondary,
+        custom_id=cid("editor", "toggle", "free_color_access"),
+    )
+    free_color_btn.callback = on_toggle_free_color
+
     done_btn = discord.ui.Button(
         label="Back",
         style=discord.ButtonStyle.secondary,
@@ -258,7 +280,7 @@ def build_color_sets_menu(
     )
     done_btn.callback = on_cancel
 
-    builder.add_action_row(create_btn, change_default_btn, done_btn)
+    builder.add_action_row(create_btn, change_default_btn, free_color_btn, done_btn)
 
     return builder.build()
 
