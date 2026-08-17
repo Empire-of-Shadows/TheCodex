@@ -815,24 +815,107 @@ guild_handler = GuildEventHandler(bot)
 # so loading is explicit. add_listener is additive - it never overrides the
 # gateway's own interaction/member processing.
 
+# ── Guild event trail (ServerData.Events) ────────────────────────────────────
+#
+# An append-only record of what changed in a server, kept for 30 days by a TTL
+# index on ``created_at`` (declared in the collection registry, not enforced
+# here). The engine writer has always existed; until 2026-08-17 nothing called
+# it, so the collection was never written.
+#
+# It is logged from the listeners rather than from inside the handlers on
+# purpose: the handlers own the real work, and a trail entry must never be able
+# to delay or break a join. Every write is best-effort - the engine's own
+# ``SnapshotEventLog.log`` already swallows and logs its errors, and the wrapper
+# below catches anything before that (a missing service during startup).
+#
+# Scope note: this deliberately does NOT log the bot being added to or removed
+# from a guild. Those are not events *in* a server's life, and on removal the
+# guild's data is already being tombstoned for cleanup, so a trail entry would
+# outlive what it describes.
+
+async def _log_guild_event(guild, event_type: str, **data) -> None:
+    """Append one entry to the guild's event trail. Never raises, never blocks."""
+    if guild is None:
+        return
+    manager = getattr(guild_handler, "cache_manager", None)
+    if manager is None:
+        return
+    try:
+        await manager.log_guild_event(guild.id, event_type, data)
+    except Exception as e:
+        guild_handler.logger.error(
+            f"Could not log {event_type!r} for guild {guild.id}: {e}", exc_info=True
+        )
+
+
+async def _event_opted_out(user_id) -> bool:
+    """Whether this member has turned off data collection for the member snapshot.
+
+    The event trail reuses the EXISTING ``member_snapshot`` opt-out rather than
+    introducing a new key, and that is a deliberate reading of the consent. A
+    member who asked to be left out of the server's member snapshot has asked not
+    to be recorded in the server's record of its own membership; logging their
+    join or departure by user id would put back exactly what that switch takes
+    out. Reusing the key can only ever REDUCE what is collected for that member,
+    needs no new toggle on the privacy page, and needs no change to the published
+    policy - all three of which would be true in reverse for a new key.
+
+    Fails OPEN, matching every other privacy gate in this bot: if the preference
+    cache never attached, event logging behaves as it did before opt-outs
+    existed. ``is_opted_out`` already folds in the "all" master switch.
+    """
+    prefs = getattr(guild_handler.bot, "privacy_prefs", None)
+    if prefs is None:
+        return False
+    try:
+        return await prefs.is_opted_out(str(user_id), "member_snapshot")
+    except Exception as e:
+        guild_handler.logger.error(
+            f"Could not read privacy preferences for {user_id}: {e}", exc_info=True
+        )
+        return False
+
+
 async def on_interaction(interaction: discord.Interaction):
     await guild_handler.handle_interaction(interaction)
 
 
 async def on_member_join(member):
     await guild_handler.handle_member_join(member)
+    if not await _event_opted_out(member.id):
+        await _log_guild_event(
+            member.guild, "member_join",
+            user_id=str(member.id), is_bot=bool(member.bot),
+        )
 
 
 async def on_member_remove(member: discord.Member):
     await guild_handler.handle_member_remove(member)
+    if not await _event_opted_out(member.id):
+        await _log_guild_event(
+            member.guild, "member_remove",
+            user_id=str(member.id), is_bot=bool(member.bot),
+        )
 
 
 async def on_guild_role_update(before: discord.Role, after: discord.Role):
     await guild_handler.handle_guild_role_update(before, after)
+    # A rename is the change worth being able to read back later; everything else
+    # is captured by the roles snapshot.
+    await _log_guild_event(
+        after.guild, "role_update",
+        role_id=str(after.id), name=after.name,
+        previous_name=(before.name if before.name != after.name else None),
+    )
 
 
 async def on_guild_channel_update(before: discord.abc.GuildChannel, after: discord.abc.GuildChannel):
     await guild_handler.handle_guild_channel_update(before, after)
+    await _log_guild_event(
+        after.guild, "channel_update",
+        channel_id=str(after.id), name=after.name,
+        previous_name=(before.name if before.name != after.name else None),
+    )
 
 
 async def on_guild_join(guild):
@@ -872,6 +955,11 @@ async def on_guild_role_create(role):
     except Exception:
         # fallback to cache refresh
         await guild_handler.cache_manager.cache_roles(role.guild)
+    # Logged outside the try/except above: the trail should record that the role
+    # was created whether or not refreshing the cache happened to succeed.
+    await _log_guild_event(
+        role.guild, "role_create", role_id=str(role.id), name=role.name,
+    )
 
 
 async def on_guild_role_delete(role):
@@ -881,6 +969,9 @@ async def on_guild_role_delete(role):
         await guild_handler.cache_manager.cache_roles(role.guild)
     except Exception as e:
         guild_handler.logger.error(f"Error updating roles cache after delete: {e}")
+    await _log_guild_event(
+        role.guild, "role_delete", role_id=str(role.id), name=role.name,
+    )
 
 
 async def setup(bot):

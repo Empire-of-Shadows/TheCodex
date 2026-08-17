@@ -173,6 +173,21 @@ def serverdata_boost_events():
     return _get_client()["ServerData"]["Boost_Events"]
 
 
+def serverdata_events():
+    """ServerData.Events - the 30-day trail of what changed in a guild.
+
+    Written by the listeners in Features/NewMembers/joining.py through the engine
+    SnapshotEventLog. Rows expire on their own: the collection carries a TTL index
+    on `created_at`, so nothing here needs pruning and no query needs a lower
+    bound to avoid ancient data.
+
+    Member joins and departures are recorded by user id and ARE personal data,
+    which is why the writer skips members who turned off the member snapshot.
+    Role and channel rows are structural and carry no user id.
+    """
+    return _get_client()["ServerData"]["Events"]
+
+
 def serverdata_guilds():
     """ServerData.Guilds - the guild snapshot root doc, keyed by `id` (string)."""
     return _get_client()["ServerData"]["Guilds"]

@@ -4,7 +4,11 @@ import { api } from "../api/client";
 import type { User } from "../api/types";
 import AppHeader from "../components/AppHeader";
 
-const EFFECTIVE_DATE = "August 13, 2026";
+// Bumped 2026-08-17: the "what we collect" list gained the 30-day record of
+// server changes. The rule this fleet follows is that the date moves only when
+// the TEXT actually changed - a date bumped for a markup edit claims terms
+// changed on a day they did not. This one is a real change, so it moves.
+const EFFECTIVE_DATE = "August 17, 2026";
 
 export default function PrivacyPolicyPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -79,6 +83,14 @@ export default function PrivacyPolicyPage() {
               for the servers the bot is in - kept so the dashboard and bot can resolve names and
               permissions quickly, along with usage analytics. Your part of that cache is a
               snapshot of your server profile: your nickname, your roles, and when you joined.
+            </li>
+            <li>
+              <strong>A short record of what changed in a server</strong> - members joining and
+              leaving, and roles and channels being created, renamed or deleted - so staff can see
+              recent activity in their own server. Your part of that is your account ID against a
+              join or a departure, and nothing else. It is <strong>deleted automatically after 30
+              days</strong>, and turning off the member snapshot stops it being written for you at
+              all.
             </li>
             <li><strong>A session cookie</strong> that keeps you signed in to the dashboard.</li>
           </ul>
@@ -157,7 +169,9 @@ export default function PrivacyPolicyPage() {
             that. With a feature turned off: your Would-You-Rather votes are acknowledged but not
             counted and you cannot submit questions; your suggestions still post but always
             anonymously, with no status messages, no record tied to you, and no editing them
-            afterwards; boost records and the member snapshot simply stop being written.
+            afterwards; boost records and the member snapshot simply stop being written, and the
+            member snapshot switch also stops your joins and departures being added to the
+            30-day record of server changes.
           </p>
           <p>
             Two things survive a delete request. Your whitelist entry, if a server's staff added

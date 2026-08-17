@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import type {
+  ActivityOverview,
   ContentDoc,
   ContentOverview,
   DropsOverview,
@@ -47,6 +48,7 @@ export default function AdminOverview({ overview }: { overview: GuildOverview })
       <NewMembers guildId={guildId} members={overview.members} />
       <Drops guildId={guildId} drops={overview.drops} />
       <FeatureUsage usage={overview.feature_usage} />
+      <RecentChanges activity={overview.activity} />
     </div>
   );
 }
@@ -491,6 +493,75 @@ function FeatureUsage({ usage }: { usage: FeatureUsageOverview | null }) {
 
       <Rule />
       <p className="ov-muted">Counted per server only - no member is identified.</p>
+    </Tile>
+  );
+}
+
+/* ── Recent changes ────────────────────────────────────────────────── */
+
+/** Plain-language label for a stored event type. */
+const EVENT_LABELS: Record<string, string> = {
+  member_join: "Member joined",
+  member_remove: "Member left",
+  role_create: "Role created",
+  role_update: "Role changed",
+  role_delete: "Role deleted",
+  channel_update: "Channel changed",
+};
+
+function describeEvent(event: { event_type: string; name: string | null; previous_name: string | null }) {
+  const label = EVENT_LABELS[event.event_type] ?? event.event_type;
+  if (event.previous_name && event.name) return `${label}: ${event.previous_name} to ${event.name}`;
+  if (event.name) return `${label}: ${event.name}`;
+  return label;
+}
+
+function RecentChanges({ activity }: { activity: ActivityOverview | null }) {
+  if (!activity) {
+    return (
+      <Tile span={5} title="Recent changes">
+        <p className="ov-muted">
+          Nothing recorded yet. This starts filling in from the day it was switched on, so a
+          quiet server or a fresh install shows nothing here.
+        </p>
+      </Tile>
+    );
+  }
+
+  return (
+    <Tile span={5} title="Recent changes">
+      <Stat
+        value={formatCount(activity.total_events)}
+        label={`Changes in the last ${activity.window_days} days`}
+      />
+      {/* Deliberately labelled as churn. Joins minus departures over a window is
+          not the member count - the New members tile owns that, from the
+          snapshot, and the two will not agree. */}
+      <KeyValue
+        k="Members joined / left"
+        v={`${formatCount(activity.joins)} / ${formatCount(activity.departures)}`}
+      />
+      <KeyValue k="Role and channel changes" v={formatCount(activity.structural_changes)} />
+
+      {activity.recent.length > 0 && (
+        <>
+          <Rule />
+          <p className="ov-muted">Most recent:</p>
+          {activity.recent.map((event, i) => (
+            <KeyValue
+              key={`${event.at}-${i}`}
+              k={describeEvent(event)}
+              v={formatRelative(event.at)}
+            />
+          ))}
+        </>
+      )}
+
+      <Rule />
+      <p className="ov-muted">
+        Kept for {activity.window_days} days, then deleted automatically. Members who turned off
+        the member snapshot are not recorded here.
+      </p>
     </Tile>
   );
 }

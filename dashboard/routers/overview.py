@@ -26,7 +26,10 @@ logger = get_logger("dashboard.routers.overview")
 router = APIRouter(tags=["overview"])
 
 #: Section name -> the key it occupies in the response, in gather order.
-_SECTIONS = ("wyr", "suggestions", "members", "drops", "content", "trackers", "feature_usage")
+_SECTIONS = (
+    "wyr", "suggestions", "members", "drops", "content", "trackers",
+    "feature_usage", "activity",
+)
 
 
 @router.get("/guilds/{guild_id}/overview")
@@ -47,6 +50,7 @@ async def guild_overview(guild_id: str, session: dict = Depends(get_current_user
         overview_service.build_content(gid, config_doc),
         overview_service.build_trackers(gid, config_doc),
         overview_service.build_feature_usage(gid),
+        overview_service.build_activity(gid),
         return_exceptions=True,
     )
 

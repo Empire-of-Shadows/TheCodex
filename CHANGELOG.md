@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased] - 2026-08-17 (server change history)
+
+### Added
+- **Codex now keeps a short history of what changes in your server.** Members joining and leaving, and roles and channels being created, renamed or deleted, are recorded so a server's staff can see what has happened recently instead of guessing. It covers the last **30 days** and older entries are deleted automatically. The only thing stored about you is your account ID against a join or a departure - no messages, no nicknames, nothing else. If you have turned off the member snapshot on your privacy page, your joins and departures are not recorded at all. The privacy policy has been updated to describe this, and its effective date has moved to August 17, 2026.
+
 ## [Unreleased] - 2026-08-17 (dashboard buttons)
 
 ### Fixed

@@ -723,6 +723,80 @@ USAGE_BASELINE_DAYS = 90
 USAGE_LIST_LIMIT = 5
 
 
+#: How far back the activity tile looks. The collection's TTL index drops rows at
+#: 30 days, so asking for more than that can only ever return the same thing.
+EVENTS_WINDOW_DAYS = 30
+#: Most recent entries shown in the tile's list.
+EVENTS_RECENT_LIMIT = 8
+
+
+async def build_activity(gid: str) -> dict | None:
+    """``ActivityOverview`` - what has changed in this server lately.
+
+    Reads ServerData.Events, written by the listeners in
+    ``Features/NewMembers/joining.py`` since 2026-08-17.
+
+    Returns None when the guild has no events at all, so the tile renders an
+    honest empty state rather than a row of zeros claiming nothing happened. That
+    is the expected state everywhere at first, because the trail only started
+    being written on 2026-08-17 and nothing backfills it.
+
+    The counts are deliberately NOT a member census. `member_join` minus
+    `member_remove` over 30 days is churn, not growth, and the tile labels it
+    that way - the member section above it owns the actual totals, which come
+    from the snapshot and are always current.
+    """
+    cutoff = datetime.now(tz=timezone.utc) - timedelta(days=EVENTS_WINDOW_DAYS)
+
+    # Rides the (guild_id, created_at desc) index the collection declares. The
+    # window bound is belt-and-braces next to the TTL: a row cannot outlive it,
+    # but an index scan bounded by both is what the index was built for.
+    rows = await db.serverdata_events().find(
+        {"guild_id": gid, "created_at": {"$gte": cutoff}},
+        {"event_type": 1, "data": 1, "created_at": 1},
+    ).sort("created_at", -1).to_list(length=1000)
+
+    if not rows:
+        return None
+
+    breakdown: dict[str, int] = {}
+    for row in rows:
+        key = row.get("event_type") or "unknown"
+        breakdown[key] = breakdown.get(key, 0) + 1
+
+    def _describe(row: dict) -> dict:
+        """One list row. Deliberately carries no user id to the browser.
+
+        The stored join/departure rows are user-keyed, but nobody reading this
+        tile needs to know WHO - the question it answers is "what has been
+        happening here". Sending ids would put personal data on a screen that
+        does not use it, so the shape stops at the event and its timestamp.
+        """
+        data = row.get("data") or {}
+        event = row.get("event_type") or "unknown"
+        name = data.get("name")
+        previous = data.get("previous_name")
+        return {
+            "event_type": event,
+            "name": name,
+            "previous_name": previous,
+            "at": row.get("created_at"),
+        }
+
+    return {
+        "window_days": EVENTS_WINDOW_DAYS,
+        "total_events": len(rows),
+        "breakdown": breakdown,
+        "joins": breakdown.get("member_join", 0),
+        "departures": breakdown.get("member_remove", 0),
+        "structural_changes": sum(
+            n for k, n in breakdown.items()
+            if k.startswith("role_") or k.startswith("channel_")
+        ),
+        "recent": [_describe(r) for r in rows[:EVENTS_RECENT_LIMIT]],
+    }
+
+
 async def build_feature_usage(gid: str) -> dict | None:
     """``FeatureUsageOverview`` - which parts of Codex are actually being used.
 

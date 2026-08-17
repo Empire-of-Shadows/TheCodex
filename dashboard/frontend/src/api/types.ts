@@ -344,6 +344,40 @@ export interface TrackersOverview {
   boost: { count: number; tier: number | null };
 }
 
+/** One entry in the server's recent-change trail. */
+export interface ActivityEvent {
+  event_type: string;
+  /** Role or channel name, where the event has one. Null for member events. */
+  name: string | null;
+  /** Only set when the event was a rename. */
+  previous_name: string | null;
+  at: string;
+}
+
+/**
+ * ServerData.Events - what has changed in this server in the last 30 days.
+ *
+ * The rows are dropped by a TTL index at 30 days, so this window is the whole
+ * history that exists; there is nothing older to ask for.
+ *
+ * `joins` and `departures` are CHURN, not growth, and the tile says so. The
+ * member section owns the real totals - those come from the snapshot and are
+ * current, whereas these only count what happened inside the window.
+ *
+ * Member events are stored against a user id, but no id reaches this type: the
+ * question the tile answers is what has been happening, not who. Members who
+ * turned off the member snapshot are not recorded at all.
+ */
+export interface ActivityOverview {
+  window_days: number;
+  total_events: number;
+  breakdown: Record<string, number>;
+  joins: number;
+  departures: number;
+  structural_changes: number;
+  recent: ActivityEvent[];
+}
+
 /**
  * Everything the admin home renders, in one round trip.
  *
@@ -361,6 +395,7 @@ export interface GuildOverview {
   content: ContentOverview | null;
   trackers: TrackersOverview | null;
   feature_usage: FeatureUsageOverview | null;
+  activity: ActivityOverview | null;
 }
 
 // ── Component V2 types ───────────────────────────────────────────────────
