@@ -3,6 +3,7 @@ import type {
   ContentDoc,
   ContentOverview,
   DropsOverview,
+  FeatureUsageOverview,
   GuildOverview,
   MembersOverview,
   SuggestionsOverview,
@@ -45,6 +46,7 @@ export default function AdminOverview({ overview }: { overview: GuildOverview })
       <Suggestions suggestions={overview.suggestions} />
       <NewMembers guildId={guildId} members={overview.members} />
       <Drops guildId={guildId} drops={overview.drops} />
+      <FeatureUsage usage={overview.feature_usage} />
     </div>
   );
 }
@@ -419,6 +421,76 @@ function Suggestions({ suggestions }: { suggestions: SuggestionsOverview | null 
           ))}
         </div>
       )}
+    </Tile>
+  );
+}
+
+/* ── Feature usage ───────────────────────────────── */
+
+/**
+ * Which parts of Codex are actually being used.
+ *
+ * Leads with what went QUIET rather than what is popular: the reason this exists
+ * is "I don't remember why I stopped using those features", and a ranked
+ * most-used list buries exactly those.
+ *
+ * The disclosure line is deliberate (owner ruling 2026-08-17): these counts are
+ * per server with no member identified, said plainly where an admin actually
+ * sees it rather than only in a policy document.
+ */
+function FeatureUsage({ usage }: { usage: FeatureUsageOverview | null }) {
+  if (!usage) {
+    return (
+      <Tile span={5} title="Feature usage">
+        <p className="ov-muted">
+          Nothing recorded yet. Usage is counted from the day this was switched on, so this
+          fills in as the server uses the bot.
+        </p>
+        <p className="ov-muted">Counted per server only - no member is identified.</p>
+      </Tile>
+    );
+  }
+
+  return (
+    <Tile span={5} title="Feature usage">
+      <Stat
+        value={formatCount(usage.total_uses)}
+        label={`Uses in the last ${usage.recent_days} days`}
+      />
+      <KeyValue k="Features used recently" v={formatCount(usage.active_features)} />
+
+      {usage.quiet.length > 0 && (
+        <>
+          <Rule />
+          <p className="ov-muted">
+            Used before, but not once in the last {usage.recent_days} days:
+          </p>
+          {usage.quiet.map((row) => (
+            <KeyValue
+              key={row.feature}
+              k={row.feature}
+              v={
+                row.last_used
+                  ? `${formatCount(row.uses_before)} before - last ${formatShortDate(row.last_used)}`
+                  : formatCount(row.uses_before)
+              }
+            />
+          ))}
+        </>
+      )}
+
+      {usage.quiet.length === 0 && usage.least_used.length > 0 && (
+        <>
+          <Rule />
+          <p className="ov-muted">Least used lately:</p>
+          {usage.least_used.map((row) => (
+            <KeyValue key={row.feature} k={row.feature} v={formatCount(row.uses)} />
+          ))}
+        </>
+      )}
+
+      <Rule />
+      <p className="ov-muted">Counted per server only - no member is identified.</p>
     </Tile>
   );
 }

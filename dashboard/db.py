@@ -159,6 +159,15 @@ def serverdata_boosts():
     return _get_client()["ServerData"]["Boosts"]
 
 
+def serverdata_feature_usage():
+    """ServerData.FeatureUsage - per-guild, per-day feature usage counters.
+
+    Written by Features/trackers/usage/usage_tracker.py. Aggregate only: no user
+    id is stored, by design, so nothing here is personal data.
+    """
+    return _get_client()["ServerData"]["FeatureUsage"]
+
+
 def serverdata_boost_events():
     """ServerData.Boost_Events - the boost start/stop event history per (guild, user)."""
     return _get_client()["ServerData"]["Boost_Events"]

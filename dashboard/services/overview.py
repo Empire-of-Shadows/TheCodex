@@ -712,6 +712,99 @@ async def build_trackers(gid: str, config_doc: dict) -> dict:
     }
 
 
+# ── Feature usage ────────────────────────────────────────────────────────────
+
+#: Recent window: "is this feature being used now".
+USAGE_RECENT_DAYS = 30
+#: Baseline window: "was it ever used". Must be comfortably longer than the recent
+#: window or nothing can ever look like it went quiet.
+USAGE_BASELINE_DAYS = 90
+#: How many entries each list on the tile carries.
+USAGE_LIST_LIMIT = 5
+
+
+async def build_feature_usage(gid: str) -> dict | None:
+    """``FeatureUsageOverview`` - which parts of Codex are actually being used.
+
+    Written by ``Features/trackers/usage/usage_tracker.py``. Aggregate only: the
+    documents contain no user id at all, so nothing here is personal data.
+
+    WHY "QUIET" MEANS *USED BEFORE, NOT NOW*
+    ----------------------------------------
+    The owner's reason for wanting this was "I don't remember why I stopped using
+    those features", so the useful list is the ones that went quiet - not a
+    popularity ranking, which buries exactly those.
+
+    Saying "never used" would need the full command registry, and this process has
+    no bot and no command tree to ask. Comparing two windows of the bot's own
+    history needs neither: a feature with uses in the last 90 days but none in the
+    last 30 has demonstrably been dropped, which is the actual question. It also
+    self-maintains - a feature added or renamed later needs no list updating.
+
+    Returns None when nothing has ever been recorded for this guild, so the tile
+    can say "nothing recorded yet" instead of rendering a wall of honest zeros.
+    Tracking only began 2026-08-17, so that is the expected state at first.
+    """
+    now = datetime.now(tz=timezone.utc)
+    baseline_start = (now - timedelta(days=USAGE_BASELINE_DAYS)).strftime("%Y-%m-%d")
+    recent_start = (now - timedelta(days=USAGE_RECENT_DAYS)).strftime("%Y-%m-%d")
+
+    # At most USAGE_BASELINE_DAYS small documents - cheap to sum in Python, and it
+    # rides the (guild_id, date) index the collection already declares.
+    cursor = await db.serverdata_feature_usage().find(
+        {"guild_id": gid, "date": {"$gte": baseline_start}},
+        {"date": 1, "total": 1, "features": 1},
+    ).to_list(length=USAGE_BASELINE_DAYS + 1)
+
+    if not cursor:
+        return None
+
+    baseline: dict[str, int] = {}
+    recent: dict[str, int] = {}
+    last_seen: dict[str, str] = {}
+    recent_total = 0
+
+    for doc in cursor:
+        date = doc.get("date") or ""
+        is_recent = date >= recent_start
+        if is_recent:
+            recent_total += int(doc.get("total") or 0)
+        for feature, payload in (doc.get("features") or {}).items():
+            uses = int((payload or {}).get("total") or 0)
+            if uses <= 0:
+                continue
+            baseline[feature] = baseline.get(feature, 0) + uses
+            if date > last_seen.get(feature, ""):
+                last_seen[feature] = date
+            if is_recent:
+                recent[feature] = recent.get(feature, 0) + uses
+
+    # Used at some point in the baseline, not once in the recent window.
+    quiet = [
+        {"feature": f, "uses_before": n, "last_used": last_seen.get(f)}
+        for f, n in baseline.items()
+        if recent.get(f, 0) == 0
+    ]
+    quiet.sort(key=lambda row: (-row["uses_before"], row["feature"]))
+
+    used_now = sorted(recent.items(), key=lambda kv: (kv[1], kv[0]))
+
+    return {
+        "recent_days": USAGE_RECENT_DAYS,
+        "baseline_days": USAGE_BASELINE_DAYS,
+        "total_uses": recent_total,
+        "active_features": len(recent),
+        "known_features": len(baseline),
+        "quiet": quiet[:USAGE_LIST_LIMIT],
+        "least_used": [
+            {"feature": f, "uses": n} for f, n in used_now[:USAGE_LIST_LIMIT]
+        ],
+        "top": [
+            {"feature": f, "uses": n} for f, n in reversed(used_now[-USAGE_LIST_LIMIT:])
+        ],
+    }
+
+
 # ── Feature status rail ──────────────────────────────────────────────────────
 
 

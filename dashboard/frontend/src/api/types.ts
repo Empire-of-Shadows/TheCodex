@@ -311,6 +311,34 @@ export interface ContentOverview {
   greeting: ContentDoc;
 }
 
+/** One feature that has gone quiet: used during the baseline window, not once recently. */
+export interface QuietFeature {
+  feature: string;
+  uses_before: number;
+  last_used: string | null;
+}
+
+/**
+ * Which parts of Codex are actually being used.
+ *
+ * Aggregate only - the underlying documents hold no user id at all, so nothing
+ * here is personal data and no member can be profiled from it.
+ *
+ * `quiet` is the point of this section: features used during the baseline window
+ * but not once in the recent one. That is the "I don't remember why I stopped
+ * using those" list, which a popularity ranking buries.
+ */
+export interface FeatureUsageOverview {
+  recent_days: number;
+  baseline_days: number;
+  total_uses: number;
+  active_features: number;
+  known_features: number;
+  quiet: QuietFeature[];
+  least_used: { feature: string; uses: number }[];
+  top: { feature: string; uses: number }[];
+}
+
 export interface TrackersOverview {
   tag: { enabled: boolean; server_tag: string | null; wearing: number | null };
   boost: { count: number; tier: number | null };
@@ -332,6 +360,7 @@ export interface GuildOverview {
   drops: DropsOverview | null;
   content: ContentOverview | null;
   trackers: TrackersOverview | null;
+  feature_usage: FeatureUsageOverview | null;
 }
 
 // ── Component V2 types ───────────────────────────────────────────────────

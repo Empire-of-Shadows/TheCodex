@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased] - 2026-08-17 (feature usage)
+
+### Added
+- **Your dashboard now shows which parts of the bot your server actually uses.** A new Feature usage panel on the admin home leads with the features that have gone quiet - things your server used before but has not touched in the last 30 days, with how much they used to be used and when they were last used. It is meant to answer "what did we stop using, and when", which is easy to lose track of. Alongside that it shows how many times the bot was used in the last 30 days and how many different features that covered. This is counted per server only - no member is identified, and the panel says so on itself. Nothing appears until the server uses the bot, since counting starts from today.
+
 ## [Unreleased] - 2026-08-15 (color settings in one place)
 
 ### Changed
