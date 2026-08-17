@@ -11,7 +11,7 @@ Panel Access Roles is a lone leaf in the Main Configurations group, above the
 Feature Configurations menus.
 
 The panel is admin-only: `bindings.resolve_panel_role` never returns "mod", so
-no node here declares `mod_allowed`.
+and the engine's `mod_allowed` node flag was removed fleet-wide on 2026-08-06.
 """
 
 import json
