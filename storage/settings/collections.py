@@ -375,6 +375,24 @@ COLLECTIONS: dict[str, CollectionConfig] = {
         ]
     ),
 
+    # Per-GUILD, per-day feature usage counters. Answers "which parts of this bot
+    # actually get used", which is what the owner asked for after noticing features
+    # had quietly fallen out of use.
+    #
+    # Deliberately AGGREGATE ONLY: no user id is ever written here, so this creates
+    # no new personal data, needs no privacy opt-out, and cannot be used to profile
+    # a member. One document per guild per day keeps it small (365 docs/guild/year)
+    # and makes a trend query a plain date-range scan.
+    'serverdata_feature_usage': CollectionConfig(
+        name='FeatureUsage',
+        database='ServerData',
+        connection='primary',
+        indexes=[
+            IndexModel([('guild_id', 1), ('date', -1)], unique=True, name='guild_date_unique'),
+            IndexModel([('date', -1)], name='date_desc'),
+        ]
+    ),
+
     'serverdata_events': CollectionConfig(
         name='Events',
         database='ServerData',
