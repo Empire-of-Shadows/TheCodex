@@ -22,9 +22,19 @@ GUILD_CLEANUP_GRACE_SECONDS = 24 * 60 * 60  # 24 hours
 class GuildEventHandler:
     """Handles all guild-related events with enhanced caching and rate limiting"""
 
+    #: Minimum gap between analytics-rollup refreshes for one guild.
+    #:
+    #: The rollup is a DAILY document, so refreshing it more often than this buys
+    #: nothing - and `extract_analytics` walks every member and every one of their
+    #: roles, which is precisely the O(members) rescan `update_guild_metrics` is
+    #: careful never to do per event. One rescan per burst, not one per join.
+    ANALYTICS_MIN_INTERVAL_SECONDS = 900
+
     def __init__(self, bot):
         self.bot = bot
         self.logger = get_logger("GuildEventHandler")
+        #: guild id -> monotonic timestamp of the last analytics rollup refresh.
+        self._analytics_refreshed_at: Dict[int, float] = {}
 
         # Enhanced guild-specific rate limiting storage
         self.dm_rate_limits: Dict[int, Dict[str, Any]] = defaultdict(lambda: {
@@ -178,6 +188,38 @@ class GuildEventHandler:
         except Exception as e:
             self.logger.error(f"Error scanning channel activity for {guild.name}: {e}")
 
+    async def _refresh_analytics_rollup(self, guild: discord.Guild) -> bool:
+        """Refresh the daily analytics rollup for `guild`, at most every 15 minutes.
+
+        `ServerData.Analytics` holds one document per guild per day: bot vs human
+        counts, role distribution, live voice occupancy and the account-age spread.
+        Nothing wrote it before 2026-08-17 - this bot snapshots with the granular
+        cache_members / cache_roles / cache_channels / cache_guild_info calls, and the
+        rollup is only covered by `cache_all`, which nothing calls. That left
+        `get_guild_statistics` reading a permanently empty collection.
+
+        Throttled on purpose. The extractor walks every member and every role they
+        hold, and this runs on a per-event path that is explicitly careful not to do
+        an O(members) rescan during a join burst. Since the document is keyed by day,
+        one refresh per quarter hour loses nothing.
+
+        Best-effort: returns False and logs rather than raising. A missing analytics
+        row must never cost a member their join flow.
+        """
+        try:
+            now = asyncio.get_running_loop().time()
+            last = self._analytics_refreshed_at.get(guild.id)
+            if last is not None and (now - last) < self.ANALYTICS_MIN_INTERVAL_SECONDS:
+                return False
+            # Stamp BEFORE awaiting: a burst of concurrent events must not all get
+            # past the check and queue redundant rescans behind each other.
+            self._analytics_refreshed_at[guild.id] = now
+            await self.cache_manager.cache_guild_analytics(guild)
+            return True
+        except Exception as e:
+            self.logger.error(f"Analytics rollup not refreshed for {guild.id}: {e}")
+            return False
+
     async def update_guild_metrics(self, guild: discord.Guild, event_type: str, **kwargs):
         """Update guild metrics based on events with human member tracking"""
         try:
@@ -231,6 +273,7 @@ class GuildEventHandler:
 
             # Update database cache periodically
             await self.cache_manager.cache_guild_info(guild)
+            await self._refresh_analytics_rollup(guild)
 
         except Exception as e:
             self.logger.error(f"Error updating guild metrics for {guild.name}: {e}")
