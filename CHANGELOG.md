@@ -10,6 +10,17 @@
   and turning it off is still instant. Nothing changes for servers that already have it on.
 
 ### Fixed
+- **An anonymous suggestion is now anonymous to staff too.** If you have turned off data
+  collection, your suggestions are posted anonymously - but the copy sent to the server's admin
+  channel still showed your name and account ID, which is not what the privacy page promises. It
+  no longer names you anywhere members or staff can read. So that a server can still deal with an
+  abusive anonymous suggestion, the author is recorded in the server's change history, where an
+  admin has to look it up by the suggestion ID rather than seeing it by default.
+- **Description limits set on a role now actually apply.** The panel let you give a specific role
+  its own embed description length, saved it, and then ignored it completely - everyone got the
+  server default or their tier's limit instead. A role limit is now honoured. Where more than one
+  applies, the most generous wins, and a limit set lower than the server default really does
+  restrict that role rather than being quietly overruled.
 - **The admin panel no longer fails to open a menu when a summary line gets long.** If a
   dropdown entry's summary grew past what Discord allows - for example a tier with many roles
   assigned to it - the whole screen failed with an error instead of showing. Long summaries now switch to a

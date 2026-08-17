@@ -64,23 +64,56 @@ class EmbedConfigLoader:
     # ── Description Limits ───────────────────────────────────────────
 
     async def get_description_limit_for_user(self, guild_id: int, user_roles: Set[int]) -> int:
-        """Get the effective description limit for a user based on their tier limits.
+        """Get the effective description limit for a user.
 
-        Resolves each role to its tier(s), finds any configured tier limits, and
-        returns the highest applicable limit.  Falls back to the guild default.
+        Three sources, highest wins, falling back to the guild default:
+          * ``limits`` - a limit set directly on one of the user's ROLES.
+          * ``tier_limits`` - a limit set on a tier the user's roles resolve to.
+          * ``default_limit`` - the guild-wide floor.
+
+        Nothing stacks; the most generous EXPLICIT limit is the one used. Note
+        that ``default_limit`` is a fallback, not a floor - if any role or tier
+        limit applies it wins even when it is lower, which is what lets an admin
+        use the setting to restrict a role rather than only to widen one. That is
+        pre-existing tier behaviour; role limits now follow the same rule.
+
+        The ``limits`` half was written by the panel and read by NOTHING until
+        2026-08-15, so a per-role limit an admin set had no effect at all.
         """
         gcm = await self._get_gcm()
         config = await gcm.get_config(guild_id)
         limits_data = config.embed.get("description_limits", {"default_limit": 500})
         default_limit = limits_data.get("default_limit", 500)
-        tier_limits = limits_data.get("tier_limits", {})
+        tier_limits = limits_data.get("tier_limits", {}) or {}
+        role_limits = limits_data.get("limits", {}) or {}
 
         mapping = config.embed.get("role_tier", {})
         user_tiers = self._resolve_user_tiers(mapping, user_roles)
 
         applicable = [tier_limits[t] for t in user_tiers if t in tier_limits]
+
+        # Role ids are stored as strings (ecosystem convention); the caller hands
+        # us discord.py ints, so compare as strings. A malformed stored value is
+        # skipped rather than allowed to break embed creation for everyone.
+        matched_roles = []
+        for role_id in user_roles:
+            raw = role_limits.get(str(role_id))
+            if raw is None:
+                continue
+            try:
+                applicable.append(int(raw))
+                matched_roles.append(str(role_id))
+            except (TypeError, ValueError):
+                logger.warning(
+                    "Ignoring unparseable per-role description limit %r for role %s in guild %s",
+                    raw, role_id, guild_id,
+                )
+
         limit = max(applicable, default=default_limit)
-        logger.debug(f"Description limit for user in guild {guild_id}: tiers={user_tiers}, limit={limit}")
+        logger.debug(
+            f"Description limit for user in guild {guild_id}: tiers={user_tiers}, "
+            f"roles_with_limits={matched_roles}, limit={limit}"
+        )
         return limit
 
     async def get_default_description_limit(self, guild_id: int) -> int:

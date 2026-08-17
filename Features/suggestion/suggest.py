@@ -49,6 +49,34 @@ OPTED_OUT_VOTE_NOTICE = (
 )
 
 
+async def write_anonymous_author_audit(*, guild_id, suggestion_id: str, author) -> bool:
+    """Record who wrote a forced-anonymous suggestion, for staff to look up.
+
+    The admin-channel copy deliberately does NOT name an opted-out member - the
+    privacy page promises no record tied to them in the places other people
+    read. Moderation still has to be possible, so the link lives here instead:
+    one audit entry, findable by Suggestion ID, that an admin has to go looking
+    for rather than one that sits in a channel.
+
+    Best-effort by design (the engine ``AuditLog.log`` swallows its own errors
+    and returns False); the suggestion is already posted by the time this runs.
+    """
+    from admin.settings.bindings import _get_audit_log
+
+    return await _get_audit_log().log(
+        guild_id=str(guild_id),
+        actor_id=str(author.id),
+        actor_name=str(author),
+        section="suggestions",
+        key="anonymous_author",
+        entity_id=suggestion_id,
+        note=(
+            "Author of an anonymous suggestion. Withheld from the admin channel "
+            "because this member has turned off data collection."
+        ),
+    )
+
+
 async def _opted_out(client, user_id) -> bool:
     """Whether this member has turned off data collection for suggestions.
 
@@ -1531,10 +1559,24 @@ class SuggestionCog(commands.Cog):
                 admin_embed.add_field(name="Anonymous", value=str(anonymous), inline=True)
                 admin_embed.add_field(name="Suggestion ID", value=suggestion_id, inline=False)
 
-                user_avatar_url = user.avatar.url if user.avatar else None
-                admin_embed.set_author(name=user.display_name, icon_url=user_avatar_url)
-                admin_embed.add_field(name="User ID", value=f"{user.id}", inline=False)
-                admin_embed.set_footer(text=f"Suggested by {user}", icon_url=user_avatar_url)
+                if forced_anonymous:
+                    # The member opted out of being linked to what they post, and
+                    # the privacy page tells them there is "no record tied to you".
+                    # The admin copy used to name them anyway, which made that a
+                    # false promise. Identity is not in the channel at all now; it
+                    # is written to the audit log below, so moderating an abusive
+                    # anonymous suggestion is a deliberate lookup rather than a
+                    # name sitting in a channel every admin can read.
+                    admin_embed.set_author(name="Anonymous (privacy opt-out)")
+                    admin_embed.set_footer(
+                        text="Author withheld. Look this Suggestion ID up in the "
+                             "audit log if you need it."
+                    )
+                else:
+                    user_avatar_url = user.avatar.url if user.avatar else None
+                    admin_embed.set_author(name=user.display_name, icon_url=user_avatar_url)
+                    admin_embed.add_field(name="User ID", value=f"{user.id}", inline=False)
+                    admin_embed.set_footer(text=f"Suggested by {user}", icon_url=user_avatar_url)
 
                 # Optional mirror of the suggestion for staff; absent on a server
                 # that has not set an admin channel.
@@ -1584,6 +1626,24 @@ class SuggestionCog(commands.Cog):
                     logger.info(f"Sent admin copy of suggestion {suggestion_id} to admin channel")
                 else:
                     logger.warning("Admin channel not found, admin copy not sent")
+
+                # The author of a forced-anonymous suggestion is withheld from the
+                # channel but recorded here, so an admin who needs it can look it
+                # up by Suggestion ID. Best-effort: a failed audit write must not
+                # cost the member their suggestion, which is already posted.
+                if forced_anonymous:
+                    try:
+                        await write_anonymous_author_audit(
+                            guild_id=interaction.guild_id,
+                            suggestion_id=suggestion_id,
+                            author=user,
+                        )
+                    except Exception as audit_error:
+                        logger.error(
+                            f"Failed to record the author of anonymous suggestion "
+                            f"{suggestion_id}: {audit_error}",
+                            exc_info=True,
+                        )
 
                 # Notify user
                 success_message = f"✅ Your {'anonymous ' if anonymous else ''}suggestion has been posted! (ID: {suggestion_id[:8]})"
