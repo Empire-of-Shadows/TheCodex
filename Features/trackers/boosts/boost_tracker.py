@@ -163,9 +163,15 @@ class BoostTracker(commands.Cog):
                     if user_id in live_ids:
                         continue
                     # The opt-out is forward-only: it stops new writes and never
-                    # removes what was stored before it was set, so a row left
-                    # behind here is deliberate, not a missed cleanup.
+                    # removes what was stored before it was set. That governs the
+                    # boost_end EVENT below, which is skipped. It does not govern
+                    # this row: every reader treats the active-boosters collection
+                    # as "who is boosting right now", so keeping it would have Codex
+                    # tell admins and the member's own dashboard that they are still
+                    # boosting. Clear it and record nothing (ruled 2026-08-19; the
+                    # matching case in on_member_update is handled the same way).
                     if await self._opted_out(user_id):
+                        await self._clear_active_booster(gid, user_id)
                         continue
                     start = as_utc(doc.get('boost_start'))
                     duration = format_duration(now - start) if start else "Unknown"
@@ -202,7 +208,20 @@ class BoostTracker(commands.Cog):
         # data collection off. The announcement goes too, deliberately: it prints
         # the very details that are not being kept, so posting it while not
         # collecting would be incoherent.
+        #
+        # One exception, ruled 2026-08-19: a boost STOP still clears their row from
+        # the active-boosters collection. That collection is read as a live fact -
+        # dashboard/routers/activity.py, dashboard/services/overview.py and
+        # admin/actions/tracker_actions.py all state that presence in it means
+        # boosting NOW - so leaving the row behind makes Codex keep telling admins,
+        # and the member's own dashboard, that they are boosting when they stopped.
+        # Forward-only is about not writing NEW records about them; removing a
+        # record that has become false is the opposite of a new record, and letting
+        # a privacy switch publish a false claim indefinitely is not what it is for.
+        # No boost_end event and no announcement, because those would be new writes.
         if await self._opted_out(after.id):
+            if before.premium_since and not after.premium_since:
+                await self._clear_active_booster(after.guild.id, after.id)
             logger.info(
                 f"Boost change for {after.id} in guild {after.guild.id} not tracked: "
                 f"data collection is turned off for this member"
@@ -213,6 +232,21 @@ class BoostTracker(commands.Cog):
             await self.log_boost_start(after)
         elif before.premium_since and not after.premium_since:
             await self.log_boost_end(before)
+
+    async def _clear_active_booster(self, guild_id, user_id) -> None:
+        """Drop a member's row from the active-boosters collection, recording nothing.
+
+        Used for members who have turned data collection off: the row has to go
+        because every reader treats the collection as "who is boosting right now",
+        but no event may be logged and nothing may be announced.
+        """
+        try:
+            boosts_collection = self.db_manager.get_collection_manager('serverdata_boosts')
+            await boosts_collection.delete_one(
+                {'guild_id': str(guild_id), 'user_id': str(user_id)}
+            )
+        except Exception as e:
+            logger.error(f"Error clearing active booster row: {e}", exc_info=True)
 
     async def log_boost_start(self, member: discord.Member):
         """Log when a member starts boosting."""

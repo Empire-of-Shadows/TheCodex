@@ -1,5 +1,22 @@
 # Changelog
 
+## [Unreleased] - 2026-08-19 (boosting, after you turn data collection off)
+
+### Fixed
+- **Pressing Escape no longer closes a confirmation box while the action is already running.**
+  When you confirm something destructive, the Cancel button greys out and clicking outside the
+  box does nothing, because by then there is nothing left to call off. Escape ignored that and
+  closed the box anyway, so the action carried on out of sight and it looked like you had
+  stopped it. Escape now behaves like the other two, and still closes the box normally before
+  you confirm.
+- **If you turned data collection off and later stopped boosting, the server kept showing you
+  as a booster.** Turning data collection off stops Codex recording anything new about you, and
+  that was being applied so strictly that it would not even remove the entry saying you are
+  currently boosting - so the admin booster list, the server overview count and your own
+  dashboard all carried on saying you boost, indefinitely. That entry is now cleared when you
+  stop, which is a removal rather than a new record, so nothing about you is written or
+  announced. Any entry left over from before is cleared the next time Codex restarts.
+
 ## [Unreleased] - 2026-08-17 (editing an embed's footer)
 
 ### Fixed
