@@ -195,6 +195,13 @@ export interface ToggleRole {
 
 export interface UserEntitlements {
   guild_id: string;
+  /**
+   * True when the member's roles could not be read from Discord. Every "do you
+   * have this" answer below is derived from those roles, so when this is set they
+   * are guesses that all read as "no" and the page must say so rather than state
+   * them as fact.
+   */
+  roles_unavailable: boolean;
   /** Every section independently nullable - one failure never blanks the page. */
   embed: EmbedEntitlements | null;
   capabilities: CapabilityEntitlement[] | null;

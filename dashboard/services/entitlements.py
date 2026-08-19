@@ -18,7 +18,7 @@ or broken collection cannot blank the page.
 import asyncio
 from typing import Any
 
-from dashboard._engine.auth.panel_access import member_role_ids
+from dashboard._engine.auth.panel_access import member_roles_lookup
 from dashboard._engine.discord_cache import discord_cache
 from dashboard import db
 from storage.log import get_logger
@@ -299,9 +299,22 @@ async def _safe(coro):
 async def get_entitlements(
     guild_id: str, user_id: str, is_admin: bool
 ) -> dict:
-    """Everything the member can use in this guild, plus their status there."""
+    """Everything the member can use in this guild, plus their status there.
+
+    Every "do you have this" answer on this page is computed from the member's
+    roles, fetched live from Discord. When that fetch does not resolve the roles
+    come back empty, which is indistinguishable from a member who holds none - so
+    the whole page would quietly tell somebody they have no colour access, no
+    capabilities and none of their self-assigned roles, all stated as fact.
+
+    Rather than make five sections individually three-valued, the outcome is
+    reported once at the top as ``roles_unavailable`` and the page says so. The
+    sections keep their shapes; they are simply known to be unreliable when the
+    flag is set.
+    """
     config = await db.guild_config().find_one({"guild_id": str(guild_id)}) or {}
-    roles = await member_role_ids(str(guild_id), str(user_id))
+    lookup = await member_roles_lookup(str(guild_id), str(user_id))
+    roles = lookup.roles
 
     embed, capabilities, self_serve, status, submissions = await asyncio.gather(
         _safe(_embed_section(guild_id, config, roles, is_admin)),
@@ -313,6 +326,8 @@ async def get_entitlements(
 
     return {
         "guild_id": str(guild_id),
+        # True means every role-derived answer below is a guess, not a fact.
+        "roles_unavailable": not lookup.resolved,
         "embed": embed,
         "capabilities": capabilities,
         "self_serve": self_serve,

@@ -66,7 +66,10 @@ async def guild_overview(guild_id: str, session: dict = Depends(get_current_user
             sections[name] = result
 
     try:
-        features = overview_service.build_features(config_doc, **sections)
+        features = overview_service.build_features(
+            config_doc,
+            **{name: sections[name] for name in overview_service.FEATURE_SECTIONS},
+        )
     except Exception:
         # features is not nullable in the contract, so an empty rail is the only
         # shape available here. It is logged loudly because an empty rail on a

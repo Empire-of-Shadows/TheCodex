@@ -886,6 +886,14 @@ def _plural(count: int, singular: str, plural: str | None = None) -> str:
     return f"{count} {singular if count == 1 else (plural or singular + 's')}"
 
 
+# The sections this rail reads, named here rather than at the call site so a
+# section added to the overview cannot silently break it. It used to be handed
+# every section the page gathers, which meant adding the feature_usage and
+# activity analytics sections made every call raise TypeError - swallowed by the
+# caller, leaving the rail empty on every request for every guild.
+FEATURE_SECTIONS = ("wyr", "suggestions", "members", "drops", "content", "trackers")
+
+
 def build_features(
     config_doc: dict,
     *,

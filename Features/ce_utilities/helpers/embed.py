@@ -5,6 +5,7 @@ from typing import Optional, Set
 
 import discord
 from Features.ce_utilities.helpers.embed_modal import (
+	MAX_FOOTER_LENGTH,
 	get_allowed_colors,
 	get_max_description_length,
 	resolve_features,
@@ -68,7 +69,12 @@ class EditEmbedModal(discord.ui.Modal, title="Edit Embed"):
 		self.max_length = max_length
 		self.default_color = default_color
 		self.free_color_access = bool(free_color_access)
-		self.has_image_field = "image_field" in resolve_features(allowed_features)
+		_features = resolve_features(allowed_features)
+		self.has_image_field = "image_field" in _features
+		# Footer is offered on edit for exactly the members the create flow offers it
+		# to. Without this a member could set a footer when creating an embed and then
+		# never change or remove it, which is the asymmetry this closes.
+		self.has_footer_field = "footer_field" in _features
 		# Colors follow the same rule as the create flow: the guild-wide opt-out,
 		# or a palette assigned to one of this member's roles. With neither, there
 		# is nothing to choose from, so the field is not offered at all.
@@ -103,6 +109,18 @@ class EditEmbedModal(discord.ui.Modal, title="Edit Embed"):
 				required=False,
 			)
 
+		# Footer input (gated by the footer_field feature)
+		self.footer_input = None
+		if self.has_footer_field:
+			self.footer_input = discord.ui.TextInput(
+				label="New Embed Footer",
+				placeholder="Footer text, 'none' to remove, empty to keep",
+				style=discord.TextStyle.paragraph,
+				default=(embed.footer.text if getattr(embed, "footer", None) else "") or "",
+				required=False,
+				max_length=MAX_FOOTER_LENGTH,
+			)
+
 		# Color input (gated by free color access or an assigned palette)
 		self.color_input = None
 		if self.has_color_field:
@@ -114,10 +132,15 @@ class EditEmbedModal(discord.ui.Modal, title="Edit Embed"):
 				max_length=32,
 			)
 
+		# Five components is Discord's hard limit for a modal, and title, description,
+		# thumbnail, footer and color is exactly five. Anything further has to go on a
+		# view after submit, which is how the create flow handles the timestamp toggle.
 		self.add_item(self.title_input)
 		self.add_item(self.description_input)
 		if self.thumbnail_input:
 			self.add_item(self.thumbnail_input)
+		if self.footer_input:
+			self.add_item(self.footer_input)
 		if self.color_input:
 			self.add_item(self.color_input)
 
@@ -174,6 +197,47 @@ class EditEmbedModal(discord.ui.Modal, title="Edit Embed"):
 							ephemeral=True,
 						)
 						return
+
+			# Handle Footer (only if the footer_field feature is enabled). Same
+			# convention as the thumbnail above: 'none' removes it, empty keeps what
+			# is already there, anything else replaces it. Without an explicit remove
+			# word a footer could be set but never cleared.
+			if self.has_footer_field and self.footer_input:
+				footer_val = (self.footer_input.value or "").strip()
+				current_footer = (
+					original_embed.footer.text
+					if getattr(original_embed, "footer", None) and original_embed.footer.text
+					else ""
+				)
+				if footer_val.lower() == "none":
+					if current_footer:
+						# remove_footer(), NOT set_footer(text=None). Unlike set_thumbnail,
+						# set_footer does not treat None as "remove" - it resets the footer
+						# to an EMPTY object, which serializes as "footer": {} and Discord
+						# rejects for a missing footer.text. Do not make this match the
+						# thumbnail line above; the two APIs genuinely differ.
+						embed.remove_footer()
+						changed = True
+						changes_made.append("footer_removed")
+				elif footer_val and footer_val != current_footer:
+					if len(footer_val) > MAX_FOOTER_LENGTH:
+						await interaction.response.send_message(
+							f"❌ Footer text is limited to {MAX_FOOTER_LENGTH} characters.",
+							ephemeral=True,
+						)
+						return
+					# Preserve the icon: set_footer replaces the whole footer object, so
+					# passing only text would silently drop an icon the embed already had.
+					embed.set_footer(
+						text=footer_val,
+						icon_url=(
+							original_embed.footer.icon_url
+							if getattr(original_embed, "footer", None)
+							else None
+						),
+					)
+					changed = True
+					changes_made.append("footer")
 
 			# Handle Color (per-guild)
 			allowed_colors = await get_allowed_colors(self.guild_id, self.user_roles)

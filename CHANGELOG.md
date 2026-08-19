@@ -1,5 +1,51 @@
 # Changelog
 
+## [Unreleased] - 2026-08-17 (editing an embed's footer)
+
+### Fixed
+- **You can now change or remove an embed's footer after posting it.** `/embed edit` let you
+  change the title, description, thumbnail and colour, but not the footer - so a footer you set
+  when you created the embed was stuck there permanently. It now appears in the edit box,
+  prefilled with what is already there. Leave it alone to keep it, type something new to replace
+  it, or type `none` to take it off. Only members who can add a footer in the first place get the
+  option, exactly as when creating.
+
+## [Unreleased] - 2026-08-17 (your access page)
+
+### Fixed
+- **Your access page now tells you when it could not check your roles, instead of guessing.**
+  Everything on it - your colour access, what you can do, and which of the self-assign roles you
+  have - is worked out from your roles. If Codex could not reach Discord to read them, every one
+  of those answers quietly came back as "no", so the page could tell you that you do not have a
+  role you are wearing right now. It now says plainly at the top that it could not check, so you
+  know not to trust the rest until you reload.
+
+## [Unreleased] - 2026-08-17 (feature status rail)
+
+### Fixed
+- **The admin home now shows the feature status list again.** The row of features telling you
+  which parts of Codex are on, off, or still need setting up was coming back empty for every
+  server, so a feature you had never finished configuring looked no different from one that was
+  running fine. It went blank when the two new usage panels were added and has been showing
+  nothing since. It is back, and a future panel cannot knock it out the same way.
+
+## [Unreleased] - 2026-08-17 (dashboard charts and sign-in)
+
+### Fixed
+- **Dates under the bar charts no longer overlap.** On a narrow screen, or when a chart covered a
+  lot of days, the labels along the bottom could print on top of one another and become
+  unreadable. The chart now shows as many labels as genuinely fit the space, and always keeps the
+  first and the last so you can see the range at a glance.
+- **A brief Discord outage no longer keeps you locked out of the dashboard for a full minute.**
+  When Discord could not be reached to confirm your roles, the dashboard remembered that failure
+  for 60 seconds, so you stayed shut out even after Discord had come back. It now tries again
+  within about 10 seconds.
+- **The same applies to a server admin.** The check that confirms you manage this server had the
+  same problem and it locked out harder: one failed reply shut every admin of that server out for
+  a full minute. It now retries after about ten seconds.
+- **The dashboard no longer creeps up in memory the longer it runs.** Two internal lookup caches
+  never cleared out entries that had gone stale.
+
 ## [Unreleased] - 2026-08-17 (server change history)
 
 ### Added

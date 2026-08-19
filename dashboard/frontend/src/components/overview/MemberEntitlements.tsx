@@ -133,11 +133,21 @@ function EmbedBuilder({ entitlements }: { entitlements: UserEntitlements }) {
 /* ── Everything else - capabilities, self-serve, status ────────────── */
 
 function YourAccess({ entitlements }: { entitlements: UserEntitlements }) {
-  const { capabilities, self_serve, status, submissions } = entitlements;
+  const { capabilities, self_serve, status, submissions, roles_unavailable } = entitlements;
   if (!capabilities && !self_serve && !status && !submissions) return null;
 
   return (
     <Tile span={5} title="Your access here">
+      {/* Everything in this tile is worked out from the member's roles. If those
+          could not be read they all read as "no", which is a lie stated as fact -
+          so say it once, at the top, before any of it. */}
+      {roles_unavailable && (
+        <p className="ov-body">
+          <span className="ov-chip ov-chip--warn">Could not check your roles</span>{" "}
+          We could not reach Discord to see which roles you have, so anything below
+          that depends on them may be wrong. Try again in a minute.
+        </p>
+      )}
       {capabilities && (
         <>
           {capabilities.map((capability) => (
