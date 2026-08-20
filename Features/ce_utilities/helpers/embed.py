@@ -58,6 +58,119 @@ def _parse_color(color_str: str) -> Optional[int]:
 		return None
 
 
+class EditTimestampView(discord.ui.View):
+	"""The timestamp control for /embed edit, on the ephemeral reply to the modal.
+
+	It cannot live in the modal. Discord allows five components in one, and a fully
+	entitled member already fills all five with title, description, thumbnail, footer
+	and colour. The create flow has the same constraint and solves it the same way -
+	its toggle sits on the confirm view, not in ``EmbedModal``.
+
+	Why the native property rather than telling members to type ``<t:...>``: the
+	markdown form renders in a description but is NOT parsed inside a footer, so the
+	small localized time Discord draws beside the footer is only reachable through
+	``Embed.timestamp``. Same reasoning as ``embed_confirm.py``.
+
+	Turning it ON restores the timestamp the embed already had, and falls back to the
+	MESSAGE's own creation time when it had none - never ``utcnow()``. The feature
+	describes itself as "the time your embed was created", so stamping an edit made a
+	week later with the current time would print a creation time that is not one.
+	"""
+
+	def __init__(
+		self,
+		*,
+		message: discord.Message,
+		embed: discord.Embed,
+		author_id: int,
+		timeout: float = 300,
+	):
+		super().__init__(timeout=timeout)
+		self.message = message
+		# The embed the modal last wrote. Held rather than re-read from
+		# ``message.embeds`` because ``Message.edit`` does not refresh the object we
+		# are holding, so a re-read could hand back the pre-edit version.
+		self.embed = embed
+		self.author_id = author_id
+		self.source_interaction: Optional[discord.Interaction] = None
+
+		# What ON restores. Captured before any toggle so switching off and back on
+		# returns the embed to the time it actually had, not to whenever that happened.
+		self.original_timestamp = embed.timestamp
+		self.timestamp_on = embed.timestamp is not None
+
+		self.toggle_button = discord.ui.Button(
+			label="Timestamp: On" if self.timestamp_on else "Timestamp: Off",
+			style=discord.ButtonStyle.primary if self.timestamp_on else discord.ButtonStyle.secondary,
+		)
+		self.toggle_button.callback = self._on_toggled
+		self.add_item(self.toggle_button)
+
+		self.done_button = discord.ui.Button(label="Done", style=discord.ButtonStyle.success)
+		self.done_button.callback = self._on_done
+		self.add_item(self.done_button)
+
+	def bind_source(self, interaction: discord.Interaction) -> None:
+		"""Remember the interaction whose original response carries these controls."""
+		self.source_interaction = interaction
+
+	async def interaction_check(self, interaction: discord.Interaction) -> bool:
+		if interaction.user.id != self.author_id:
+			await interaction.response.send_message(
+				"These controls belong to someone else.", ephemeral=True
+			)
+			return False
+		return True
+
+	def _disable_all(self) -> None:
+		for child in self.children:
+			child.disabled = True
+
+	async def on_timeout(self) -> None:
+		"""Leave no live controls on a stale ephemeral message."""
+		self._disable_all()
+		if self.source_interaction is None:
+			return
+		try:
+			await self.source_interaction.edit_original_response(
+				content="Timestamp controls expired. Run `/embed edit` again to change it.",
+				view=None,
+			)
+		except discord.HTTPException as e:
+			logger.debug(f"Could not clear the timed-out timestamp controls: {e}")
+
+	async def _on_toggled(self, interaction: discord.Interaction) -> None:
+		"""Flip the timestamp on the live message, not just on the preview."""
+		self.timestamp_on = not self.timestamp_on
+		if self.timestamp_on:
+			self.embed.timestamp = self.original_timestamp or self.message.created_at
+		else:
+			self.embed.timestamp = None
+
+		try:
+			await self.message.edit(embed=self.embed)
+		except (discord.HTTPException, discord.Forbidden) as e:
+			# Put the flag back so the button keeps matching what the message shows.
+			self.timestamp_on = not self.timestamp_on
+			self.embed.timestamp = self.original_timestamp if self.timestamp_on else None
+			logger.error(f"Failed to toggle embed timestamp: {e}", exc_info=True)
+			await interaction.response.send_message(
+				"❌ Could not update the embed just now. Please try again.", ephemeral=True
+			)
+			return
+
+		self.toggle_button.label = "Timestamp: On" if self.timestamp_on else "Timestamp: Off"
+		self.toggle_button.style = (
+			discord.ButtonStyle.primary if self.timestamp_on else discord.ButtonStyle.secondary
+		)
+		await interaction.response.edit_message(view=self)
+
+	async def _on_done(self, interaction: discord.Interaction) -> None:
+		self._disable_all()
+		await interaction.response.edit_message(content="✅ Done.", view=None)
+		self.stop()
+
+
 class EditEmbedModal(discord.ui.Modal, title="Edit Embed"):
 	def __init__(self, message: discord.Message, guild_id: int, max_length: int, user_roles: Set[int],
 	             allowed_features: Optional[Set[str]] = None, default_color: Optional[int] = None,
@@ -75,6 +188,11 @@ class EditEmbedModal(discord.ui.Modal, title="Edit Embed"):
 		# to. Without this a member could set a footer when creating an embed and then
 		# never change or remove it, which is the asymmetry this closes.
 		self.has_footer_field = "footer_field" in _features
+		# Timestamp does NOT become a modal field - five components is Discord's hard
+		# limit and title/description/thumbnail/footer/colour already fills it. It is
+		# offered on the reply instead, via EditTimestampView, which is the same shape
+		# the create flow uses. Gated on the same entitlement create gates it on.
+		self.has_timestamp_field = "timestamp" in _features
 		# Colors follow the same rule as the create flow: the guild-wide opt-out,
 		# or a palette assigned to one of this member's roles. With neither, there
 		# is nothing to choose from, so the field is not offered at all.
@@ -272,11 +390,34 @@ class EditEmbedModal(discord.ui.Modal, title="Edit Embed"):
 					changed = True
 					changes_made.append("color")
 
+			# The timestamp control rides the REPLY, because the modal has no room for
+			# it. It is built even when nothing else changed: toggling the timestamp is
+			# a legitimate reason to open /embed edit on its own, and requiring some
+			# other edit first to reach the button would be a worse flow than no button.
+			timestamp_view = (
+				EditTimestampView(
+					message=self.message,
+					embed=embed,
+					author_id=interaction.user.id,
+				)
+				if self.has_timestamp_field
+				else None
+			)
+
 			if not changed:
+				if timestamp_view is None:
+					await interaction.response.send_message(
+						"ℹ️ Nothing to update. No changes were detected.",
+						ephemeral=True,
+					)
+					return
 				await interaction.response.send_message(
-					"ℹ️ Nothing to update. No changes were detected.",
+					"ℹ️ No changes were detected in the form. You can still switch the "
+					"timestamp on or off below.",
+					view=timestamp_view,
 					ephemeral=True,
 				)
+				timestamp_view.bind_source(interaction)
 				return
 
 			logger.info(f"Applying embed changes: {', '.join(changes_made)} for message {self.message.id}")
@@ -284,7 +425,15 @@ class EditEmbedModal(discord.ui.Modal, title="Edit Embed"):
 			try:
 				await self.message.edit(embed=embed)
 				logger.info(f"Embed successfully updated by user {interaction.user.id} for message {self.message.id}")
-				await interaction.response.send_message("✅ Embed updated successfully.", ephemeral=True)
+				if timestamp_view is None:
+					await interaction.response.send_message("✅ Embed updated successfully.", ephemeral=True)
+				else:
+					await interaction.response.send_message(
+						"✅ Embed updated successfully.",
+						view=timestamp_view,
+						ephemeral=True,
+					)
+					timestamp_view.bind_source(interaction)
 			except discord.HTTPException as e:
 				logger.error(f"Discord HTTP error editing embed: {e.status} {e.text}", exc_info=True)
 				error_msg = "❌ Failed to edit the embed. Please try again later."

@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased] - 2026-08-19 (turning an embed's timestamp on and off)
+
+### Added
+- **You can now switch an embed's timestamp on or off after posting it.** The timestamp is the
+  small time Discord shows next to the footer, in each reader's own timezone. You could turn it on
+  when creating an embed but never change your mind afterwards. After you submit `/embed edit`
+  there is now a Timestamp button to switch it either way, and a Done button when you have
+  finished. It appears only if your roles unlock the timestamp feature, the same as when creating.
+- **Turning it back on shows when the embed was actually posted**, not the moment you pressed the
+  button - so an embed you edit a week later does not claim it was created today.
+- The button is there even if you closed the edit box without changing any text, since wanting to
+  change only the timestamp is a perfectly good reason to open it.
+
 ## [Unreleased] - 2026-08-19 (boosting, after you turn data collection off)
 
 ### Fixed
