@@ -34,7 +34,13 @@ from .tracker_actions import TrackerActions
 logger = get_logger("TrackerNodes")
 
 # Permissions the bot needs in the boost log channel to actually log a boost.
-_BOOST_CHANNEL_PERMS = ["view_channel", "send_messages", "embed_links"]
+#
+# ``embed_links`` used to be on this list and was an over-ask: the only sender is
+# ``Features/trackers/boosts/boost_tracker.py`` :365, a plain ``channel.send(message)``
+# with a string and no embed. Asking for a permission the code never uses refuses
+# channels the boost log would work perfectly well in, which is a wrong answer
+# rather than a cautious one.
+_BOOST_CHANNEL_PERMS = ["view_channel", "send_messages"]
 
 
 # ── Tag Tracker ───────────────────────────────────────────────────────────────

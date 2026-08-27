@@ -391,6 +391,12 @@ _TIER_DESCRIPTIONS = {
     ),
 }
 
+# The five tier leaves below deliberately carry NO ``requires_role_manage``, and
+# that is a decision rather than an unfinished seam. The bot never hands a tier
+# role out - it only compares a member's roles against the stored lists to decide
+# what the embed builder unlocks. The flag would run the hierarchy rule and
+# refuse any role above the bot's own top role, and staff roles normally sit
+# there, so it would reject exactly the roles an admin wants in the upper tiers.
 ROLE_TIER_CONFIG = PanelNode(
     key="role_tiers",
     label="Role Tier Mapping",
@@ -571,6 +577,24 @@ async def _clear_wyr_channel(guild_id: int) -> bool:
     return ok
 
 
+# Everything the daily WYR post actually exercises in its channel.
+# ``Features/daily/WYR.py`` sends content + embed + view (:894-899), creates a
+# public thread on that message (:917-920) and posts the starter line inside it
+# (:922). Its ``except`` (:928-930) turns a Forbidden into a log line and the
+# scheduler simply tries again the next day, forever.
+#
+# The post is fired by a schedule, not by anyone standing in the channel, so a
+# failure there is invisible to the members and to the admin who configured it.
+# That is what makes a pre-save check worth having on this leaf: it is the only
+# moment a human is present to be told.
+_WYR_CHANNEL_PERMS = [
+    "view_channel",
+    "send_messages",
+    "embed_links",
+    "create_public_threads",
+    "send_messages_in_threads",
+]
+
 WYR_CHANNEL_CONFIG = PanelNode(
     key="wyr_channel",
     label="WYR Channel",
@@ -582,22 +606,32 @@ WYR_CHANNEL_CONFIG = PanelNode(
     post_save_hook=partial(_auto_enable_feature_if_ready, feature_key="wyr"),
     min_values=1,
     max_values=1,
+    required_channel_perms=_WYR_CHANNEL_PERMS,
+    # The picker used to offer forums, voice, stages and categories, none of
+    # which this send path can post an embed and a thread into.
+    channel_types=[discord.ChannelType.text],
 )
 
+# ``requires_role_manage=True`` is right here because the bot genuinely hands
+# this role out and takes it back (``Features/daily/wyr_notify.py`` :295
+# ``add_roles`` / :301 ``remove_roles``). The engine check wants Manage Roles
+# and the role below the bot's own top role - exactly the condition this
+# description used to ask the admin to remember by hand.
 WYR_PING_ROLE_CONFIG = PanelNode(
     key="wyr_ping_role",
     label="WYR Ping Role",
     kind="role_select",
     description=(
         "Role pinged when a WYR question is posted. Leave empty for no ping.\n"
-        "Members can give themselves this role from any question post or with "
-        "`/wyr notify`, so keep it below the bot's own role in the role list."
+        "The bot assigns this role itself when a member opts in from a question "
+        "post or with `/wyr notify`."
     ),
     get_values=WYRConfigActions.get_ping_role,
     set_values=WYRConfigActions.set_ping_role,
     clear_values=WYRConfigActions.clear_ping_role,
     min_values=1,
     max_values=1,
+    requires_role_manage=True,
 )
 
 _WYR_TOGGLE_OPTIONS = [("true", "Enabled"), ("false", "Disabled")]
@@ -788,6 +822,21 @@ _NM_ACCOUNT_AGE_OPTIONS = [
 
 _NM_TOGGLE_OPTIONS = [("true", "Enabled"), ("false", "Disabled")]
 
+# Deliberately lean, and deliberately the SAME set the Send a Test Greeting node
+# checks (``admin/actions/greeting_nodes.py`` :52-56). The two screens sit one
+# click apart, so the panel must never accept a channel here and then refuse to
+# send a test greeting into it on the next screen.
+#
+# ``embed_links`` is deliberately not demanded. What a Components v2 greeting
+# needs in order to render is not settled evidence - EcomRebuild chose otherwise
+# for its own senders - and demanding it would refuse channels Discord would in
+# fact deliver to. An over-ask is a wrong answer, not a safe one.
+#
+# The greeting fires on a join with nobody watching for it, so a silent Forbidden
+# in that channel is seen by no one; the pre-save check is the only moment a
+# human is there to be told.
+_NM_GREETING_CHANNEL_PERMS = ["view_channel", "send_messages"]
+
 NM_GREETING_CHANNEL_CONFIG = PanelNode(
     key="nm_greeting_channel",
     label="Greeting Channel",
@@ -798,6 +847,10 @@ NM_GREETING_CHANNEL_CONFIG = PanelNode(
     clear_values=NewMemberActions.clear_greeting_channel,
     min_values=1,
     max_values=1,
+    required_channel_perms=_NM_GREETING_CHANNEL_PERMS,
+    # A greeting goes to a normal text channel; the picker used to offer forums,
+    # voice, stages and categories the sender cannot use.
+    channel_types=[discord.ChannelType.text],
 )
 
 NM_GREETING_TEXT_CONFIG = PanelNode(
@@ -889,6 +942,11 @@ NM_SETTINGS_CONFIG = PanelNode(
     },
 )
 
+# ``requires_role_manage=True``: the bot hands this role out in four separate
+# places (``Features/NewMembers/joining.py`` :470, ``whitelist.py`` :758,
+# ``tasks/whitelist_role_cleanup.py`` :123 and the panel's own
+# ``admin/actions/whitelist_nodes.py`` :294), so it needs Manage Roles and needs
+# this role to sit below its own top role.
 NM_WHITELIST_ROLE_CONFIG = PanelNode(
     key="nm_whitelist_role",
     label="Whitelist Role",
@@ -899,6 +957,7 @@ NM_WHITELIST_ROLE_CONFIG = PanelNode(
     clear_values=NewMemberActions.clear_whitelist_role,
     min_values=1,
     max_values=1,
+    requires_role_manage=True,
 )
 
 
@@ -913,6 +972,28 @@ _ANN_ARCHIVE_OPTIONS = [
     ("10080", "1 Week"),
 ]
 
+# What the announcement thread flow actually exercises.
+# ``Features/announcements/announcements.py`` re-fetches the message over REST
+# (:81), opens a public thread on a MEMBER's message (:90-96) and sends the
+# welcome embed inside that thread (:147).
+#
+# ``manage_threads`` is deliberately absent. The only path that needs it is the
+# optional Auto-Delete Threads setting (:176), and demanding a permission that
+# an optional setting uses is the over-ask defect class - it refuses channels
+# the feature would work perfectly well in (TheHost's ``manage_threads``,
+# cleared 2026-08-20).
+#
+# The thread opens on somebody else's announcement, minutes after they posted
+# and stopped looking, so a Forbidden here is seen by nobody. The pre-save check
+# is the one moment a human is present to be told.
+_ANN_CHANNEL_PERMS = [
+    "view_channel",
+    "read_message_history",
+    "create_public_threads",
+    "send_messages_in_threads",
+    "embed_links",
+]
+
 ANN_CHANNEL_CONFIG = PanelNode(
     key="ann_channel",
     label="Announcement Channel",
@@ -923,6 +1004,10 @@ ANN_CHANNEL_CONFIG = PanelNode(
     clear_values=AnnouncementActions.clear_announcement_channel,
     min_values=1,
     max_values=1,
+    required_channel_perms=_ANN_CHANNEL_PERMS,
+    # News (announcement) channels are a normal choice here and threads work in
+    # them; forums, voice, stages and categories do not fit this flow.
+    channel_types=[discord.ChannelType.text, discord.ChannelType.news],
 )
 
 ANN_SETTINGS_CONFIG = PanelNode(
@@ -1012,6 +1097,22 @@ ANN_SETTINGS_CONFIG = PanelNode(
 
 # ── Suggestions ──────────────────────────────────────────────────────────────
 
+# What posting a suggestion actually exercises: ``Features/suggestion/suggest.py``
+# :1589-1608 sends content + embed + view, opens a public thread on that message
+# and posts the discussion opener inside it.
+#
+# The member who wrote the suggestion is looking at their own ephemeral reply in
+# whatever channel they ran the command from, so a Forbidden in the destination
+# is invisible to them and to everyone else. The pre-save check is where an admin
+# can still be told.
+_SUG_CHANNEL_PERMS = [
+    "view_channel",
+    "send_messages",
+    "embed_links",
+    "create_public_threads",
+    "send_messages_in_threads",
+]
+
 SUG_CHANNEL_CONFIG = PanelNode(
     key="sug_channel",
     label="Suggestion Channel",
@@ -1022,6 +1123,10 @@ SUG_CHANNEL_CONFIG = PanelNode(
     clear_values=SuggestionActions.clear_suggestion_channel,
     min_values=1,
     max_values=1,
+    required_channel_perms=_SUG_CHANNEL_PERMS,
+    # Forums, voice, stages and categories cannot take this embed-plus-thread
+    # post, so the picker no longer offers them.
+    channel_types=[discord.ChannelType.text],
 )
 
 
@@ -1029,6 +1134,13 @@ SUG_CHANNEL_CONFIG = PanelNode(
 
 _GUIDE_TOGGLE_OPTIONS = [("true", "Enabled"), ("false", "Disabled")]
 
+# Deliberately carries NO ``required_channel_perms``, unlike the four channel
+# leaves above. The guide only ever replies where the bot was just mentioned: the
+# member is standing in that channel waiting for the answer, so a reply that does
+# not arrive is immediately visible to them and to whoever they ask about it.
+# There is nothing a pre-save check could tell an admin that the first mention
+# would not, and the cost of guessing the list wrong is refusing a channel that
+# works.
 GUIDE_CHANNEL_CONFIG = PanelNode(
     key="guide_channel",
     label="Guide Channel",
@@ -1039,6 +1151,9 @@ GUIDE_CHANNEL_CONFIG = PanelNode(
     clear_values=GuideActions.clear_guide_channel,
     min_values=1,
     max_values=1,
+    # The guide answers mentions in a normal text channel, so the picker no
+    # longer offers forums, voice, stages and categories.
+    channel_types=[discord.ChannelType.text],
 )
 
 GUIDE_UPLOAD_CONFIG = PanelNode(

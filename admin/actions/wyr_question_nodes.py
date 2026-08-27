@@ -313,6 +313,16 @@ _MAX_PENDING_OPTIONS = [
     ("10", "10"),
 ]
 
+# What posting a submission for review actually exercises: ``Features/daily/WYR.py``
+# :1115-1118 sends an embed plus the Approve/Decline view, and its ``except``
+# turns a failure into a log line and a False.
+#
+# The member who submitted the question is looking at their own reply somewhere
+# else entirely, and the reviewers are not watching an empty channel, so a
+# Forbidden here means the submission simply never reaches anybody. The pre-save
+# check is the one moment a human is present to be told.
+_WYR_REVIEW_CHANNEL_PERMS = ["view_channel", "send_messages", "embed_links"]
+
 WYR_REVIEW_CHANNEL_CONFIG = PanelNode(
     key="wyr_review_channel",
     label="Review Channel",
@@ -328,8 +338,17 @@ WYR_REVIEW_CHANNEL_CONFIG = PanelNode(
     clear_values=WYRQuestionActions.clear_review_channel,
     min_values=1,
     max_values=1,
+    required_channel_perms=_WYR_REVIEW_CHANNEL_PERMS,
+    # Review posts carry an embed and buttons, so the picker no longer offers
+    # forums, voice, stages and categories.
+    channel_types=[discord.ChannelType.text],
 )
 
+# Deliberately carries NO ``requires_role_manage``. The bot never hands this role
+# out - it only compares it against a reviewer's own roles to decide whether the
+# Approve and Decline buttons work for them. The flag's hierarchy rule would
+# refuse any role above the bot's own top role, and staff roles normally sit
+# there, so it would reject exactly the roles an admin wants to name here.
 WYR_REVIEWER_ROLE_CONFIG = PanelNode(
     key="wyr_reviewer_role",
     label="Who Can Review",

@@ -79,6 +79,22 @@ class HelpListener(commands.Cog):
 		if not config.guide.get("enabled", True):
 			return
 
+		# Respect the per-guild guide channel restriction. When one is set the
+		# guide answers only there and stays completely silent everywhere else -
+		# a "wrong channel" reply would defeat the point of restricting it.
+		# Unset, empty and 0 (in either the int or the string form storage may
+		# round-trip) all mean "anywhere", so normalize to a string first.
+		guide_channel_id = str(config.guide.get("channel_id") or "").strip()
+		if guide_channel_id and guide_channel_id != "0":
+			# A thread under the guide channel counts as inside it - the member
+			# is in that channel's context, and a thread has its own id, so the
+			# direct comparison alone would silence exactly those members.
+			parent_id = getattr(message.channel, "parent_id", None)
+			if guide_channel_id != str(message.channel.id) and (
+				parent_id is None or guide_channel_id != str(parent_id)
+			):
+				return
+
 		# Throttle per user to prevent mention spam from hammering search.
 		if _on_cooldown(message.guild.id, message.author.id):
 			return

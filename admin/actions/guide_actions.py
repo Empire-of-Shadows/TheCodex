@@ -10,8 +10,13 @@ from typing import Any, Dict, List, Optional
 from storage.settings.config_manager import get_guild_config_manager, get_config
 from Features.Guide.guide_store import guide_store
 from Features.Guide.guide_schema import validate_guide_schema, normalize_pages
-from Features.Guide.guide import guide_manager
 from storage.log import get_logger
+
+# Features.Guide.guide is imported LAZILY inside the two cache-invalidation
+# methods below, not here: that module imports `admin`, whose __init__ pulls
+# panel_configs, which imports this file - a cycle that only resolved because
+# the bot happens to import `admin` first. A cold import of anything under
+# Features.Guide used to raise ImportError because of this line.
 
 logger = get_logger("GuideActions")
 
@@ -86,6 +91,7 @@ class GuideActions:
 		# Save
 		saved = await guide_store.save_guide(guild_id, data, updated_by=0)
 		if saved:
+			from Features.Guide.guide import guide_manager  # lazy: see module import note
 			guide_manager.invalidate_cache(guild_id)
 		return saved
 
@@ -94,6 +100,7 @@ class GuideActions:
 		"""Delete custom guide and revert to default template."""
 		deleted = await guide_store.delete_guide(guild_id)
 		if deleted:
+			from Features.Guide.guide import guide_manager  # lazy: see module import note
 			guide_manager.invalidate_cache(guild_id)
 		return deleted
 

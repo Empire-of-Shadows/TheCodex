@@ -38,7 +38,13 @@ logger = get_logger("DropsNodes")
 DROPS_CHANNEL_PERMS = ["view_channel", "send_messages", "embed_links"]
 
 # Tracked channels are only read for statistics, so the bot just needs to see them.
-_TRACKER_CHANNEL_PERMS = ["view_channel", "read_message_history"]
+#
+# ``read_message_history`` used to be on this list and was an over-ask: the
+# tracker counts events straight off the gateway in ``on_message`` /
+# ``on_message_edit`` (``Features/updates-drops/drops-tracker.py`` :123, :180) and
+# never fetches a channel's history. Demanding it refuses channels the tracker
+# would count perfectly well, which is a wrong answer rather than a cautious one.
+_TRACKER_CHANNEL_PERMS = ["view_channel"]
 
 
 # ── Drops Channel ─────────────────────────────────────────────────────────────

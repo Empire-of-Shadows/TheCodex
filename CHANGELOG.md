@@ -1,5 +1,35 @@
 # Changelog
 
+## [Unreleased] - 2026-08-26 (readable dashboard errors)
+
+### Added
+- **The guide can now be kept to one channel.** The Guide Channel setting has been in the
+  admin panel and the dashboard for a while but did nothing - the guide answered a mention
+  anywhere in the server. Pick a channel and the guide now replies only there, and stays
+  completely quiet everywhere else rather than telling people they are in the wrong place.
+  Leave it empty to carry on answering anywhere.
+
+### Changed
+- **The admin panel now checks the bot can actually do the job before it saves a channel.**
+  When you pick a channel for WYR questions, greetings, announcements or suggestions, Codex
+  first checks it can see the channel and post, embed and open discussion threads there as
+  that feature needs. If it cannot, it tells you which permission is missing instead of
+  saving happily and then failing silently every day where nobody can see it.
+- **Roles the bot has to hand out are checked the same way.** The WYR notify role and the
+  new-member whitelist role are given to members by Codex, so the panel now turns down a role
+  it cannot manage - one sitting above Codex's own role, or when it has no permission to
+  manage roles at all - rather than accepting it and quietly never assigning it.
+- **Channel pickers only offer channels the feature can use.** They used to list forums,
+  voice channels, stages and categories that these features cannot post in.
+
+### Fixed
+- **The boost logger and the drops tracker no longer refuse channels that work fine.** Both
+  were asking for permissions they never use - the boost log posts plain text and needs no
+  embed permission, and the drops tracker only watches messages arrive and never reads back
+  through a channel's history - so perfectly good channels were being turned down.
+- **Dashboard error messages for invalid form input are readable now.** Some validation
+  errors used to render as raw data instead of a sentence naming the field and the problem.
+
 ## [Unreleased] - 2026-08-22 (admin panel pickers)
 
 ### Changed
