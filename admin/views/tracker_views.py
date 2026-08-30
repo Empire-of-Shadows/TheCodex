@@ -350,7 +350,7 @@ def format_tracker_status(overview: Dict[str, Any], guild: discord.Guild) -> str
         f"**Tag Tracker:**\n"
         f"- Status: {'Enabled' if tt_enabled else 'Disabled'}\n"
         f"- Tracked Role: {tt_role_display}\n"
-        f"- Server Tag: {tt_tag}\n\n"
+        f"- Server Tag: {tt_tag}\n"
         f"**Boost Tracker:**\n"
         f"- Status: {'Enabled' if bt_enabled else 'Disabled'}\n"
         f"- Log Channel: {bt_channel_display}\n"

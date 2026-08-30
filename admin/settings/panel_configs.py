@@ -170,7 +170,7 @@ _BOARD_TEMPLATE = {
             "id": "getting-started",
             "label": "Getting Started",
             "components": [
-                {"type": "text", "content": "## Getting Started\n- Introduce yourself in chat.\n- Pick up a few roles.\n- Jump into a game or a voice channel.\n\nMention me any time and I'll help you find your way around."},
+                {"type": "text", "content": "## Getting Started\n- Introduce yourself in chat.\n- Pick up a few roles.\n- Jump into a game or a voice channel.\nMention me any time and I'll help you find your way around."},
             ],
         },
         {
@@ -411,7 +411,7 @@ ROLE_TIER_CONFIG = PanelNode(
         "- **Tier 2** → R2, R3, R4, R5\n"
         "- **Tier 3** → R3, R4, R5\n"
         "- **Tier 4** → R4, R5\n"
-        "- **Tier 5** → R5 only - most exclusive\n\n"
+        "- **Tier 5** → R5 only - most exclusive\n"
         "**Before you begin:** Create 5 Discord roles in your server, one per progression level."
     ),
     children={

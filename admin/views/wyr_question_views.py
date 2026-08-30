@@ -175,9 +175,11 @@ def build_review_queue_view(
     ]
     options = question_options(submission)
     if options:
-        lines.append("")
+        # No blank lines around the numbered list - Discord's list block
+        # carries its own margins, and explicit blanks stack into double gaps.
         lines.extend(f"{number}. {text}" for number, text in options)
-    lines.append("")
+    else:
+        lines.append("")
     lines.append(f"Suggested by <@{submission.get('user_id')}>")
     if submission.get("tags"):
         lines.append(f"Tags: {', '.join(submission['tags'])}")

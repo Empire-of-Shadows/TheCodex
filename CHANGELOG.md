@@ -1,5 +1,23 @@
 # Changelog
 
+## [Unreleased] - 2026-08-28 (tidier spacing in the bot's messages)
+
+### Fixed
+- **Big empty gaps in the bot's messages are gone.** Several screens left a full blank line
+  under a bulleted or numbered list, or under a heading, on top of the space Discord already
+  puts there - so lists and headings floated in the middle of nowhere. Affected the admin
+  panel's Quick Setup Guide, the Role Tier Mapping help text, the Trackers and Drops status
+  screens, and the guide's "How to Use" page.
+- **The Quick Setup Guide's step titles no longer run into their own descriptions.** Step
+  headings such as "1. Panel Access Roles" were printed hard against the sentence that
+  follows them; each now sits on its own line.
+- **The starter guide and starter info board templates are tidier too.** The default guide
+  every server starts with, and the downloadable guide and board templates, had the same
+  extra gap under their headings and lists.
+- **The daily question screens lost their extra gaps as well.** Reviewing a suggested
+  question in the admin panel, and the suggestion preview members see while writing one,
+  both showed oversized space around the answer options.
+
 ## [Unreleased] - 2026-08-26 (readable dashboard errors)
 
 ### Added

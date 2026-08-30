@@ -222,9 +222,16 @@ class SubmissionBuilderView(discord.ui.LayoutView):
         lines.append(f"\n> {self.draft_text}")
         for index, option in enumerate(self.draft_options, start=1):
             lines.append(f"{index}. {option}")
+        # Right after the numbered options list, Discord's list margin already
+        # separates - an explicit blank line would stack into a double gap. The
+        # blank stays only when the previous line is plain text (no options).
+        after_list = bool(self.draft_options)
         if self.draft_tags:
-            lines.append(f"\n*Tags: {', '.join(self.draft_tags)}*")
-        lines.append("\n**3.** Send it for a moderator to look at.")
+            prefix = "" if after_list else "\n"
+            lines.append(f"{prefix}*Tags: {', '.join(self.draft_tags)}*")
+            after_list = False
+        prefix = "" if after_list else "\n"
+        lines.append(f"{prefix}**3.** Send it for a moderator to look at.")
         return "\n".join(lines)
 
     def _render(self) -> None:

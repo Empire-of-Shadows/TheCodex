@@ -233,6 +233,6 @@ def format_drops_status(overview: Dict[str, Any], guild: discord.Guild) -> str:
         f"**Drops Posting Channel:** {drops_display}\n"
         f"**Status:** {enabled_display}\n"
         f"**Daily Post Time:** {schedule_display}\n\n"
-        "**Tracked Channels:**\n" + "\n".join(tracker_lines) + "\n\n"
+        "**Tracked Channels:**\n" + "\n".join(tracker_lines) + "\n"
         "**Statistics (Guild):**\n" + "\n".join(stats_lines)
     )

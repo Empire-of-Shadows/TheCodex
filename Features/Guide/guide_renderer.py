@@ -208,7 +208,7 @@ class GuideRenderer:
 			"**Getting around the guide**\n"
 			"- Use the **dropdown** on a page to open its sub-sections.\n"
 			"- Tap **🔍 Search** to look through everything by keyword.\n"
-			"- Use **◀ Back** and **🏠 Home** to move around.\n\n"
+			"- Use **◀ Back** and **🏠 Home** to move around.\n"
 			"**💡 Tips**\n"
 			"- The more specific your wording, the better the match - try the "
 			"exact name of what you're after.\n"

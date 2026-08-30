@@ -103,7 +103,7 @@ class GuideStore:
 						"description": "Welcome to the server guide",
 						"content": {
 							"components": [
-								{"type": "text", "content": "# Server Guide\n\nThis guide is being set up. Check back soon!"}
+								{"type": "text", "content": "# Server Guide\nThis guide is being set up. Check back soon!"}
 							]
 						}
 					}

@@ -9,7 +9,7 @@
       "order": 1,
       "content": {
         "components": [
-          {"type": "text", "content": "# Welcome to the Server Guide!\n\nThis guide will help you get familiar with our community. Use the navigation below to explore different topics."},
+          {"type": "text", "content": "# Welcome to the Server Guide!\nThis guide will help you get familiar with our community. Use the navigation below to explore different topics."},
           {"type": "separator"},
           {"type": "text", "content": "**Quick Tips:**\n- Read the rules to stay in good standing\n- Check out our channels to find your interests\n- Join voice channels when they're active\n- Have fun and be respectful!"}
         ]
@@ -21,7 +21,7 @@
           "description": "Learn about our community",
           "content": {
             "components": [
-              {"type": "text", "content": "# About Us\n\nWelcome to our community! We're a group of passionate gamers and friends who enjoy hanging out, playing games, and having fun together."}
+              {"type": "text", "content": "# About Us\nWelcome to our community! We're a group of passionate gamers and friends who enjoy hanging out, playing games, and having fun together."}
             ]
           }
         },
@@ -32,7 +32,7 @@
           "icon": "📜",
           "content": {
             "components": [
-              {"type": "text", "content": "# Server Rules\n\nPlease follow these guidelines to keep our community welcoming:\n\n1. **Be Respectful** - Treat everyone with kindness\n2. **No Spam** - Keep channels clean and on-topic\n3. **No NSFW** - Keep content appropriate\n4. **Have Fun** - That's what we're here for!"}
+              {"type": "text", "content": "# Server Rules\nPlease follow these guidelines to keep our community welcoming:\n1. **Be Respectful** - Treat everyone with kindness\n2. **No Spam** - Keep channels clean and on-topic\n3. **No NSFW** - Keep content appropriate\n4. **Have Fun** - That's what we're here for!"}
             ]
           }
         }
@@ -46,7 +46,7 @@
       "order": 2,
       "content": {
         "components": [
-          {"type": "text", "content": "# Channel Guide\n\nHere's an overview of our server channels. Select a category below to learn more."}
+          {"type": "text", "content": "# Channel Guide\nHere's an overview of our server channels. Select a category below to learn more."}
         ]
       },
       "children": [
@@ -56,7 +56,7 @@
           "description": "Social and casual discussion channels",
           "content": {
             "components": [
-              {"type": "text", "content": "# General Channels\n\nOur social channels are open to everyone. Come hang out, share memes, and chat about anything!"}
+              {"type": "text", "content": "# General Channels\nOur social channels are open to everyone. Come hang out, share memes, and chat about anything!"}
             ]
           }
         },
@@ -66,7 +66,7 @@
           "description": "Game discussion and media channels",
           "content": {
             "components": [
-              {"type": "text", "content": "# Gaming Channels\n\nDedicated spaces for game discussions, clips, strategies, and finding people to play with."}
+              {"type": "text", "content": "# Gaming Channels\nDedicated spaces for game discussions, clips, strategies, and finding people to play with."}
             ]
           }
         }
@@ -80,7 +80,7 @@
       "order": 3,
       "content": {
         "components": [
-          {"type": "text", "content": "# Bot Commands\n\nOur bots provide various features. Select a category below to see available commands."}
+          {"type": "text", "content": "# Bot Commands\nOur bots provide various features. Select a category below to see available commands."}
         ]
       },
       "children": [
@@ -90,7 +90,7 @@
           "description": "Essential commands for everyday use",
           "content": {
             "components": [
-              {"type": "text", "content": "# Basic Commands\n\n- `/help` - Show this guide\n- `/suggest` - Submit a suggestion\n- `/info` - View server information"}
+              {"type": "text", "content": "# Basic Commands\n- `/help` - Show this guide\n- `/suggest` - Submit a suggestion\n- `/info` - View server information"}
             ]
           }
         },
@@ -100,7 +100,7 @@
           "description": "Interactive game commands",
           "content": {
             "components": [
-              {"type": "text", "content": "# Game Commands\n\n- `/uno` - Start a UNO game\n- `/hangman` - Play Hangman\n- `/tictactoe` - Play Tic-Tac-Toe"}
+              {"type": "text", "content": "# Game Commands\n- `/uno` - Start a UNO game\n- `/hangman` - Play Hangman\n- `/tictactoe` - Play Tic-Tac-Toe"}
             ]
           }
         }
@@ -114,7 +114,7 @@
       "order": 4,
       "content": {
         "components": [
-          {"type": "text", "content": "# Frequently Asked Questions\n\n**Q: How do I get roles?**\nCheck the role selection channel for self-assignable roles.\n\n**Q: How do I report someone?**\nUse the modmail system or contact a moderator directly.\n\n**Q: Can I suggest features?**\nYes! Use the `/suggest` command to submit your ideas."}
+          {"type": "text", "content": "# Frequently Asked Questions\n**Q: How do I get roles?**\nCheck the role selection channel for self-assignable roles.\n\n**Q: How do I report someone?**\nUse the modmail system or contact a moderator directly.\n\n**Q: Can I suggest features?**\nYes! Use the `/suggest` command to submit your ideas."}
         ]
       }
     }
