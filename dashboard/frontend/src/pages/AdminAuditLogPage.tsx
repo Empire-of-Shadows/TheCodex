@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { AuditLogEntry, AuditLogSummary } from "../api/types";
+import AdminNav from "../components/AdminNav";
 import AppHeader from "../components/AppHeader";
 import BarChart, { type BarChartSeries } from "../_engine/components/charts/BarChart";
 import {
@@ -210,20 +211,14 @@ export default function AdminAuditLogPage() {
 
   return (
     <div className="app-layout">
-      <AppHeader
-        title="Change history"
-        left={
-          <Link
-            to={`/settings/${guildId}`}
-            className="btn btn-secondary"
-            style={{ marginLeft: 12 }}
-          >
-            &larr; Settings
-          </Link>
-        }
-      />
+      {/* No back button in the header: AdminNav underneath already carries a
+          Settings tab and a way out to the server list, and two competing
+          controls a few pixels apart landed in different places. */}
+      <AppHeader title="Change history" />
 
       <div className="page">
+        <AdminNav guildId={guildId} />
+
         {error && (
           <div className="alert danger" role="alert" style={{ marginTop: 16 }}>
             {error}

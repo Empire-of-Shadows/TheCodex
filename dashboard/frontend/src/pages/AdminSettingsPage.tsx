@@ -10,6 +10,7 @@ import type {
   SettingsResponse,
   SettingsSection,
 } from "../api/types";
+import AdminNav from "../components/AdminNav";
 import AppHeader from "../components/AppHeader";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { formatError } from "../_engine/api/formatError";
@@ -325,12 +326,20 @@ export default function AdminSettingsPage() {
       .catch(() => setOverview(null));
   }, [guildId]);
 
+  // The loading and failure branches carry the same shell as the loaded page:
+  // header, .page, and the tab bar. The tab bar is the only way off this page
+  // now that the header's back button is gone, and a settings load that fails
+  // is exactly when somebody needs to leave for the change history or the
+  // builder - both of which read different endpoints and may well be fine.
   if (loadError) {
     return (
       <div className="app-layout admin-settings-page">
-        <AppHeader />
-        <div className="alert danger" role="alert" style={{ margin: 24 }}>
-          {loadError}
+        <AppHeader title="Server Settings" />
+        <div className="page">
+          <AdminNav guildId={guildId} />
+          <div className="alert danger" role="alert" style={{ marginTop: 16 }}>
+            {loadError}
+          </div>
         </div>
       </div>
     );
@@ -338,10 +347,13 @@ export default function AdminSettingsPage() {
   if (!resp || !draft) {
     return (
       <div className="app-layout admin-settings-page">
-        <AppHeader />
-        <p className="muted" style={{ padding: 24 }}>
-          Loading settings...
-        </p>
+        <AppHeader title="Server Settings" />
+        <div className="page">
+          <AdminNav guildId={guildId} />
+          <p className="muted" style={{ marginTop: 16 }}>
+            Loading settings...
+          </p>
+        </div>
       </div>
     );
   }
@@ -415,16 +427,14 @@ export default function AdminSettingsPage() {
 
   return (
     <div className="app-layout admin-settings-page">
-      <AppHeader
-        title="Server Settings"
-        left={
-          <Link to="/dashboard" className="btn btn-secondary" style={{ marginLeft: 12 }}>
-            &larr; Dashboard
-          </Link>
-        }
-      />
+      {/* No back button in the header: AdminNav underneath already leads back
+          to the server list, and two competing "go back" controls a few pixels
+          apart landed in different places. */}
+      <AppHeader title="Server Settings" />
 
       <div className="page">
+        <AdminNav guildId={guildId} />
+
         {message && (
           <div className={`alert ${message.kind}`} style={{ marginTop: 16 }}>
             {message.text}
@@ -484,7 +494,7 @@ export default function AdminSettingsPage() {
                     {showAudit && (
                       <Link
                         className="set-rail__item"
-                        to={`/settings/${guildId}/audit-log`}
+                        to={`/settings/guilds/${guildId}/audit-log`}
                       >
                         <span>Change history</span>
                       </Link>

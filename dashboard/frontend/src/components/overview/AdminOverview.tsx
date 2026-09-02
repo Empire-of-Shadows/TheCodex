@@ -34,6 +34,35 @@ import {
 } from "../../_engine/format";
 import { formatQuestionKind, orderedStatuses, statusColour } from "./format";
 
+/*
+ * Where this tile's deep links go.
+ *
+ * Codex's management pages live under `/settings/guilds/<id>/...`, not at the
+ * engine's older flat `/settings/<id>` default, so the addresses are built here
+ * rather than spelled out a dozen times across the tiles below. FeatureStrip is
+ * handed the settings builder through its documented `settingsHref` prop for
+ * the same reason - the engine component is vendored and cannot be taught this
+ * bot's shape.
+ */
+
+/** One server's settings page, optionally opened on a named section. */
+function settingsHref(guildId: string, section?: string): string {
+  const base = `/settings/guilds/${guildId}/settings`;
+  return section ? `${base}?s=${encodeURIComponent(section)}` : base;
+}
+
+/** One server's change history, a sibling of its settings page. */
+function auditLogHref(guildId: string): string {
+  return `/settings/guilds/${guildId}/audit-log`;
+}
+
+/** One server's component builder. Guide, board and greeting are modes of the
+ *  one page rather than routes of their own, so the mode rides in the query. */
+function builderHref(guildId: string, mode?: "board" | "greeting"): string {
+  const base = `/settings/guilds/${guildId}/builder`;
+  return mode ? `${base}?mode=${mode}` : base;
+}
+
 /** The admin home. Every section of the payload can be null on its own. */
 export default function AdminOverview({ overview }: { overview: GuildOverview }) {
   const guildId = overview.guild_id;
@@ -73,16 +102,20 @@ function IsItWorking({ overview }: { overview: GuildOverview }) {
       }
       action={
         <>
-          <Link className="ov-link" to={`/settings/${guildId}`}>
+          <Link className="ov-link" to={settingsHref(guildId)}>
             Change settings
           </Link>
-          <Link className="ov-link" to={`/settings/${guildId}/audit-log`}>
+          <Link className="ov-link" to={auditLogHref(guildId)}>
             Change history
           </Link>
         </>
       }
     >
-      <FeatureStrip guildId={guildId} features={overview.features} />
+      <FeatureStrip
+        guildId={guildId}
+        features={overview.features}
+        settingsHref={(key) => settingsHref(guildId, key)}
+      />
     </Tile>
   );
 }
@@ -105,7 +138,7 @@ function TodaysQuestion({ guildId, wyr }: { guildId: string; wyr: WyrOverview | 
         title="Today's question"
         chips={<span className="ov-chip">Off</span>}
         action={
-          <Link className="ov-link" to={`/settings/${guildId}?s=wyr`}>
+          <Link className="ov-link" to={settingsHref(guildId, "wyr")}>
             Turn it on
           </Link>
         }
@@ -125,7 +158,7 @@ function TodaysQuestion({ guildId, wyr }: { guildId: string; wyr: WyrOverview | 
         title="Today's question"
         chips={<span className="ov-chip ov-chip--warn">Nothing posted yet</span>}
         action={
-          <Link className="ov-link" to={`/settings/${guildId}?s=wyr`}>
+          <Link className="ov-link" to={settingsHref(guildId, "wyr")}>
             Posting schedule
           </Link>
         }
@@ -294,7 +327,7 @@ function ServerContent({ guildId, content }: { guildId: string; content: Content
       span={7}
       title="Your server's own content"
       action={
-        <Link className="ov-link" to={`/builder/${guildId}`}>
+        <Link className="ov-link" to={builderHref(guildId)}>
           Open the builder
         </Link>
       }
@@ -323,13 +356,13 @@ function ServerContent({ guildId, content }: { guildId: string; content: Content
         edit these later, so a moderator leaving does not take the rules with them.
       </p>
       <div className="admin-actions">
-        <Link className="btn btn-secondary" to={`/builder/${guildId}`}>
+        <Link className="btn btn-secondary" to={builderHref(guildId)}>
           Edit guide
         </Link>
-        <Link className="btn btn-secondary" to={`/builder/${guildId}?mode=board`}>
+        <Link className="btn btn-secondary" to={builderHref(guildId, "board")}>
           Edit board
         </Link>
-        <Link className="btn btn-secondary" to={`/builder/${guildId}?mode=greeting`}>
+        <Link className="btn btn-secondary" to={builderHref(guildId, "greeting")}>
           Edit greeting
         </Link>
       </div>
@@ -362,7 +395,7 @@ function QuestionHealth({ guildId, wyr }: { guildId: string; wyr: WyrOverview | 
       span={5}
       title="Daily question health"
       action={
-        <Link className="ov-link" to={`/settings/${guildId}?s=wyr`}>
+        <Link className="ov-link" to={settingsHref(guildId, "wyr")}>
           Question settings
         </Link>
       }
@@ -587,7 +620,7 @@ function NewMembers({ guildId, members }: { guildId: string; members: MembersOve
       span={4}
       title="New members, 30 days"
       action={
-        <Link className="ov-link" to={`/settings/${guildId}?s=new_members`}>
+        <Link className="ov-link" to={settingsHref(guildId, "new_members")}>
           Screening
         </Link>
       }
@@ -635,7 +668,7 @@ function Drops({ guildId, drops }: { guildId: string; drops: DropsOverview | nul
         title="Drops posted"
         chips={<span className="ov-chip">Off</span>}
         action={
-          <Link className="ov-link" to={`/settings/${guildId}?s=drops`}>
+          <Link className="ov-link" to={settingsHref(guildId, "drops")}>
             Turn it on
           </Link>
         }
@@ -657,7 +690,7 @@ function Drops({ guildId, drops }: { guildId: string; drops: DropsOverview | nul
       span={4}
       title="Drops posted"
       action={
-        <Link className="ov-link" to={`/settings/${guildId}?s=drops`}>
+        <Link className="ov-link" to={settingsHref(guildId, "drops")}>
           Configure
         </Link>
       }

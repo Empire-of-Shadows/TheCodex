@@ -41,10 +41,20 @@ export default function AppHeader({
       }
       nav={user ? (
         <>
-          <NavLink to="/dashboard" className={navClass}>Stats</NavLink>
+          {/* "Dashboard" and "Manage", not "Stats" and "Settings": the guild
+              tab bar underneath has a Settings tab of its own, and two links
+              with the same word leading to different places is how you end up
+              on the wrong one.
+
+              Dashboard is `end`-matched because the member home is /me and the
+              per-server pages and the privacy page sit underneath it. Without
+              it this link would stay lit on every one of them, and on
+              /me/privacy two links in the same bar would claim to be the
+              current page. */}
+          <NavLink to="/me" end className={navClass}>Dashboard</NavLink>
           <NavLink to="/me/privacy" className={navClass}>Privacy</NavLink>
           {user.can_access_settings_any && (
-            <NavLink to="/settings" className={navClass}>Settings</NavLink>
+            <NavLink to="/settings" className={navClass}>Manage</NavLink>
           )}
         </>
       ) : null}

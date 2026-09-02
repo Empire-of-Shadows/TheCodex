@@ -32,7 +32,7 @@ export default function SettingsPage() {
   // Client guard: only admins reach Settings; everyone else has no Settings nav
   // link. Server-side routes re-check access on their own.
   useEffect(() => {
-    if (user && !user.can_access_settings_any) navigate("/dashboard", { replace: true });
+    if (user && !user.can_access_settings_any) navigate("/me", { replace: true });
   }, [user, navigate]);
 
   const webGuilds = useMemo(
@@ -161,16 +161,28 @@ function SettingsActionPanel({
           )
         ) : (
           <>
-            <button className="btn btn-primary" onClick={() => onNavigate(`/builder/${guild.id}`)}>
+            <button
+              className="btn btn-primary"
+              onClick={() => onNavigate(`/settings/guilds/${guild.id}/builder`)}
+            >
               Edit Guide
             </button>
-            <button className="btn btn-secondary" onClick={() => onNavigate(`/builder/${guild.id}?mode=greeting`)}>
+            <button
+              className="btn btn-secondary"
+              onClick={() => onNavigate(`/settings/guilds/${guild.id}/builder?mode=greeting`)}
+            >
               Edit Greeting
             </button>
-            <button className="btn btn-secondary" onClick={() => onNavigate(`/settings/${guild.id}`)}>
+            <button
+              className="btn btn-secondary"
+              onClick={() => onNavigate(`/settings/guilds/${guild.id}/settings`)}
+            >
               Settings
             </button>
-            <button className="btn btn-secondary" onClick={() => onNavigate(`/settings/${guild.id}/audit-log`)}>
+            <button
+              className="btn btn-secondary"
+              onClick={() => onNavigate(`/settings/guilds/${guild.id}/audit-log`)}
+            >
               Change history
             </button>
           </>

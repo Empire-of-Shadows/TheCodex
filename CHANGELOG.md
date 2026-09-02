@@ -1,5 +1,35 @@
 # Changelog
 
+## [Unreleased] - 2026-08-31 (finding your way around the dashboard)
+
+### Changed
+- **Every server now has its own page on the dashboard.** Picking a server used to change
+  what the home page was showing, so there was no address you could send someone for one
+  particular server. Now choosing a server takes you to that server's own page - your
+  activity there, what the server lets you use, and the server overview if you manage it -
+  and the address bar says which server you are looking at. Old links that pointed at a
+  server still work; they take you straight to that server's page.
+- **The home page is now your picker and your totals.** It shows the server list and your
+  own activity added up across every server you share with Codex. Admins get that combined
+  view too, instead of being dropped straight into the server they run.
+- **A server's tabs are always on screen.** Once you are on a server's page there is a row
+  of tabs at the top: back to your servers, the overview, and Settings if you manage that
+  server. A server the bot has not been added to shows only the invite card and no tabs that
+  lead nowhere.
+- **Clearer names in the top menu.** "Stats" is now "Dashboard" and "Settings" is now
+  "Manage", so they no longer share a name with the tabs inside a server.
+- **The management pages have their own tabs now.** Settings, Change history and the Builder
+  sit next to each other on every management page, so you can move between them without
+  going back to the web of servers and picking the same server again. The old back button in
+  the corner of those pages is gone - it sat right next to the tabs and went somewhere else.
+- **The dashboard home is at the same address as the other bots' dashboards now.** Logging in
+  lands you in the same place it always did; it just has a shorter address, and every bot's
+  dashboard uses the same one, so moving between them is less of a surprise.
+- **The management pages moved under Manage.** Settings, Change history and the Builder for a
+  server now live together under one address instead of being scattered. Anything you
+  bookmarked or shared earlier still works and takes you to the matching new page, keeping
+  the section or the editor you had open.
+
 ## [Unreleased] - 2026-08-28 (tidier spacing in the bot's messages)
 
 ### Fixed

@@ -168,3 +168,11 @@ style is the part that needs judgment:
 - Codex is the reference for the **consolidated** storage seam (`bindings` + `collections` +
   `config_manager`); relay is still on the older `define_collections` / `manager` trio. Codex's
   shape is the target, so copy from here, not from there.
+- **Console log colors** (engine feature, opt-in in `docker/.env`, fleet pass 2026-09-01):
+  `LOG_COLOR=force` emits ANSI without a TTY so `docker compose logs` over SSH renders
+  colored; `LOG_HIGHLIGHT=true` colors the `module:function:line` segment by FEATURE
+  (this bot's logger names are in the fleet table in the engine master
+  `storage_engine/log/factory.py`) and paints ids, durations, counts, `key=` labels and
+  outcome words inside messages; `LOG_SOURCE_COLORS=keyword:color,...` overrides the
+  table without code. Files and JSON stay plain. Stdlib `extra=` fields render as a
+  trailing `| k=v` on every sink.

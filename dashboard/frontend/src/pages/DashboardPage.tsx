@@ -1,79 +1,53 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
-import type {
-  Guild,
-  GuildOverview,
-  User,
-  UserActivity,
-  UserEntitlements,
-} from "../api/types";
+import type { Guild, User, UserActivity } from "../api/types";
 import AppHeader from "../components/AppHeader";
-import AdminOverview from "../components/overview/AdminOverview";
 import MemberOverview from "../components/overview/MemberOverview";
-import MemberEntitlements from "../components/overview/MemberEntitlements";
+import { memberSignals } from "../components/overview/signals";
 import ServerPicker, { pickerMeta } from "../_engine/components/overview/ServerPicker";
-import SignalStrip, { type Signal } from "../_engine/components/overview/SignalStrip";
-import { formatCount } from "../_engine/format";
+import SignalStrip from "../_engine/components/overview/SignalStrip";
 import { formatError } from "../_engine/api/formatError";
 
-/** What the page is showing for the current selection. */
-type Pane =
-  | {
-      kind: "admin";
-      overview: GuildOverview;
-      activity: UserActivity | null;
-      entitlements: UserEntitlements | null;
-    }
-  | { kind: "member"; activity: UserActivity; entitlements: UserEntitlements | null }
-  | { kind: "none" };
-
+/**
+ * The dashboard home.
+ *
+ * Two things, and only these two: the server picker, and your own activity
+ * added up across every server you share with Codex.
+ *
+ * One server's view is not here any more. It lives at
+ * `/me/guilds/:id/overview`, and picking a server in the picker goes there.
+ * This page used to render that view inline under a `?guild=` parameter, which
+ * left one per-guild view addressed by a query string while every other page
+ * of the dashboard uses a path, and hid the fact that a server has pages of
+ * its own. Links carrying `?guild=` still work - the route redirects them to
+ * that server's overview (see `DashboardOrRedirect` in App).
+ *
+ * The page no longer picks a server for you either. It used to jump an admin
+ * straight to the server they run, which meant an admin could not see their
+ * combined activity at all; an admin is a member first (the owner ruling of
+ * 2026-08-13), so everybody lands on the same home and goes to a server from
+ * there.
+ */
 export default function DashboardPage() {
+  const navigate = useNavigate();
+
   const [user, setUser] = useState<User | null>(null);
   const [guilds, setGuilds] = useState<Guild[]>([]);
-  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [searchParams, setSearchParams] = useSearchParams();
-  const selectedGuildId = searchParams.get("guild");
-
-  const [pane, setPane] = useState<Pane>({ kind: "none" });
-  const [paneLoading, setPaneLoading] = useState(true);
-  const [paneError, setPaneError] = useState<string | null>(null);
-
-  // The ?guild= value the page was opened with. A link someone shared always
-  // wins over the default-to-your-own-server behaviour below.
-  const openedWith = useRef<string | null>(searchParams.get("guild"));
-
-  const selectGuild = (guildId: string | null, replace: boolean) => {
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        if (guildId) next.set("guild", guildId);
-        else next.delete("guild");
-        return next;
-      },
-      { replace },
-    );
-  };
+  const [activity, setActivity] = useState<UserActivity | null>(null);
+  const [activityLoading, setActivityLoading] = useState(true);
+  const [activityError, setActivityError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([api.me(), api.guilds(), api.botInviteUrl()])
-      .then(([me, guildList, invite]) => {
+    Promise.all([api.me(), api.guilds()])
+      .then(([me, guildList]) => {
         if (cancelled) return;
         setUser(me);
         setGuilds(guildList);
-        setInviteUrl(invite.url);
-        if (!openedWith.current) {
-          // Land an admin on the server they actually run. Written with
-          // replace, so the URL stays shareable and reload-safe either way.
-          const own = guildList.find(
-            (g) => g.panel_role === "admin" && g.bot_in_guild && !g.setup_required,
-          );
-          if (own) selectGuild(own.id, true);
-        }
       })
       .catch((e) => {
         console.error("Dashboard load failed", e);
@@ -87,90 +61,32 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-    // Runs once: the initial guild comes from the URL, captured above.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const selectedGuild = useMemo(
-    () => guilds.find((g) => g.id === selectedGuildId) ?? null,
-    [guilds, selectedGuildId],
-  );
-
-  const isAdminPane =
-    selectedGuild !== null &&
-    selectedGuild.panel_role === "admin" &&
-    selectedGuild.bot_in_guild &&
-    !selectedGuild.setup_required;
-
+  // Loaded on its own rather than with the identity above: it covers every
+  // server at once, so it does not need the server list, and losing one of the
+  // two must not blank the other.
   useEffect(() => {
-    if (loading) return;
     let cancelled = false;
-    setPaneLoading(true);
-    setPaneError(null);
-
-    // Entitlements are guild-scoped and additive: no guild selected (or the
-    // bot missing) means no section, and a failed fetch never takes the rest
-    // of the page down with it.
-    const entitlementsRequest: Promise<UserEntitlements | null> =
-      selectedGuild && selectedGuild.bot_in_guild && !selectedGuild.setup_required
-        ? api.getUserEntitlements(selectedGuild.id).then(
-            (entitlements) => entitlements,
-            (e) => {
-              console.error("Entitlements fetch failed", e);
-              return null;
-            },
-          )
-        : Promise.resolve(null);
-
-    const request: Promise<Pane> =
-      isAdminPane && selectedGuild
-        ? Promise.all([
-            api.getGuildOverview(selectedGuild.id),
-            // Admins get their personal section too. It is additive: if it
-            // fails, the server overview still renders alone rather than
-            // taking the page down with it.
-            api.getUserActivity(selectedGuild.id).then(
-              (activity) => activity,
-              (e) => {
-                console.error("Personal activity fetch failed", e);
-                return null;
-              },
-            ),
-            entitlementsRequest,
-          ]).then(([overview, activity, entitlements]) => ({
-            kind: "admin" as const,
-            overview,
-            activity,
-            entitlements,
-          }))
-        : Promise.all([
-            api.getUserActivity(selectedGuildId ?? undefined),
-            entitlementsRequest,
-          ]).then(([activity, entitlements]) => ({
-            kind: "member" as const,
-            activity,
-            entitlements,
-          }));
-
-    request
+    api
+      .getUserActivity()
       .then((next) => {
-        if (!cancelled) setPane(next);
+        if (!cancelled) setActivity(next);
       })
       .catch((e) => {
-        console.error("Dashboard pane fetch failed", e);
+        console.error("Dashboard activity fetch failed", e);
         if (cancelled) return;
-        setPane({ kind: "none" });
+        setActivity(null);
         if ((e as Error).message === "Unauthorized") return;
-        setPaneError(formatError(e, "Could not load this server."));
+        setActivityError(formatError(e, "Could not load your activity."));
       })
       .finally(() => {
-        if (!cancelled) setPaneLoading(false);
+        if (!cancelled) setActivityLoading(false);
       });
-
     return () => {
       cancelled = true;
     };
-  }, [loading, isAdminPane, selectedGuild, selectedGuildId]);
+  }, []);
 
   if (loading) {
     return (
@@ -230,42 +146,18 @@ export default function DashboardPage() {
         <div className="ov-command">
           <ServerPicker
             guilds={guilds}
-            selectedGuildId={selectedGuildId}
-            onSelect={(id) => selectGuild(id, true)}
-            meta={pickerMeta(selectedGuild, guilds.length, "TheCodex")}
+            // Nothing is ever selected here: this page IS the across-servers
+            // view, and choosing a server leaves it for that server's overview.
+            selectedGuildId={null}
+            onSelect={(id) => {
+              if (id) navigate(`/me/guilds/${id}/overview`);
+            }}
+            meta={pickerMeta(null, guilds.length, "TheCodex")}
           />
-          <SignalStrip signals={signalsFor(pane)} />
+          <SignalStrip signals={activity ? memberSignals(activity) : []} />
         </div>
 
-        {selectedGuild?.setup_required && (
-          <div className="ov-grid">
-            <section className="ov-card ov-card--quiet s12">
-              <div className="ov-card__head">
-                <span className="ov-card__title">Not added yet</span>
-                <span className="ov-chip ov-chip--warn">Bot missing</span>
-              </div>
-              <p className="ov-body">
-                Bot not in this server yet. Use the link below to add it, then return here.
-              </p>
-              <div className="admin-actions">
-                {inviteUrl ? (
-                  <a
-                    className="btn btn-primary"
-                    href={`${inviteUrl}&guild_id=${selectedGuild.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Invite TheCodex
-                  </a>
-                ) : (
-                  <span className="guild-invite-hint">Bot not in this server yet.</span>
-                )}
-              </div>
-            </section>
-          </div>
-        )}
-
-        {paneLoading ? (
+        {activityLoading ? (
           <div className="ov-grid" role="status" aria-busy="true">
             <div className="skeleton-card s12" />
             <div className="skeleton-card s7" />
@@ -273,53 +165,23 @@ export default function DashboardPage() {
             <div className="skeleton-card s4" />
             <span className="visually-hidden">Loading activity…</span>
           </div>
-        ) : paneError ? (
+        ) : activityError ? (
           <div className="ov-grid">
             <section className="ov-card ov-card--quiet s12">
               <div className="ov-card__head">
                 <span className="ov-card__title">Not loaded</span>
               </div>
               <p className="ov-body" role="alert">
-                {paneError}
+                {activityError}
               </p>
             </section>
           </div>
-        ) : pane.kind === "admin" ? (
+        ) : activity ? (
           <>
-            {/* Owner ruling 2026-08-13: an admin is a member first - their own
-                stats sit above the server sections. */}
-            {pane.activity && (
-              <>
-                <h2 className="section-title" style={{ margin: "4px 0 12px" }}>
-                  Your activity
-                </h2>
-                <MemberOverview activity={pane.activity} />
-              </>
-            )}
-            <h2 className="section-title" style={{ margin: "28px 0 12px" }}>
-              Server overview
+            <h2 className="section-title" style={{ margin: "4px 0 12px" }}>
+              Your activity
             </h2>
-            <AdminOverview overview={pane.overview} />
-            {pane.entitlements && (
-              <>
-                <h2 className="section-title" style={{ margin: "28px 0 12px" }}>
-                  What you can use
-                </h2>
-                <MemberEntitlements entitlements={pane.entitlements} />
-              </>
-            )}
-          </>
-        ) : pane.kind === "member" ? (
-          <>
-            <MemberOverview activity={pane.activity} />
-            {pane.entitlements && (
-              <>
-                <h2 className="section-title" style={{ margin: "28px 0 12px" }}>
-                  What you can use
-                </h2>
-                <MemberEntitlements entitlements={pane.entitlements} />
-              </>
-            )}
+            <MemberOverview activity={activity} />
           </>
         ) : (
           <div className="empty-state" role="status" style={{ padding: "32px 24px" }}>
@@ -330,67 +192,4 @@ export default function DashboardPage() {
       </div>
     </div>
   );
-}
-
-/* ── The command-row numbers ───────────────────────────────────────── */
-
-function signalsFor(pane: Pane): Signal[] {
-  if (pane.kind === "admin") return adminSignals(pane.overview);
-  if (pane.kind === "member") return memberSignals(pane.activity);
-  return [];
-}
-
-function adminSignals(overview: GuildOverview): Signal[] {
-  const signals: Signal[] = [];
-  const members = overview.members;
-  const wyr = overview.wyr;
-  const trackers = overview.trackers;
-
-  // null means "never snapshotted", which has to read differently from a real 0.
-  signals.push({
-    key: "members",
-    value: members && members.total !== null ? formatCount(members.total) : "-",
-    label: members && members.total !== null ? "Members" : "Members · not counted yet",
-  });
-
-  signals.push({
-    key: "active",
-    value: wyr ? formatCount(wyr.voters_30d) : "-",
-    label: "Voted · 30 days",
-  });
-
-  const wearing = trackers?.tag.wearing ?? null;
-  signals.push({
-    key: "tag",
-    value: wearing === null ? "-" : formatCount(wearing),
-    label:
-      !trackers || !trackers.tag.enabled
-        ? "Wearing the tag · off"
-        : wearing === null
-          ? "Wearing the tag · not known"
-          : "Wearing the tag",
-  });
-
-  signals.push({
-    key: "boost",
-    value: trackers ? formatCount(trackers.boost.count) : "-",
-    label:
-      trackers && trackers.boost.tier !== null
-        ? `Boosting · level ${trackers.boost.tier}`
-        : "Boosting",
-  });
-
-  return signals;
-}
-
-function memberSignals(activity: UserActivity): Signal[] {
-  return [
-    { key: "votes", value: formatCount(activity.wyr.total_votes), label: "Votes cast" },
-    { key: "streak", value: formatCount(activity.wyr.streak_days), label: "Day streak" },
-    {
-      key: "suggestions",
-      value: formatCount(activity.suggestions.submitted),
-      label: "Suggestions sent",
-    },
-  ];
 }

@@ -608,7 +608,9 @@ export default function BuilderPage() {
           board: JSON.stringify(buildBoardData(bc.main, bc.responses, bc.accentColor)),
         });
       })
-      .catch(() => navigate("/dashboard"))
+      // The builder is a Manage-tree page, so a guild whose content will not
+      // load bounces to the Manage hub - which itself sends non-admins home.
+      .catch(() => navigate("/settings"))
       .finally(() => setLoading(false));
   }, [guildId, navigate, initialMode]);
 
@@ -1416,7 +1418,15 @@ export default function BuilderPage() {
     <div className="app-layout app-layout--builder">
       <header className="app-header">
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <button className="btn btn-secondary" onClick={() => navigateAway("/dashboard")} style={{ fontSize: 12 }}>
+          {/* The builder lives under Manage beside Settings and Change history,
+              so Back returns to this server's settings rather than the member
+              home. This page draws its own chrome rather than the shared
+              header, so it carries its own way out. */}
+          <button
+            className="btn btn-secondary"
+            onClick={() => navigateAway(`/settings/guilds/${guildId}/settings`)}
+            style={{ fontSize: 12 }}
+          >
             ← Back
           </button>
           {guild && (

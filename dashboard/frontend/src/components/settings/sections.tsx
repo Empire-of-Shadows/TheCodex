@@ -372,7 +372,7 @@ export function NewMembersSectionForm({
         </FRow>
         <p className="muted" style={{ margin: 0 }}>
           What the greeting actually says is put together in the{" "}
-          <Link to={`/builder/${guildId}?mode=greeting`}>builder</Link>.
+          <Link to={`/settings/guilds/${guildId}/builder?mode=greeting`}>builder</Link>.
         </p>
       </Fieldset>
 
@@ -681,9 +681,9 @@ export function GuideSectionForm({
       </FRow>
       <p className="muted" style={{ margin: 0 }}>
         Guide content (pages, components) is managed in the{" "}
-        <Link to={`/builder/${guildId}`}>builder</Link>. The info board, the posted
-        message with buttons that open private answers, is built{" "}
-        <Link to={`/builder/${guildId}?mode=board`}>there too</Link>.
+        <Link to={`/settings/guilds/${guildId}/builder`}>builder</Link>. The info board, the
+        posted message with buttons that open private answers, is built{" "}
+        <Link to={`/settings/guilds/${guildId}/builder?mode=board`}>there too</Link>.
       </p>
     </Fieldset>
   );
