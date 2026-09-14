@@ -21,6 +21,7 @@ from Features.ce_utilities.helpers.embed_modal import (
 from storage.log import get_logger, log_context, log_performance
 from storage.settings.config_manager import get_config
 from admin.setup_notice import send_setup_notice, setup_notice_embed
+from Features.error_handler import mark_error_handled
 
 logger = get_logger("CreateEmbed")
 
@@ -37,9 +38,13 @@ CACHE_DURATION = 3600
 
 async def is_admin_check(interaction: Interaction) -> bool:
     """
-    Return True if the user is an admin or has a configured admin role.
+    Return True if the user holds the fleet admin tier: Manage Server or a
+    configured Panel Access role - the same tier that opens /admin panel.
     """
-    if interaction.user.guild_permissions.administrator:
+    perms = getattr(interaction.user, "guild_permissions", None)
+    if interaction.guild is None or perms is None:
+        return False
+    if perms.manage_guild:
         return True
 
     guild_config = await get_config(interaction.guild.id)
@@ -58,7 +63,8 @@ def has_embed_permissions():
         if not interaction.guild:
             return False
 
-        if interaction.user.guild_permissions.administrator:
+        # Fleet admin tier: Manage Server or a Panel Access role (checked below).
+        if interaction.user.guild_permissions.manage_guild:
             return True
 
         guild_config = await get_config(interaction.guild.id)
@@ -216,6 +222,9 @@ async def _build_features_embed(
     return embed
 
 
+# guild_only: every embed command reads the member's roles and the server's
+# config, so the group is registered DM-unavailable like every other member command.
+@app_commands.guild_only()
 class EmbedGroup(commands.GroupCog, name="embed", description="Create and edit embeds with role-based limits"):
     """
     Group cog providing:
@@ -245,8 +254,10 @@ class EmbedGroup(commands.GroupCog, name="embed", description="Create and edit e
         not been handed to any role yet.
         """
         if not isinstance(error, app_commands.CheckFailure):
-            raise error
+            # The per-command handler below has already logged and answered it.
+            return
 
+        mark_error_handled(interaction)
         embed = await setup_notice_embed(
             interaction.guild,
             what="embed access for your roles",
@@ -457,7 +468,10 @@ class EmbedGroup(commands.GroupCog, name="embed", description="Create and edit e
                 await interaction.response.send_message("❌ Failed to fetch the message.", ephemeral=True)
                 return
 
-            if not message.author.bot or not message.embeds:
+            # Only TheCodex's own messages: another bot's embed would open the edit
+            # modal and then fail on submit, because nobody can edit a message
+            # another account posted.
+            if message.author.id != self.bot.user.id or not message.embeds:
                 await interaction.response.send_message("❌ This is not a valid bot embed.", ephemeral=True)
                 return
 
@@ -510,68 +524,38 @@ class EmbedGroup(commands.GroupCog, name="embed", description="Create and edit e
                     "❌ An internal error occurred. Please contact the admin.", ephemeral=True
                 )
 
-    # Unified error handlers for subcommands
-    @create.error
-    async def _create_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+    # Unified error handlers for subcommands. A failed access check is answered
+    # once, by cog_app_command_error above; these only cover unexpected errors.
+    async def _handle_command_error(self, interaction: discord.Interaction,
+                                    error: app_commands.AppCommandError, label: str) -> None:
+        if isinstance(error, app_commands.CheckFailure):
+            return
+        mark_error_handled(interaction)
         try:
-            if isinstance(error, app_commands.CheckFailure):
-                await interaction.response.send_message("❌ You don't have permission to use this command.",
+            logger.error(f"Unhandled error in {label}: {error}", exc_info=True)
+            if not interaction.response.is_done():
+                await interaction.response.send_message("❌ Something went wrong. Please try again later.",
                                                         ephemeral=True)
-            else:
-                logger.error(f"Unhandled error in /embed create: {error}", exc_info=True)
-                if not interaction.response.is_done():
-                    await interaction.response.send_message("❌ Something went wrong. Please try again later.",
-                                                            ephemeral=True)
         except discord.errors.NotFound:
             pass
         except Exception as inner_e:
-            logger.error(f"Error in create error handler: {inner_e}", exc_info=True)
+            logger.error(f"Error in {label} error handler: {inner_e}", exc_info=True)
+
+    @create.error
+    async def _create_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        await self._handle_command_error(interaction, error, "/embed create")
 
     @edit.error
     async def _edit_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        try:
-            if isinstance(error, app_commands.CheckFailure):
-                await interaction.response.send_message("❌ You're on cooldown or lack permission to use this command.",
-                                                        ephemeral=True)
-            else:
-                logger.error(f"Unhandled error in /embed edit: {error}", exc_info=True)
-                if not interaction.response.is_done():
-                    await interaction.response.send_message("❌ Something went wrong. Please try again later.",
-                                                            ephemeral=True)
-        except discord.errors.NotFound:
-            pass
-        except Exception as inner_e:
-            logger.error(f"Error in edit error handler: {inner_e}", exc_info=True)
+        await self._handle_command_error(interaction, error, "/embed edit")
 
     @colors.error
     async def _colors_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        try:
-            if isinstance(error, app_commands.CheckFailure):
-                await interaction.response.send_message("❌ You don't have permission to view colors.", ephemeral=True)
-            else:
-                logger.error(f"Unhandled error in /embed colors: {error}", exc_info=True)
-                if not interaction.response.is_done():
-                    await interaction.response.send_message("❌ Something went wrong. Please try again later.",
-                                                            ephemeral=True)
-        except discord.errors.NotFound:
-            pass
-        except Exception as inner_e:
-            logger.error(f"Error in colors error handler: {inner_e}", exc_info=True)
+        await self._handle_command_error(interaction, error, "/embed colors")
 
     @features.error
     async def _features_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        try:
-            if isinstance(error, app_commands.CheckFailure):
-                await interaction.response.send_message("❌ You don't have permission to view features.", ephemeral=True)
-            else:
-                logger.error(f"Unhandled error in /embed features: {error}", exc_info=True)
-                if not interaction.response.is_done():
-                    await interaction.response.send_message("❌ Something went wrong. Please try again later.",
-                                                            ephemeral=True)
-        except discord.errors.NotFound:
-            pass
-        except Exception as inner_e:
-            logger.error(f"Error in features error handler: {inner_e}", exc_info=True)
+        await self._handle_command_error(interaction, error, "/embed features")
 
 
 async def setup(bot: commands.Bot):

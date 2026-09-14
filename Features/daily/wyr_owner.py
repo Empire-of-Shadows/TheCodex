@@ -232,7 +232,8 @@ class _DecisionView(discord.ui.View):
 
     async def _on_delete(self, interaction: discord.Interaction) -> None:
         guild_id = self.question.get("guild_id")
-        ok = await wyr_bank.delete_question(self.question["_id"], guild_id)
+        # delete_question takes the question NUMBER (``id``), not the ObjectId.
+        ok = await wyr_bank.delete_question(self.question["id"], guild_id)
         self._drop_from_parent()
         self.parent._render()
         await interaction.response.edit_message(

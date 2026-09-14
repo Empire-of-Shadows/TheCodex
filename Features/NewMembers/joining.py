@@ -747,6 +747,13 @@ class GuildEventHandler:
             totals["daily_wyr_leaderboard"] = await col("daily_wyr_leaderboard").delete_many({"guild_id": gid_str})
             totals["daily_wyr_votes"] = await col("daily_wyr_votes").delete_many({"guild_id": gid_str})
             totals["daily_wyr_mappings"] = await col("daily_wyr_mappings").delete_many({"guild_id": gid_str})
+            totals["daily_wyr_notify_prefs"] = await col("daily_wyr_notify_prefs").delete_many({"guild_id": gid_str})
+            totals["daily_wyr_submissions"] = await col("daily_wyr_submissions").delete_many({"guild_id": gid_str})
+            # The server's own questions. Shared-bank questions carry no guild_id and
+            # promoted ones had it unset, so only still-private questions match.
+            totals["daily_wyr_guild_questions"] = await col("daily_wyr").delete_many(
+                {"scope": "guild", "guild_id": gid_str}
+            )
 
             # --- Suggestions (votes/notifications reference suggestion_id, not guild_id directly) ---
             suggestion_ids = await col("suggestions_suggestions").collection.distinct(
@@ -765,6 +772,11 @@ class GuildEventHandler:
             totals["updates_monthly"] = await col("updates_monthly").delete_many({"_id.guild_id": gid_str})
             totals["updates_weekly"] = await col("updates_weekly").delete_many({"_id.guild_id": gid_str})
             totals["updates_totals"] = await col("updates_totals").delete_many({"_id.guild_id": gid_str})
+            # Which Prime drops were already posted to this server.
+            totals["prime_drops_sent_markers"] = await col("prime_drops").update_many(
+                {f"sent_by_guild.{gid_str}": {"$exists": True}},
+                {"$unset": {f"sent_by_guild.{gid_str}": ""}},
+            )
 
             # --- ServerData ---
             totals["serverdata_boosts"] = await col("serverdata_boosts").delete_many({"guild_id": gid_str})
@@ -780,6 +792,7 @@ class GuildEventHandler:
             totals["serverdata_roles"] = await col("serverdata_roles").delete_many({"guild_id": gid_str})
             totals["serverdata_analytics"] = await col("serverdata_analytics").delete_many({"guild_id": gid_str})
             totals["serverdata_events"] = await col("serverdata_events").delete_many({"guild_id": gid_str})
+            totals["serverdata_feature_usage"] = await col("serverdata_feature_usage").delete_many({"guild_id": gid_str})
 
             # --- Guide content ---
             totals["guide_content"] = await col("guide_content").delete_many({"guild_id": gid_str})

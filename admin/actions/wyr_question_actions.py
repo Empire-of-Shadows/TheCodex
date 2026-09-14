@@ -70,6 +70,34 @@ async def _write(guild_id: int, key: str, value) -> bool:
     return await gcm.save_config(config)
 
 
+async def release_vote_tallies(questions, guild_id: str, votes) -> int:
+    """Take removed votes back out of each question's per-guild tally.
+
+    ``questions`` is the Daily.WYR collection manager; ``votes`` the vote rows that
+    were just deleted. The decrement only applies while the tally is above zero, so
+    a tally that was already short can never go negative. Best effort per vote.
+    Returns how many tallies were reduced.
+    """
+    reduced = 0
+    for vote in votes or []:
+        question_id = vote.get("question_id")
+        option = vote.get("option")
+        if question_id is None or not option:
+            continue
+        path = f"guilds.{guild_id}.vote_counts.{option}"
+        try:
+            if await questions.update_one(
+                {"_id": question_id, path: {"$gt": 0}}, {"$inc": {path: -1}}
+            ):
+                reduced += 1
+        except Exception as e:
+            logger.error(
+                f"Could not reduce the {option} tally on question {question_id} "
+                f"in guild {guild_id}: {e}", exc_info=True,
+            )
+    return reduced
+
+
 class WYRQuestionActions:
     """Static async methods backing the Question Bank panel nodes."""
 
@@ -244,8 +272,14 @@ class WYRQuestionActions:
             )
 
         try:
+            # Read the votes first: the per-question tallies that /wyr results and
+            # Show Results read are a separate counter, and deleting the vote rows
+            # alone left the reset votes counted - and counted a second time when
+            # the member voted on the same question again.
+            cast = await db_manager.daily_wyr_votes.find_many(dict(scope))
             votes = await db_manager.daily_wyr_votes.delete_many(dict(scope))
             removed = removed or bool(votes)
+            await release_vote_tallies(db_manager.daily_wyr, gid, cast)
         except Exception as e:
             logger.error(
                 f"Failed to reset WYR votes for {user_id} in guild {guild_id}: {e}",
@@ -267,7 +301,8 @@ class WYRQuestionActions:
     async def can_review(member) -> bool:
         """Whether this member may approve or decline suggestions.
 
-        Administrator, OR a panel admin role, OR the configured reviewer role.
+        Manage Server, OR a Panel Access role, OR the configured reviewer role -
+        the fleet admin tier plus the optional reviewer role.
         Shaped on ``DropsActions.has_drops_management``.
 
         Deliberately not inferred from channel access: a review channel is
@@ -277,7 +312,7 @@ class WYRQuestionActions:
         if guild is None:
             return False
         perms = getattr(member, "guild_permissions", None)
-        if perms is not None and perms.administrator:
+        if perms is not None and perms.manage_guild:
             return True
 
         gcm = await _get_gcm()

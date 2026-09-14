@@ -69,7 +69,12 @@ async def on_ready():
     """
     if getattr(bot, "_init_done", False):
         try:
-            await bot.change_presence(status=discord.Status.online)
+            # Re-send the activity /status last applied: a presence update with no
+            # activity clears it, which used to wipe a /status on every reconnect.
+            await bot.change_presence(
+                status=discord.Status.online,
+                activity=getattr(bot, "status_activity", None),
+            )
             logger.info("🔁 Reconnect detected - presence refreshed, init skipped.")
         except Exception as e:
             logger.error(f"❌ Error refreshing presence on reconnect: {e}")

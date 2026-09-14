@@ -4,9 +4,11 @@ Registers a single `CommandTree.on_error` so that unhandled slash-command and
 interaction errors are logged with context and surfaced to the user as a clean
 ephemeral message instead of Discord's bare "interaction failed".
 
-A few cogs define their own `cog_app_command_error`; this handler is defensive
-and only sends a response when one has not already been sent, so it never
-double-responds over a local handler.
+A few cogs define their own `cog_app_command_error` (or per-command error
+handlers). discord.py calls those first and then this tree handler for the same
+error, so a local handler that has already told the member what went wrong marks
+the interaction with `mark_error_handled`; this handler then stays silent instead
+of stacking a second, vaguer message on top.
 """
 
 import logging
@@ -18,6 +20,17 @@ from discord.ext import commands
 from storage.log import get_logger
 
 logger = get_logger("ErrorHandler")
+
+#: Key a local error handler sets in ``interaction.extras`` once it has answered.
+ERROR_HANDLED_KEY = "codex_error_handled"
+
+
+def mark_error_handled(interaction: discord.Interaction) -> None:
+    """Record that a local handler already answered this failed interaction."""
+    try:
+        interaction.extras[ERROR_HANDLED_KEY] = True
+    except Exception:  # pragma: no cover - extras is a plain dict on every Interaction
+        pass
 
 
 class ErrorHandler(commands.Cog):
@@ -38,6 +51,10 @@ class ErrorHandler(commands.Cog):
         error: app_commands.AppCommandError,
     ):
         original = getattr(error, "original", error)
+
+        # A cog or command handler already explained this one to the member.
+        if interaction.extras.get(ERROR_HANDLED_KEY):
+            return
 
         if isinstance(error, app_commands.CommandOnCooldown):
             await self._respond(

@@ -70,6 +70,9 @@ def build_review_embed(submission: dict, *, guild: discord.Guild = None,
     )
     if submission.get("tags"):
         embed.add_field(name="Tags", value=", ".join(submission["tags"]), inline=True)
+    if submission.get("nsfw"):
+        embed.add_field(name="Age-restricted", value="Yes - it will be added as age-restricted",
+                        inline=True)
 
     # The reviewer needs to know BEFORE approving that this type is switched
     # off, not discover it days later when the question never appears.

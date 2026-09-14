@@ -50,6 +50,20 @@ def _build_activity(activity_type: str, name: str, url: str | None) -> discord.B
     return discord.Activity(type=ACTIVITY_TYPES[activity_type], name=name)
 
 
+def _remember_activity(activity) -> None:
+    """Keep the activity /status applied, so a gateway reconnect can restore it.
+
+    The reconnect path in Codex.py re-sends the presence; without this it sent
+    none and wiped whatever /status had set.
+    """
+    bot.status_activity = activity
+
+
+async def _set_activity(activity) -> None:
+    await bot.change_presence(activity=activity)
+    _remember_activity(activity)
+
+
 def _presets_collection():
     return bot.db_manager.get_collection_manager("bot_statuses")
 
@@ -58,7 +72,7 @@ async def _apply_preset(preset: dict) -> None:
     activity = _build_activity(
         preset["activity_type"], preset["name"], preset.get("url")
     )
-    await bot.change_presence(activity=activity)
+    await _set_activity(activity)
 
 
 def _validate_type(value: str) -> str | None:
@@ -100,7 +114,7 @@ class SetStatusModal(discord.ui.Modal, title="Set Bot Status"):
         url = self.url.value.strip() or None
 
         try:
-            await bot.change_presence(activity=_build_activity(atype, name, url))
+            await _set_activity(_build_activity(atype, name, url))
         except Exception as e:
             logger.error(f"Failed to set status: {e}", exc_info=True)
             await interaction.response.send_message(
@@ -281,6 +295,14 @@ def build_preset_layout(presets: list[dict]) -> discord.ui.LayoutView:
 # ── Cog ─────────────────────────────────────────────────────────────────────
 
 
+def _is_bot_owner():
+    """Allow only the bot's owner. Guild scoping keeps /status out of sight; this
+    is the actual gate, matching /wyrbank (see startup/owner_guild.py)."""
+    async def predicate(interaction: discord.Interaction) -> bool:
+        return await interaction.client.is_owner(interaction.user)
+    return app_commands.check(predicate)
+
+
 class StatusAdmin(commands.Cog):
     """Admin commands for the bot's Discord presence."""
 
@@ -295,15 +317,18 @@ class StatusAdmin(commands.Cog):
         self.bot = bot
 
     @status_group.command(name="set", description="Set the bot's current status")
+    @_is_bot_owner()
     async def set_cmd(self, interaction: discord.Interaction):
         await interaction.response.send_modal(SetStatusModal())
 
     @status_group.command(name="save", description="Save a new status preset")
+    @_is_bot_owner()
     @app_commands.describe(apply="Apply immediately after saving")
     async def save_cmd(self, interaction: discord.Interaction, apply: bool = False):
         await interaction.response.send_modal(SavePresetModal(apply_now=apply))
 
     @status_group.command(name="list", description="List saved status presets")
+    @_is_bot_owner()
     async def list_cmd(self, interaction: discord.Interaction):
         presets = await _presets_collection().find_many(
             {}, sort=[("preset_name", 1)], limit=100
@@ -313,8 +338,9 @@ class StatusAdmin(commands.Cog):
         )
 
     @status_group.command(name="clear", description="Clear the bot's current activity")
+    @_is_bot_owner()
     async def clear_cmd(self, interaction: discord.Interaction):
-        await self.bot.change_presence(activity=None)
+        await _set_activity(None)
         await interaction.response.send_message("✅ Activity cleared.", ephemeral=True)
 
 

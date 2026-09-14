@@ -355,7 +355,7 @@ WYR_REVIEWER_ROLE_CONFIG = PanelNode(
     kind="role_select",
     description=(
         "An extra role allowed to approve or decline suggestions.\n\n"
-        "Server administrators and Panel Access roles can always review, so this is "
+        "Members with Manage Server and Panel Access roles can always review, so this is "
         "only needed to let someone else help without giving them the whole panel."
     ),
     get_values=WYRQuestionActions.get_reviewer_role_as_list,
@@ -457,9 +457,10 @@ class _ReviewQueueFlow(PanelFlow):
                                "The daily question feature is not loaded right now.")
             return
         # A lightweight stand-in for the review post's view: the handler only
-        # reads submission_id and the age-restriction flag off it.
+        # reads submission_id off it.
         await cog.handle_submission_approve(
-            interaction, _QueueDecision(submission["submission_id"])
+            interaction, _QueueDecision(submission["submission_id"]),
+            on_panel=self._after_decision,
         )
 
     async def _on_decline(self, interaction: discord.Interaction) -> None:
@@ -477,8 +478,24 @@ class _ReviewQueueFlow(PanelFlow):
                                "The daily question feature is not loaded right now.")
             return
         await cog.handle_submission_reject(
-            interaction, _QueueDecision(submission["submission_id"])
+            interaction, _QueueDecision(submission["submission_id"]),
+            on_panel=self._after_decision,
         )
+
+    async def _after_decision(self, interaction: discord.Interaction) -> None:
+        """Redraw the queue once a decision is recorded.
+
+        Approve answers from the queue's own button; Decline answers from the
+        reason modal, which was opened from that button - both may update the
+        panel message in place.
+        """
+        layout = await self._layout()
+        if interaction.type == discord.InteractionType.modal_submit:
+            await self._render_via_modal(interaction, layout)
+        else:
+            await self._render(interaction, layout)
+        if self.ctx.refresh_parent:
+            await self.ctx.refresh_parent()
 
     async def _on_back(self, interaction: discord.Interaction) -> None:
         await self._back_to_parent(interaction)
@@ -488,13 +505,13 @@ class _QueueDecision:
     """What the cog's approve/decline handlers expect to be handed.
 
     They accept the review post's persistent view, but only ever read
-    ``submission_id`` and ``nsfw`` from it, so the panel passes this instead of
-    constructing a message view it has no message for.
+    ``submission_id`` from it (the age-restriction choice lives on the submission),
+    so the panel passes this instead of constructing a message view it has no
+    message for.
     """
 
-    def __init__(self, submission_id: str, nsfw: bool = False):
+    def __init__(self, submission_id: str):
         self.submission_id = submission_id
-        self.nsfw = nsfw
 
 
 async def _run_review_queue(cog, interaction: discord.Interaction,

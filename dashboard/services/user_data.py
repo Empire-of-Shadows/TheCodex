@@ -57,6 +57,9 @@ from __future__ import annotations
 import time
 
 from dashboard import db
+from storage.log import get_logger
+
+logger = get_logger("dashboard.services.user_data")
 
 #: The five opt-out toggles. ``all`` is the master switch; the rest are per feature.
 PRIVACY_FEATURES: tuple[str, ...] = (
@@ -81,6 +84,23 @@ def _normalize_features(stored: dict | None) -> dict[str, bool]:
     """Coerce a stored features map to exactly the five known booleans."""
     stored = stored or {}
     return {name: bool(stored.get(name, False)) for name in PRIVACY_FEATURES}
+
+
+async def _release_vote_tallies(votes: list) -> None:
+    """Decrement each erased vote's per-guild tally on its question, never below zero."""
+    for vote in votes:
+        question_id = vote.get("question_id")
+        option = vote.get("option")
+        gid = vote.get("guild_id")
+        if question_id is None or not option or not gid:
+            continue
+        path = f"guilds.{gid}.vote_counts.{option}"
+        try:
+            await db.daily_wyr().update_one(
+                {"_id": question_id, path: {"$gt": 0}}, {"$inc": {path: -1}}
+            )
+        except Exception:
+            logger.warning("Could not reduce a WYR tally during erasure", exc_info=True)
 
 
 async def _guild_suggestion_ids(guild_id: int) -> list[str]:
@@ -371,9 +391,16 @@ async def delete_all(user_id: int, guild_id: int | None = None) -> dict[str, int
     deleted["wyr_leaderboard"] = (
         await db.wyr_leaderboard().delete_many(wyr_match)
     ).deleted_count
+    # The per-question tallies are a separate counter from the vote rows. Read the
+    # votes before deleting them so each tally can be given back; otherwise the
+    # erased votes stay in every result and a later re-vote counts twice.
+    erased_votes = [v async for v in db.daily_wyr_votes().find(
+        votes_match, {"question_id": 1, "guild_id": 1, "option": 1}
+    )]
     deleted["wyr_votes"] = (
         await db.daily_wyr_votes().delete_many(votes_match)
     ).deleted_count
+    await _release_vote_tallies(erased_votes)
     deleted["wyr_submissions"] = (
         await db.daily_wyr_submissions().delete_many(submissions_match)
     ).deleted_count

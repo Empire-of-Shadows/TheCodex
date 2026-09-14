@@ -56,6 +56,12 @@ _ALLOWED_BOT_IDS = {
 }
 
 
+def mentions_bot_in_text(content: str, bot_id: int) -> bool:
+	"""Whether the bot is mentioned in the message text itself (<@id> or <@!id>)."""
+	content = content or ""
+	return f"<@{bot_id}>" in content or f"<@!{bot_id}>" in content
+
+
 class HelpListener(commands.Cog):
 	def __init__(self, bot):
 		self.bot = bot
@@ -67,6 +73,13 @@ class HelpListener(commands.Cog):
 			return
 
 		if self.bot.user not in message.mentions:
+			return
+
+		# Only a mention actually typed in the message counts. Discord also lists the
+		# replied-to author in a reply's mentions whenever the reply pings, so without
+		# this every pinging reply to one of the bot's posts (a daily question, a
+		# greeting, a guide page) drew a guide answer. Ruled 2026-09-13.
+		if not mentions_bot_in_text(message.content, self.bot.user.id):
 			return
 
 		# Must be in a guild

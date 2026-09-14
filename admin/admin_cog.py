@@ -892,7 +892,7 @@ class AdminCog(commands.Cog):
                     notice = build_premium_layout(
                         "Premium Required",
                         "This option requires a **Premium** subscription.\n\n"
-                        "Use `/premium` to learn more about upgrading.",
+                        "Use `/premium status` to learn more about upgrading.",
                     )
                     await _refuse(notice)
                     return
@@ -904,7 +904,7 @@ class AdminCog(commands.Cog):
                         "Premium Required",
                         f"Free servers can select up to **{node.max_values}** channel(s).\n"
                         f"Upgrade to **Premium** to select up to **{node.premium_max_values}**.\n\n"
-                        "Use `/premium` to learn more about upgrading.",
+                        "Use `/premium status` to learn more about upgrading.",
                     )
                     await _refuse(notice)
                     return

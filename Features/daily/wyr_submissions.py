@@ -227,6 +227,22 @@ class WYRSubmissionStore:
             logger.error(f"Failed to delete submission {submission_id}: {e}", exc_info=True)
             return False
 
+    async def set_nsfw(self, submission_id: str, nsfw: bool) -> bool:
+        """Record the reviewer's age-restriction choice on a still-pending submission.
+
+        Stored on the document, not on the review post's view: after a restart one
+        view instance serves every review post, so view state leaks between posts.
+        False when the submission is no longer pending.
+        """
+        try:
+            return await self._col.update_one(
+                {"submission_id": str(submission_id), "status": STATUS_PENDING},
+                {"$set": {"nsfw": bool(nsfw)}},
+            )
+        except Exception as e:
+            logger.error(f"Failed to set age restriction on {submission_id}: {e}", exc_info=True)
+            return False
+
     async def claim_for_review(self, submission_id: str, reviewer_id: int) -> bool:
         """Atomically take a pending submission for a decision.
 

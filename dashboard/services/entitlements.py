@@ -72,7 +72,7 @@ async def _embed_section(
     role_tier = embed_cfg.get("role_tier") or {}
     tiers = _member_tiers(embed_cfg, roles)
 
-    # Command access mirrors has_embed_permissions: administrator OR an admin
+    # Command access mirrors has_embed_permissions: Manage Server OR an admin
     # role OR any tier role. The dashboard's "admin" tier covers the first two.
     access = is_admin or bool(tiers)
     enabled = embed_cfg.get("enabled")

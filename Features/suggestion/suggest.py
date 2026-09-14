@@ -11,6 +11,7 @@ from storage.log import get_logger, log_context, PerformanceLogger
 from storage.settings.config_manager import get_config
 from storage.settings.collections import db_manager
 from admin.setup_notice import send_setup_notice
+from Features.error_handler import mark_error_handled
 
 logger = get_logger("Suggestion")
 
@@ -1403,7 +1404,10 @@ class SuggestionCog(commands.Cog):
                 f"Processing suggestion from user {user.id} - Category: {category}, Anonymous: {anonymous}, Length: {len(suggestion_text)} chars")
 
             if not already_responded:
-                await interaction.response.defer(ephemeral=anonymous)
+                # Always ephemeral: the suggestion itself is posted to the suggestions
+                # channel separately, and a public defer made every later followup -
+                # the confirmation, refusals, the similar-suggestions prompt - public.
+                await interaction.response.defer(ephemeral=True)
 
             if len(suggestion_text) > 2000:
                 logger.warning(f"Suggestion from user {user.id} rejected - too long ({len(suggestion_text)} chars)")
@@ -1432,7 +1436,11 @@ class SuggestionCog(commands.Cog):
 
                 async def continue_anyway(interaction_inner):
                     logger.info(f"User {user.id} chose to submit despite similar suggestions")
-                    await interaction_inner.response.defer()
+                    # Close the prompt first, so a second click cannot post it again.
+                    view.stop()
+                    await interaction_inner.response.edit_message(
+                        content="Submitting your suggestion...", embed=None, view=None
+                    )
                     await self._create_suggestion_post(
                         interaction, suggestion_text, anonymous, category,
                         forced_anonymous=forced_anonymous,
@@ -1440,7 +1448,10 @@ class SuggestionCog(commands.Cog):
 
                 async def cancel_suggestion(interaction_inner):
                     logger.info(f"User {user.id} cancelled submission after seeing similar suggestions")
-                    await interaction_inner.response.send_message("✅ Suggestion cancelled.", ephemeral=True)
+                    view.stop()
+                    await interaction_inner.response.edit_message(
+                        content="✅ Suggestion cancelled.", embed=None, view=None
+                    )
 
                 continue_btn = discord.ui.Button(label="Submit Anyway",
                                                  style=cast(discord.ButtonStyle, discord.ButtonStyle.success))
@@ -1771,6 +1782,8 @@ class SuggestionCog(commands.Cog):
 
     # Error handlers for group commands
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        # This handler answers every error itself, so the tree handler stays quiet.
+        mark_error_handled(interaction)
         if isinstance(error, app_commands.errors.CommandOnCooldown):
             logger.info(f"User {interaction.user.id} hit cooldown on suggestion command")
             await interaction.response.send_message(

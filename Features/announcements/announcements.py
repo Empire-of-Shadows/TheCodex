@@ -6,6 +6,7 @@ import logging
 
 from storage.settings.config_manager import get_config
 from storage.log import get_logger
+from Features.announcements.thread_name import render_thread_name
 
 logger = get_logger("Announcements")
 
@@ -124,11 +125,16 @@ class AnnouncementThreadCog(commands.Cog):
         if len(content) > 50:
             content = content[:47] + "..."
 
-        thread_name = thread_name_format.format(
+        # Falls back to the default format when the stored one is unusable, so a bad
+        # format can never stop threads from opening.
+        thread_name = render_thread_name(
+            thread_name_format,
             message_content=content,
             author_name=message.author.display_name,
-            channel_name=message.channel.name
+            channel_name=message.channel.name,
         )
+        if not thread_name.strip():
+            thread_name = "Discussion"
 
         if len(thread_name) > 100:
             thread_name = thread_name[:97] + "..."

@@ -131,9 +131,9 @@ class DropsActions:
         """Check if a member has drops management access.
 
         Returns True if the member has the configured manager_role_id,
-        any admin role, or the administrator permission.
+        any Panel Access role, or Manage Server (the fleet admin tier).
         """
-        if member.guild_permissions.administrator:
+        if member.guild_permissions.manage_guild:
             return True
 
         config = await get_config(member.guild.id)

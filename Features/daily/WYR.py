@@ -586,9 +586,14 @@ class WYR(commands.Cog):
         except Exception as e:
             logger.error(f"{s}❌ Failed to initialize WYR database: {e}", exc_info=True)
 
-    async def store_message_question_mapping(self, message_id, question_id, channel_id=None, guild_id=None):
+    async def store_message_question_mapping(self, message_id, question_id, channel_id=None, guild_id=None,
+                                             manual=False):
         """
         Store the relationship between message ID and question ID in the database.
+
+        ``manual`` marks an off-schedule post (Post a Question Now). The daily
+        schedule ignores those when deciding whether today's question is already
+        out, so a test post in a staff channel cannot cancel the real one.
         """
         try:
             with PerformanceLogger(logger, f"store_mapping_{message_id}"):
@@ -601,6 +606,8 @@ class WYR(commands.Cog):
                     "channel_id": str(channel_id) if channel_id is not None else None,
                     "guild_id": str(guild_id) if guild_id is not None else None
                 }
+                if manual:
+                    mapping_data["manual"] = True
 
                 # Use the new database manager to create the mapping
                 await db_manager.daily_wyr_mappings.create_one(mapping_data)
@@ -683,10 +690,16 @@ class WYR(commands.Cog):
             logger.error(f"Error cleaning up old mappings: {e}", exc_info=True)
 
     async def get_last_post_time(self, guild_id):
-        """Get the timestamp of the most recent scheduled post for a guild from the database."""
+        """Get the timestamp of the most recent scheduled post for a guild from the database.
+
+        Manual posts (Post a Question Now) are excluded: they are off-schedule by
+        definition and must not count as today's scheduled question. A mapping with
+        no ``manual`` field is a scheduled post - or predates the field, when the
+        two could not be told apart and counting it keeps the old behavior.
+        """
         try:
             mappings = await db_manager.daily_wyr_mappings.find_many(
-                filter_dict={"guild_id": str(guild_id)},
+                filter_dict={"guild_id": str(guild_id), "manual": {"$ne": True}},
                 sort=[("created_at", -1)],
                 limit=1
             )
@@ -981,7 +994,8 @@ class WYR(commands.Cog):
             return False, f"I could not post in {channel.mention}."
 
         await self.store_message_question_mapping(
-            message.id, question["_id"], channel_id=channel.id, guild_id=guild.id
+            message.id, question["_id"], channel_id=channel.id, guild_id=guild.id,
+            manual=True,
         )
 
         thread_name_fmt, starter_msg = _thread_templates(guild_config, question)
@@ -1153,23 +1167,44 @@ class WYR(commands.Cog):
         return False
 
     async def handle_submission_nsfw_toggle(self, interaction, view):
-        """Mark the pending question age-restricted before approving it."""
+        """Mark the pending question age-restricted before approving it.
+
+        The choice is stored on the SUBMISSION, never on the view. After a restart
+        one persistent view instance serves every review post, so anything written
+        onto it (the flag, or the submission id) leaked into the next post a
+        reviewer clicked - Approve on post B then approved post A.
+        """
         if not await self._reviewer_gate(interaction):
             return
         submission = await self._resolve_submission(interaction, view)
         if submission is None:
             return
 
-        view.nsfw = not getattr(view, "nsfw", False)
-        view.submission_id = submission["submission_id"]
-        state = "age-restricted" if view.nsfw else "not age-restricted"
-        await interaction.response.edit_message(view=view)
+        nsfw = not bool(submission.get("nsfw"))
+        if not await wyr_submissions.set_nsfw(submission["submission_id"], nsfw):
+            await interaction.response.send_message(
+                "Somebody else already handled that one.", ephemeral=True
+            )
+            return
+        submission["nsfw"] = nsfw
+
+        warning = await WYRQuestionActions.warning_for_format(
+            interaction.guild_id, submission.get("format")
+        )
+        state = "age-restricted" if nsfw else "not age-restricted"
+        await interaction.response.edit_message(
+            embed=build_review_embed(submission, format_warning=warning)
+        )
         await interaction.followup.send(
             f"This question will be added as **{state}**.", ephemeral=True
         )
 
-    async def handle_submission_approve(self, interaction, view):
+    async def handle_submission_approve(self, interaction, view, on_panel=None):
         """Approve a suggestion into the guild's own bank.
+
+        ``on_panel`` is set when the decision comes from the admin panel's Review
+        Suggestions screen: it redraws that screen, and the review post in the
+        review channel is updated separately.
 
         Ordering matters and is not incidental: the submission is CLAIMED before
         anything is inserted. Without that, a double-click or two moderators
@@ -1215,7 +1250,7 @@ class WYR(commands.Cog):
                 cleaned,
                 guild_id=guild_id,
                 source="submission",
-                nsfw=bool(getattr(view, "nsfw", False)),
+                nsfw=bool(submission.get("nsfw")),
                 submitted_by=submission.get("user_id"),
                 approved_by=interaction.user.id,
             )
@@ -1235,7 +1270,7 @@ class WYR(commands.Cog):
             )
             await self._close_review_post(
                 interaction, submission, outcome="approved",
-                question_id=question["id"],
+                question_id=question["id"], on_panel=on_panel,
             )
             await self._notify_submitter(interaction, submission, approved=True)
 
@@ -1262,8 +1297,10 @@ class WYR(commands.Cog):
                     ephemeral=True,
                 )
 
-    async def handle_submission_reject(self, interaction, view):
-        """Decline a suggestion, optionally with a reason for the member."""
+    async def handle_submission_reject(self, interaction, view, on_panel=None):
+        """Decline a suggestion, optionally with a reason for the member.
+
+        ``on_panel`` works as in :meth:`handle_submission_approve`."""
         if not await self._reviewer_gate(interaction):
             return
         submission = await self._resolve_submission(interaction, view)
@@ -1284,7 +1321,8 @@ class WYR(commands.Cog):
                 submission_id, modal_interaction.user.id, reason
             )
             await self._close_review_post(
-                modal_interaction, submission, outcome="rejected", reason=reason
+                modal_interaction, submission, outcome="rejected", reason=reason,
+                on_panel=on_panel,
             )
             await self._notify_submitter(
                 modal_interaction, submission, approved=False, reason=reason
@@ -1294,8 +1332,14 @@ class WYR(commands.Cog):
         await interaction.response.send_modal(RejectReasonModal(_on_reason))
 
     async def _close_review_post(self, interaction, submission, *, outcome,
-                                 question_id=None, reason=""):
-        """Rewrite the review post to show the decision and drop its buttons."""
+                                 question_id=None, reason="", on_panel=None):
+        """Rewrite the review post to show the decision and drop its buttons.
+
+        When the click came from the review post itself, that message is the one the
+        interaction answers. When it came from the admin panel, the interaction's
+        message is the Components v2 panel, which cannot carry an embed: the review
+        post is fetched and edited on its own, and ``on_panel`` redraws the panel.
+        """
         embed = build_review_embed(
             submission,
             decided_by=interaction.user,
@@ -1303,6 +1347,20 @@ class WYR(commands.Cog):
             reason=reason,
             question_id=question_id,
         )
+        review_message_id = submission.get("review_message_id")
+        message = getattr(interaction, "message", None)
+        from_review_post = (
+            message is not None and review_message_id is not None
+            and str(message.id) == str(review_message_id)
+        )
+        if not from_review_post:
+            await self._edit_review_post(submission, embed)
+            if on_panel is not None:
+                await on_panel(interaction)
+            elif not interaction.response.is_done():
+                await interaction.response.send_message("Recorded.", ephemeral=True)
+            return
+
         try:
             if interaction.response.is_done():
                 await interaction.message.edit(embed=embed, view=None)
@@ -1314,6 +1372,26 @@ class WYR(commands.Cog):
                 await interaction.response.send_message(
                     f"Recorded, but the review post could not be updated.", ephemeral=True
                 )
+
+    async def _edit_review_post(self, submission, embed) -> bool:
+        """Edit a submission's review post by its stored ids. Best effort."""
+        channel_id = submission.get("review_channel_id")
+        message_id = submission.get("review_message_id")
+        if not channel_id or not message_id:
+            return False  # A reviewer-role-only setup never posts one.
+        try:
+            channel = self.bot.get_channel(int(channel_id))
+            if channel is None:
+                channel = await self.bot.fetch_channel(int(channel_id))
+            post = await channel.fetch_message(int(message_id))
+            await post.edit(embed=embed, view=None)
+            return True
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException, ValueError) as e:
+            logger.warning(
+                f"Could not update the review post for submission "
+                f"{str(submission.get('submission_id', ''))[:8]}: {e}"
+            )
+            return False
 
     async def _notify_submitter(self, interaction, submission, *, approved, reason=""):
         """DM the member the outcome. Best effort by design.

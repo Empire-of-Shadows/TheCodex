@@ -26,6 +26,7 @@ if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
 from storage.settings.config_manager import DEFAULT_CONFIG  # noqa: E402
+from Features.announcements.thread_name import thread_name_format_error  # noqa: E402
 
 logger = get_logger("dashboard.routers.settings")
 
@@ -253,6 +254,11 @@ async def update_settings(
                 )
 
         _coerce_section_ids(section, value)
+
+        if section == "announcement" and "thread_name_format" in value:
+            format_error = thread_name_format_error(value["thread_name_format"])
+            if format_error:
+                raise HTTPException(status_code=400, detail=format_error)
 
         # Surgical dotted $set of only the leaf keys that actually change, so a
         # concurrent edit to a different key in the same section isn't clobbered

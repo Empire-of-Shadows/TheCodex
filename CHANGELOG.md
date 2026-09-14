@@ -1,5 +1,50 @@
 # Changelog
 
+## [Unreleased] - 2026-09-13 (fixes from a full check of the bot)
+
+### Fixed
+- **Approving or declining a suggested question from the admin panel works properly.** The
+  panel used to say the review post could not be updated, and the post in the review channel
+  kept its buttons. Now the review post shows the decision and the panel moves on to the next
+  suggestion.
+- **Age-restrict on a review post only affects that post.** After the bot restarted, pressing
+  Age-restrict on one suggestion and then Approve on a different one could approve the first
+  one instead. The choice is now saved with the suggestion, and the review post shows it.
+- **Posting a question with Post a Question Now no longer cancels that day's scheduled
+  question.** A test post in a staff channel used to count as the day's question.
+- **Question results stay accurate after a member's stats are reset or their data is erased.**
+  Their old votes used to stay in the results, and voting again counted them twice.
+- **Removing the bot from a server now clears everything it stored about that server,**
+  including question suggestions, notification settings, the server's own questions and usage
+  counts.
+- **Submit Anyway can no longer post the same suggestion twice.** The Similar Suggestions
+  buttons now close as soon as you press one. Your confirmation when submitting a suggestion
+  with text is also private now, instead of showing to the whole channel.
+- **A mistake in the announcement thread name can no longer stop discussion threads.** An
+  unknown placeholder like `{title}` or a stray brace is now refused with an explanation, in
+  the panel and on the dashboard, and anything already saved falls back to the default name.
+- **Whitelist Reactivate gives the whitelist role back** to a member who is in the server and
+  still under the age requirement, just like adding them the first time.
+- **Admin commands follow the same rule as the admin panel:** Manage Server or a Panel Access
+  role. Embed editing for admins, drops management, question review and `/whitelist` used to
+  demand Administrator. `/help` now shows its Admin page to Panel Access role holders too.
+- **A command you can't use now says so once**, instead of stacking up to three messages.
+- **`/embed` commands no longer show up in DMs**, where they could not work. `/embed edit` now
+  refuses another bot's message straight away instead of failing after you fill in the form.
+- **The guide only answers when you actually mention the bot.** Replying to one of the bot's
+  posts no longer brings up the guide.
+- **The bot keeps its status after a connection hiccup.** A status set with `/status` used to
+  disappear whenever the bot reconnected. `/status` is also limited to the bot owner now.
+- **`/wyrbank review` Delete removes the question.** It used to report that it could not delete.
+- **Getting Started lists this bot's own commands** instead of game commands it does not have,
+  and one welcome message no longer mentions a fixed account.
+- **Embed edits in a tracked drops channel are only counted while Updates & Drops is on.**
+- **The Quick Setup Guide no longer says settings stay locked** until a channel is picked - they
+  never were.
+- **Signing in from a link takes you back to that page** instead of the dashboard home.
+- **The health checks report a database outage.** Both the bot and the dashboard used to keep
+  saying they were healthy if the database went down after startup.
+
 ## [Unreleased] - 2026-08-31 (finding your way around the dashboard)
 
 ### Changed

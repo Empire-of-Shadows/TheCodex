@@ -151,12 +151,11 @@ async def _handle_getting_started(interaction, params: dict):
     )
 
     embed.add_field(
-        name="Gaming Features",
+        name="Things to Try",
         value=(
-            "- Use `/uno` to start a UNO game\n"
-            "- Try `/tictactoe` for quick matches\n"
-            "- Play `/hangman` with friends\n"
-            "- Check leaderboards with `/stats`"
+            "- Vote on the daily question and see how others voted with `/wyr stats`\n"
+            "- Browse free Prime Gaming games with `/drop`\n"
+            "- See every command with `/help`"
         ),
         inline=False,
     )

@@ -9,7 +9,7 @@ joining_responses = [
 	"Welcome to the madness, {member.mention}! 💥 Let the fun begin.",
 	"Yo {member.mention}, glad you found us! 🍕 Pull up a chair and stay awhile.",
 	"The party's not complete without you, {member.mention}! 🥳 Welcome!",
-	"Welcome {member.mention}! If you get stuck, mention <@1326779139423731753> for help.",
+	"Welcome {member.mention}! If you get stuck, mention me for help.",
 
 	# Friendly and casual
 	"Hey there {member.mention}! 👋 Welcome to our little corner of the internet!",

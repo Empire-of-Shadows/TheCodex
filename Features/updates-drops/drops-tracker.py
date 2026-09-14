@@ -187,6 +187,10 @@ class DropsStatsCog(commands.Cog):
 		if after.guild is None:
 			logger.debug("on_message_edit ignored: message %s is from DM", getattr(after, "id", "unknown"))
 			return
+		# Same switch as new messages: nothing is counted while Updates & Drops is off.
+		guild_config = await get_config(after.guild.id)
+		if not guild_config.drops.get("enabled", False):
+			return
 
 		channel_map = await self._get_channel_map(after.guild.id)
 		coll_name = channel_map.get(after.channel.id)

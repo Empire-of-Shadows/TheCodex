@@ -9,6 +9,7 @@ from storage.log import get_logger
 from storage.settings.config_manager import get_config
 from admin.setup_notice import permission_notice_embed
 from admin.actions.whitelist_nodes import WhitelistPanelActions
+from Features.error_handler import mark_error_handled
 
 logger = get_logger("WhitelistManager")
 
@@ -21,7 +22,8 @@ ACCOUNT_AGE_REQUIREMENT_DAYS = 90  # Must match the age check in joining.py
 def has_whitelist_admin_app():
     """App command check for every whitelist command (read and mutation).
 
-    Admin-only: Administrator permission or a configured Panel Access role.
+    Admin-only: Manage Server or a configured Panel Access role - the fleet
+    admin tier, the same one that opens /admin panel.
     There is no moderator tier, so viewing and changing the screening whitelist
     are gated the same way.
     """
@@ -32,7 +34,7 @@ def has_whitelist_admin_app():
         user = interaction.user
 
         perms = getattr(user, "guild_permissions", None)
-        if perms and perms.administrator:
+        if perms and perms.manage_guild:
             return True
 
         guild_config = await get_config(interaction.guild.id)
@@ -572,6 +574,7 @@ class WhitelistGroup(commands.Cog):
         if not isinstance(error, app_commands.CheckFailure):
             raise error
 
+        mark_error_handled(interaction)
         embed = await permission_notice_embed(
             interaction.guild,
             action="view or change the screening whitelist",
@@ -725,10 +728,19 @@ class WhitelistGroup(commands.Cog):
                             'reactivated_reason': reason
                         }}
                     )
+                    details = f"**Reason:** {reason}"
+                    # Same rule as a first add: an in-server member still under the age
+                    # requirement gets the whitelist role back.
+                    if member:
+                        assigned, age = await self._assign_role_if_new(
+                            interaction, guild, member, whitelist_collection
+                        )
+                        if assigned:
+                            details += f"\n**Role Assigned:** Yes (account age: {age} days)"
                     return {
                         'success': True,
                         'message': f"**{username}** (`{user_id}`) has been reactivated on the whitelist.",
-                        'details': f"**Reason:** {reason}"
+                        'details': details
                     }
 
             # Add to whitelist
@@ -750,26 +762,9 @@ class WhitelistGroup(commands.Cog):
             # If member is in guild and has a new account, assign the role
             role_assigned = False
             if member:
-                guild_config = await get_config(guild.id)
-                account_age = (datetime.now(timezone.utc) - member.created_at).days
-                if account_age < guild_config.new_members["account_age_requirement_days"]:
-                    try:
-                        role = await self._ensure_whitelist_role(guild)
-                        await member.add_roles(role, reason=f"Whitelisted by {interaction.user}")
-                        role_assigned = True
-
-                        # Update database with role info
-                        await whitelist_collection.update_one(
-                            {'guild_id': str(guild.id), 'user_id': str(user_id)},
-                            {'$set': {
-                                'role_assigned': True,
-                                'role_assigned_at': datetime.now(timezone.utc),
-                                'account_age_at_whitelist': account_age
-                            }}
-                        )
-                        logger.info(f"Assigned whitelist role to {member} (account age: {account_age} days)")
-                    except Exception as e:
-                        logger.error(f"Failed to assign whitelist role: {e}")
+                role_assigned, account_age = await self._assign_role_if_new(
+                    interaction, guild, member, whitelist_collection
+                )
 
             details = f"**User:** {username} (`{user_id}`)\n**Reason:** {reason}"
             if role_assigned:
@@ -793,6 +788,34 @@ class WhitelistGroup(commands.Cog):
                 'success': False,
                 'message': f"An error occurred: {str(e)}"
             }
+
+    async def _assign_role_if_new(self, interaction: discord.Interaction, guild: discord.Guild,
+                                  member: discord.Member, whitelist_collection) -> tuple[bool, int]:
+        """Give an in-server member the whitelist role if their account is still new.
+
+        Returns ``(assigned, account_age_days)``. Shared by a first add and a
+        reactivation, so both follow one rule.
+        """
+        guild_config = await get_config(guild.id)
+        account_age = (datetime.now(timezone.utc) - member.created_at).days
+        if account_age >= guild_config.new_members["account_age_requirement_days"]:
+            return False, account_age
+        try:
+            role = await self._ensure_whitelist_role(guild)
+            await member.add_roles(role, reason=f"Whitelisted by {interaction.user}")
+            await whitelist_collection.update_one(
+                {'guild_id': str(guild.id), 'user_id': str(member.id)},
+                {'$set': {
+                    'role_assigned': True,
+                    'role_assigned_at': datetime.now(timezone.utc),
+                    'account_age_at_whitelist': account_age
+                }}
+            )
+            logger.info(f"Assigned whitelist role to {member} (account age: {account_age} days)")
+            return True, account_age
+        except Exception as e:
+            logger.error(f"Failed to assign whitelist role: {e}")
+            return False, account_age
 
     async def _fetch_whitelist_entry(self, guild_id: int, user_id: int) -> Optional[dict]:
         """The whitelist document for one member in one guild, active or not.

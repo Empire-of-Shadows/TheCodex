@@ -19,6 +19,7 @@ from discord import ui, app_commands
 from discord.ext import commands
 
 from storage.log import get_logger
+from storage.settings.config_manager import get_config
 
 from commands.help.help_content import (
     CATEGORIES,
@@ -123,6 +124,28 @@ class CodexHelpView(ui.LayoutView):
         self.stop()
 
 
+async def has_panel_access(member) -> bool:
+    """The fleet admin tier: Manage Server or a configured Panel Access role.
+
+    The same rule that opens /admin panel, so everyone who can open the panel
+    also sees the Admin help page. Fails closed on a config read error - the
+    member still gets every non-admin page.
+    """
+    perms = getattr(member, "guild_permissions", None)
+    if perms is not None and perms.manage_guild:
+        return True
+    guild = getattr(member, "guild", None)
+    if guild is None:
+        return False
+    try:
+        config = await get_config(guild.id)
+        admin_ids = {int(r) for r in (config.roles.get("admin_role_ids") or [])}
+    except Exception as e:
+        logger.warning(f"Could not read Panel Access roles for guild {guild.id}: {e}")
+        return False
+    return bool(admin_ids & {role.id for role in getattr(member, "roles", [])})
+
+
 class HelpCommands(commands.Cog):
     """Public /help command. Ephemeral, browses categories via dropdown."""
 
@@ -134,7 +157,7 @@ class HelpCommands(commands.Cog):
     @app_commands.guild_only()
     async def help(self, interaction: discord.Interaction):
         try:
-            is_admin = interaction.user.guild_permissions.manage_guild
+            is_admin = await has_panel_access(interaction.user)
             view = CodexHelpView(self.bot, is_admin)
             await interaction.response.send_message(
                 view=view, files=view.files, ephemeral=True

@@ -58,6 +58,7 @@ from ..actions.board_actions import (
     build_board_status_node,
 )
 from .setup_gatekeeper import setup_gatekeeper
+from Features.announcements.thread_name import thread_name_format_error
 from Features.NewMembers.greeting_schema import validate_greeting_schema
 from Features.Board.board_schema import validate_board_schema
 from Features.Guide.guide_schema import validate_guide_schema
@@ -335,6 +336,15 @@ def _validate_char_limit(raw: str):
     if not (1 <= val <= 4000):
         return False, None, "Limit must be between 1 and 4000."
     return True, val, ""
+
+
+def _validate_thread_name_format(raw: str):
+    """Validator for the announcement Thread Name Format modal."""
+    value = (raw or "").strip()
+    error = thread_name_format_error(value)
+    if error:
+        return False, None, error
+    return True, value, ""
 
 
 async def _get_default_limit(guild_id: int) -> list:
@@ -1042,6 +1052,7 @@ ANN_SETTINGS_CONFIG = PanelNode(
             modal_placeholder="e.g., 💬 {message_content}",
             modal_min_length=1,
             modal_max_length=100,
+            modal_validator=_validate_thread_name_format,
             get_values=AnnouncementActions.get_thread_name_format_as_list,
             set_values=AnnouncementActions.set_thread_name_format,
             is_customized=_value_diverges(
@@ -1224,8 +1235,8 @@ DROPS_MANAGER_ROLE_CONFIG = role_leaf(
     "drops.manager_role_id",
     label="Manager Role",
     description=(
-        "Role allowed to manage drops with `/drop`, alongside admins and anyone with "
-        "Administrator. Leave empty to keep `/drop` management to admins only."
+        "Role allowed to manage drops with `/drop`, alongside Panel Access roles and "
+        "anyone with Manage Server. Leave empty to keep `/drop` management to admins only."
     ),
 )
 

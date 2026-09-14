@@ -237,7 +237,7 @@ async def permission_notice_embed(
     the honest answer is "nobody has delegated it yet" rather than "you were denied".
     """
     parts = [
-        f"You need **Administrator** or the configured **Panel Access** role to {action}."
+        f"You need **Manage Server** or the configured **Panel Access** role to {action}."
     ]
 
     delegated = True

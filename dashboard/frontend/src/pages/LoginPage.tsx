@@ -1,10 +1,35 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { fetchPublicStats, type PublicStats } from "../api/client";
+import { Link, useSearchParams } from "react-router-dom";
+import { discordLoginUrl, fetchPublicStats, type PublicStats } from "../api/client";
 import { formatCount } from "../_engine/format";
+
+/**
+ * Where to land after Discord sign-in: the page that sent the visitor here.
+ *
+ * The shared 401 handler bounces to `/login?next=<path>`. Only a path on THIS
+ * dashboard is honoured - anything that resolves to another origin, or back to
+ * /login, is dropped and sign-in lands on the default home instead, so the
+ * parameter can never become an open redirect. The URL handed on is ABSOLUTE
+ * because the server's redirect allowlist is anchored on `^https?://` and
+ * silently replaces a bare path with the default.
+ */
+function signInReturnUrl(next: string | null): string | undefined {
+  if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) {
+    return undefined;
+  }
+  try {
+    const url = new URL(next, window.location.origin);
+    if (url.origin !== window.location.origin || url.pathname === "/login") return undefined;
+    return url.href;
+  } catch {
+    return undefined;
+  }
+}
 
 export default function LoginPage() {
   const [stats, setStats] = useState<PublicStats | null>(null);
+  const [searchParams] = useSearchParams();
+  const loginHref = discordLoginUrl(signInReturnUrl(searchParams.get("next")));
 
   useEffect(() => {
     let alive = true;
@@ -25,7 +50,7 @@ export default function LoginPage() {
           Sign in with Discord to view stats and manage your servers. Your Empire of Shadows
           session is shared - one login covers every bot dashboard.
         </p>
-        <a href="/auth/discord" className="cta">
+        <a href={loginHref} className="cta">
           Login with Discord
         </a>
         <p className="eos-muted" style={{ marginTop: "0.75rem", fontSize: "0.85rem" }}>

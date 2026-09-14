@@ -43,6 +43,25 @@ async def load_cogs_command(ctx):
     await ctx.send("Cogs loaded successfully.")
 
 
+async def on_command_error(ctx: commands.Context, error: commands.CommandError):
+    """Quiet handler for the mention-prefix text command surface.
+
+    ``when_mentioned`` makes every message that starts with a bot mention a
+    text-command attempt, and the guide answers exactly those messages - so
+    "@TheCodex rules" is a normal guide question, not a failed command. The
+    library default logged each one as an error with a traceback.
+    """
+    if isinstance(error, commands.CommandNotFound):
+        return
+    if isinstance(error, commands.NotOwner):
+        logger.warning(f"{ctx.author} ({ctx.author.id}) tried the owner-only command {ctx.invoked_with!r}")
+        return
+    logger.error(f"Text command {ctx.invoked_with!r} failed: {error}", exc_info=error)
+
+
+bot.add_listener(on_command_error, "on_command_error")
+
+
 async def attach_databases():
     """
     Initialize and attach the DB-dependent managers onto the bot instance.
