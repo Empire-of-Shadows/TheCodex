@@ -24,6 +24,8 @@ from Features.Guide.guide_actions import (
 	CUSTOM_ID_SEARCH,
 )
 from admin.setup_notice import setup_notice_text
+from Features.interaction_errors import SupportAwareModalMixin, send_unexpected_failure
+from commands.help.help_content import SUPPORT_LINE
 
 logger = get_logger("Guide")
 
@@ -527,7 +529,7 @@ guide_manager = GuideManager()
 # Search Modal
 # ─────────────────────────────────────────────────────────────────────────────
 
-class GuideSearchModal(discord.ui.Modal):
+class GuideSearchModal(SupportAwareModalMixin, discord.ui.Modal):
 	"""Modal for searching guide content."""
 
 	def __init__(self, guild_id: int):
@@ -549,7 +551,7 @@ class GuideSearchModal(discord.ui.Modal):
 		except Exception as e:
 			logger.error(f"Search error: {e}", exc_info=True)
 			await interaction.response.send_message(
-				"An error occurred while searching. Please try again.",
+				f"An error occurred while searching. Please try again.\n\n{SUPPORT_LINE}",
 				ephemeral=True,
 			)
 
@@ -590,7 +592,9 @@ async def _handle_role_action(interaction: discord.Interaction, role_id: str):
 		await interaction.response.send_message("I don't have permission to manage that role.", ephemeral=True)
 	except discord.HTTPException as e:
 		logger.error(f"Role toggle error: {e}", exc_info=True)
-		await interaction.response.send_message("Something went wrong managing the role.", ephemeral=True)
+		await interaction.response.send_message(
+			f"Something went wrong managing the role.\n\n{SUPPORT_LINE}", ephemeral=True,
+		)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -677,11 +681,9 @@ async def dispatch_guide_interaction(interaction: discord.Interaction) -> bool:
 		return True
 
 	except Exception as e:
-		logger.error(f"Error handling guide interaction '{custom_id}': {e}", exc_info=True)
-		if not interaction.response.is_done():
-			await interaction.response.send_message(
-				"Something went wrong. Please try again.", ephemeral=True,
-			)
+		# A raw on_interaction listener never reaches a view's on_error, so this is
+		# the only thing between an exception and a bare "This interaction failed".
+		await send_unexpected_failure(interaction, e, f"guide interaction {custom_id!r}")
 		return True
 
 

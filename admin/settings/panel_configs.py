@@ -21,6 +21,7 @@ from functools import partial
 import discord
 
 from ..views.panel_engine import PanelNode
+from ..views.base import SupportAwareView
 from ..views.embed_views import TIER_NAMES, TIER_LABELS, FEATURE_OPTIONS
 from ..views.drops_views import format_drops_status
 from ..views.new_member_views import format_new_member_status
@@ -211,7 +212,7 @@ def _guide_template_data() -> tuple[bytes, str]:
     return json.dumps(data, indent=2, ensure_ascii=False).encode("utf-8"), "guide_template.json"
 
 
-class _SkipInitialPostView(discord.ui.View):
+class _SkipInitialPostView(SupportAwareView):
     """One-shot view attached to the WYR auto-enable message.
 
     Lets the admin skip the first catch-up post that would fire immediately

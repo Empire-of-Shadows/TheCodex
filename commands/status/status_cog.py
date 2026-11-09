@@ -12,6 +12,7 @@ from discord.ext import commands
 
 from startup.bot import bot
 from storage.log import get_logger
+from Features.interaction_errors import SupportAwareLayoutView, SupportAwareModalMixin
 
 logger = get_logger("StatusAdmin")
 
@@ -83,7 +84,7 @@ def _validate_type(value: str) -> str | None:
 # ── Modals ──────────────────────────────────────────────────────────────────
 
 
-class SetStatusModal(discord.ui.Modal, title="Set Bot Status"):
+class SetStatusModal(SupportAwareModalMixin, discord.ui.Modal, title="Set Bot Status"):
     activity_type = discord.ui.TextInput(
         label="Type",
         placeholder="playing | watching | listening | competing | streaming | custom",
@@ -128,7 +129,7 @@ class SetStatusModal(discord.ui.Modal, title="Set Bot Status"):
         )
 
 
-class SavePresetModal(discord.ui.Modal, title="Save Status Preset"):
+class SavePresetModal(SupportAwareModalMixin, discord.ui.Modal, title="Save Status Preset"):
     preset_name = discord.ui.TextInput(
         label="Preset name",
         max_length=MAX_PRESET_NAME_LEN,
@@ -263,7 +264,8 @@ class DeletePresetSelect(discord.ui.Select):
 
 
 def build_preset_layout(presets: list[dict]) -> discord.ui.LayoutView:
-    layout = discord.ui.LayoutView(timeout=300.0)
+    # Support-aware: the preset selects below carry callbacks that can raise.
+    layout = SupportAwareLayoutView(timeout=300.0)
     layout.add_item(discord.ui.TextDisplay("## Bot Status Presets"))
 
     if not presets:

@@ -15,7 +15,13 @@ from typing import Any, Callable, Awaitable, Dict
 
 import discord
 
-from ....views.base import cid, readonly_container, editable_container
+from ....views.base import (
+    SupportAwareLayoutView,
+    SupportAwareModal,
+    cid,
+    readonly_container,
+    editable_container,
+)
 
 # Display labels for suggestion statuses
 _STATUS_LABELS = {
@@ -84,7 +90,7 @@ def format_suggestion_status(stats: Dict[str, Any], guild: discord.Guild) -> str
     return "\n\n".join(sections)
 
 
-class SuggestionStatusUpdateModal(discord.ui.Modal):
+class SuggestionStatusUpdateModal(SupportAwareModal):
     """Modal for admins to update a suggestion's status."""
 
     ALLOWED_STATUSES = ["Under Review", "Approved", "Implemented", "Rejected", "On Hold"]
@@ -157,8 +163,13 @@ class SuggestionStatusUpdateModal(discord.ui.Modal):
 def build_suggestion_export_view(
     export_callback: Callable[[discord.Interaction, str], Awaitable[None]],
 ) -> discord.ui.LayoutView:
-    """Build a view with a format selector and export button."""
-    layout = discord.ui.LayoutView()
+    """Build a view with a format selector and export button.
+
+    Support-aware: the Export callback can raise (a failed export is re-raised,
+    see ``SuggestionActions.export_suggestions``), and this layout is built here
+    rather than through ``AdminLayoutBuilder``.
+    """
+    layout = SupportAwareLayoutView()
 
     layout.add_item(discord.ui.TextDisplay("## Export Suggestions"))
     layout.add_item(readonly_container(discord.ui.TextDisplay(

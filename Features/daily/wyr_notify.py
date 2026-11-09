@@ -26,6 +26,8 @@ import discord
 
 from startup.bot import bot
 from storage.log import get_logger
+from Features.interaction_errors import SupportAwareViewMixin
+from commands.help.help_content import SUPPORT_LINE
 from storage.settings.collections import db_manager
 from storage.settings.config_manager import get_config
 from admin.setup_notice import setup_notice_text
@@ -313,7 +315,11 @@ async def apply_subscription(interaction: discord.Interaction, *, subscribe: boo
         return
     except discord.HTTPException as e:
         logger.error(f"HTTP error managing WYR ping role for {member.id}: {e}", exc_info=True)
-        await _reply(interaction, "Something went wrong changing your notifications. Please try again.", None)
+        await _reply(
+            interaction,
+            f"Something went wrong changing your notifications. Please try again.\n\n{SUPPORT_LINE}",
+            None,
+        )
         return
 
     if subscribe:
@@ -340,7 +346,7 @@ async def apply_subscription(interaction: discord.Interaction, *, subscribe: boo
 # Views
 # ─────────────────────────────────────────────────────────────────────────────
 
-class NotifyManageView(discord.ui.View):
+class NotifyManageView(SupportAwareViewMixin, discord.ui.View):
     """One button showing the member the opposite of their current state.
 
     Subscribed members get "turn it off", everyone else gets "notify me", so

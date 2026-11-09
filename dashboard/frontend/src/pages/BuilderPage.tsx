@@ -10,6 +10,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
+import { useAdminHref } from "../components/AdminNav";
 import { api } from "../api/client";
 import type {
   BuilderMode,
@@ -436,6 +437,9 @@ export default function BuilderPage() {
   const { guildId } = useParams<{ guildId: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  // Carries the from-overview marker onto Back, so settings still knows to
+  // return to the overview (see AdminNav).
+  const adminHref = useAdminHref();
   const initialMode: BuilderMode = parseMode(searchParams.get("mode"));
 
   const [mode, setMode] = useState<BuilderMode>(initialMode);
@@ -1424,7 +1428,7 @@ export default function BuilderPage() {
               header, so it carries its own way out. */}
           <button
             className="btn btn-secondary"
-            onClick={() => navigateAway(`/settings/guilds/${guildId}/settings`)}
+            onClick={() => navigateAway(adminHref(`/settings/guilds/${guildId}/settings`))}
             style={{ fontSize: 12 }}
           >
             ← Back

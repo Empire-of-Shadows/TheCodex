@@ -126,7 +126,7 @@ class _TagTrackerFlow(PanelFlow):
             await self._too_fast(interaction)
             return
         if not await TrackerActions.set_tag_tracker_enabled(self.guild.id, enabled):
-            await self._notice(
+            await self._failure_notice(
                 interaction, "Failed to Save", "Could not change the Tag Tracker setting.",
             )
             return
@@ -144,7 +144,7 @@ class _TagTrackerFlow(PanelFlow):
 
         old = (await TrackerActions.get_tag_tracker_settings(self.guild.id)).get("tag_tracker_role_id")
         if not await TrackerActions.set_tag_tracker_role(self.guild.id, role_id):
-            await self._notice(interaction, "Failed to Save", "Could not save that role.")
+            await self._failure_notice(interaction, "Failed to Save", "Could not save that role.")
             return
         await self._after_write(interaction, "set", old, role_id)
         await self._render(interaction, await self._layout())
@@ -168,7 +168,7 @@ class _TagTrackerFlow(PanelFlow):
 
         old = (await TrackerActions.get_tag_tracker_settings(self.guild.id)).get("tag_tracker_server_tag")
         if not await TrackerActions.set_tag_tracker_server_tag(self.guild.id, tag):
-            await self._notice(interaction, "Failed to Save", "Could not save that server tag.")
+            await self._failure_notice(interaction, "Failed to Save", "Could not save that server tag.")
             return
         await self._after_write(interaction, "set", old, tag)
         await self._render_via_modal(interaction, await self._layout())
@@ -207,7 +207,7 @@ class _TagTrackerFlow(PanelFlow):
             return
 
         if not await TrackerActions.set_tag_tracker_server_tag(self.guild.id, tag):
-            await self._notice(interaction, "Failed to Save", "Could not save the detected tag.")
+            await self._failure_notice(interaction, "Failed to Save", "Could not save the detected tag.")
             return
         await self._after_write(interaction, "set", old, tag)
         await self._render(interaction, await self._layout())
@@ -298,7 +298,7 @@ class _BoostTrackerFlow(PanelFlow):
             await self._too_fast(interaction)
             return
         if not await TrackerActions.set_boost_enabled(self.guild.id, enabled):
-            await self._notice(
+            await self._failure_notice(
                 interaction, "Failed to Save", "Could not change the Boost Tracker setting.",
             )
             return
@@ -318,7 +318,7 @@ class _BoostTrackerFlow(PanelFlow):
 
         old = (await TrackerActions.get_boost_tracker_settings(self.guild.id)).get("boost_log_channel_id")
         if not await TrackerActions.set_boost_log_channel(self.guild.id, channel_id):
-            await self._notice(interaction, "Failed to Save", "Could not save that channel.")
+            await self._failure_notice(interaction, "Failed to Save", "Could not save that channel.")
             return
         await self._after_write(interaction, "set", old, channel_id)
         await self._render(interaction, await self._layout())

@@ -16,6 +16,7 @@ from typing import Awaitable, Callable, List
 
 import discord
 
+from Features.interaction_errors import SupportAwareModalMixin
 from Features.daily.wyr_bank import (
     FORMAT_LABELS,
     FORMAT_OPEN,
@@ -41,7 +42,7 @@ _OPTION_PLACEHOLDERS = {
 }
 
 
-class QuestionFormModal(discord.ui.Modal):
+class QuestionFormModal(SupportAwareModalMixin, discord.ui.Modal):
     """Write one question.
 
     Answers are one field with a line each rather than one field per answer.

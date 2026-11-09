@@ -44,8 +44,8 @@ intents.guild_messages = True
 intents.message_content = True
 
 bot = commands.Bot(
-    # Slash-only: no "." text-command surface. The owner-only load_cogs utility is
-    # still reachable by mentioning the bot (matches the relay reference).
+    # Slash-only: no text commands at all (the owner-only load_cogs mention command
+    # was removed 2026-11-08, matching relay). A mention is still the guide trigger.
     command_prefix=commands.when_mentioned,
     intents=intents,
     help_command=None,

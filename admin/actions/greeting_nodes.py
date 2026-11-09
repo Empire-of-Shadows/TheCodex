@@ -10,7 +10,9 @@ refuses before sending when the greeting could not possibly arrive.
 That second part matters. ``GuildEventHandler.send_greeting_message`` logs and
 returns when there is no greeting channel, when the saved channel is gone, or
 when the send itself fails, so ``/greeting test`` reported "Test Complete" for
-sends that never happened. Everything is checked here first instead.
+sends that never happened. Everything is checked here first instead, and since
+2026-11-08 the send also reports whether it landed, so a refusal from Discord
+itself is told to the admin rather than shown as "Test greeting sent".
 
 ``/greeting info`` is deliberately NOT rebuilt. The New Members group already
 carries ``NM_STATUS_NODE`` ("View Status"), which shows the greeting channel,
@@ -276,16 +278,42 @@ class _GreetingTestFlow(PanelFlow):
             # tree should not pull that in just to be imported.
             from Features.NewMembers.joining import guild_handler
 
-            await guild_handler.send_greeting_message(member)
+            sent = await guild_handler.send_greeting_message(member)
         except Exception as exc:
             logger.error(
                 f"Test greeting failed for {member} in guild {self.guild.id}: {exc}",
                 exc_info=True,
             )
-            await self._refresh_then_notice(
+            # The exception text stays in the log. send_greeting_message catches
+            # Discord's own refusals (and reports them as False, below), so what
+            # reaches here is an internal failure (a config read, say), not a
+            # message the admin can act on.
+            await self._render(interaction, await self._build_layout())
+            await self._failure_notice(
                 interaction, "The test greeting failed",
-                f"Discord refused the message:\n```{str(exc)[:500]}```",
-                await self._build_layout(),
+                "Something went wrong sending the test greeting. Please try again.",
+            )
+            return
+
+        if not sent:
+            # It logged and skipped. If the setup changed under us (a permission
+            # taken away, the channel or greeting removed), that is something the
+            # admin can fix, so say what it is. Otherwise Discord refused a
+            # greeting that should have gone through.
+            logger.warning(
+                f"Test greeting for {member} ({member.id}) was not posted in guild {self.guild.id}"
+            )
+            _settings, _channel, problem = await self._preflight()
+            if problem:
+                await self._refresh_then_notice(
+                    interaction, "Nothing was sent", problem, await self._build_layout(),
+                )
+                return
+            await self._render(interaction, await self._build_layout())
+            await self._failure_notice(
+                interaction, "The test greeting failed",
+                f"Discord did not accept the greeting in {channel.mention}, so nothing "
+                f"was posted. Please try again.",
             )
             return
 

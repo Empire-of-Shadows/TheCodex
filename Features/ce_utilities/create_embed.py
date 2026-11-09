@@ -22,6 +22,7 @@ from storage.log import get_logger, log_context, log_performance
 from storage.settings.config_manager import get_config
 from admin.setup_notice import send_setup_notice, setup_notice_embed
 from Features.error_handler import mark_error_handled
+from commands.help.help_content import SUPPORT_LINE
 
 logger = get_logger("CreateEmbed")
 
@@ -258,23 +259,23 @@ class EmbedGroup(commands.GroupCog, name="embed", description="Create and edit e
             return
 
         mark_error_handled(interaction)
-        embed = await setup_notice_embed(
-            interaction.guild,
-            what="embed access for your roles",
-            path="Embed Settings -> Role Tier Mapping",
-            viewer=interaction.user if isinstance(interaction.user, discord.Member) else None,
-            detail=(
-                "Embed commands are opened up per role. Yours has not been given "
-                "access yet."
-            ),
-            title="Embed Access Required",
-        )
         try:
+            embed = await setup_notice_embed(
+                interaction.guild,
+                what="embed access for your roles",
+                path="Embed Settings -> Role Tier Mapping",
+                viewer=interaction.user if isinstance(interaction.user, discord.Member) else None,
+                detail=(
+                    "Embed commands are opened up per role. Yours has not been given "
+                    "access yet."
+                ),
+                title="Embed Access Required",
+            )
             if interaction.response.is_done():
                 await interaction.followup.send(embed=embed, ephemeral=True)
             else:
                 await interaction.response.send_message(embed=embed, ephemeral=True)
-        except discord.HTTPException as e:
+        except Exception as e:
             logger.debug(f"Could not deliver embed permission notice: {e}")
 
     @tasks.loop(minutes=10)
@@ -361,7 +362,8 @@ class EmbedGroup(commands.GroupCog, name="embed", description="Create and edit e
                 logger.error(f"Error presenting create modal to {interaction.user}: {e}", exc_info=True)
                 if not interaction.response.is_done():
                     await interaction.response.send_message(
-                        "❌ An internal error occurred while opening the modal.", ephemeral=True
+                        f"❌ An internal error occurred while opening the modal.\n\n{SUPPORT_LINE}",
+                        ephemeral=True,
                     )
 
     # /embed colors
@@ -465,7 +467,9 @@ class EmbedGroup(commands.GroupCog, name="embed", description="Create and edit e
                 return
             except Exception as e:
                 logger.error(f"Fetch error for channel {channel_id} / message {parsed_message_id}: {e}", exc_info=True)
-                await interaction.response.send_message("❌ Failed to fetch the message.", ephemeral=True)
+                await interaction.response.send_message(
+                    f"❌ Failed to fetch the message.\n\n{SUPPORT_LINE}", ephemeral=True
+                )
                 return
 
             # Only TheCodex's own messages: another bot's embed would open the edit
@@ -497,7 +501,9 @@ class EmbedGroup(commands.GroupCog, name="embed", description="Create and edit e
             except Exception as e:
                 logger.error(f"Failed to send edit modal: {e}", exc_info=True)
                 if not interaction.response.is_done():
-                    await interaction.response.send_message("❌ Failed to process the edit modal.", ephemeral=True)
+                    await interaction.response.send_message(
+                        f"❌ Failed to process the edit modal.\n\n{SUPPORT_LINE}", ephemeral=True
+                    )
 
     async def _open_create_modal(self, interaction: discord.Interaction, guild_id: int, max_length: int,
                                 user_roles: Set[int], allowed_features: Optional[Set[str]] = None,
@@ -521,7 +527,7 @@ class EmbedGroup(commands.GroupCog, name="embed", description="Create and edit e
             logger.error(f"Error opening create modal for {interaction.user}: {e}", exc_info=True)
             if not interaction.response.is_done():
                 await interaction.response.send_message(
-                    "❌ An internal error occurred. Please contact the admin.", ephemeral=True
+                    f"❌ An internal error occurred.\n\n{SUPPORT_LINE}", ephemeral=True
                 )
 
     # Unified error handlers for subcommands. A failed access check is answered
@@ -533,9 +539,13 @@ class EmbedGroup(commands.GroupCog, name="embed", description="Create and edit e
         mark_error_handled(interaction)
         try:
             logger.error(f"Unhandled error in {label}: {error}", exc_info=True)
-            if not interaction.response.is_done():
-                await interaction.response.send_message("❌ Something went wrong. Please try again later.",
-                                                        ephemeral=True)
+            # Answer after a defer too: the tree handler stays quiet for these
+            # commands, so this is the member's only reply.
+            message = f"❌ Something went wrong. Please try again later.\n\n{SUPPORT_LINE}"
+            if interaction.response.is_done():
+                await interaction.followup.send(message, ephemeral=True)
+            else:
+                await interaction.response.send_message(message, ephemeral=True)
         except discord.errors.NotFound:
             pass
         except Exception as inner_e:

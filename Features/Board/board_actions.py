@@ -26,6 +26,8 @@ from typing import Optional, Tuple
 import discord
 
 from storage.log import get_logger
+from Features.interaction_errors import send_unexpected_failure
+from commands.help.help_content import SUPPORT_LINE
 
 logger = get_logger("BoardActions")
 
@@ -198,7 +200,7 @@ async def _handle_role(interaction: discord.Interaction, role_id: str) -> None:
     except discord.HTTPException as e:
         logger.error(f"Board role toggle error: {e}", exc_info=True)
         await interaction.response.send_message(
-            "Something went wrong managing the role.", ephemeral=True
+            f"Something went wrong managing the role.\n\n{SUPPORT_LINE}", ephemeral=True
         )
 
 
@@ -242,13 +244,11 @@ async def dispatch_board_interaction(interaction: discord.Interaction) -> bool:
         logger.warning(f"Board action '{action}' has no handler")
         return False
 
+    # A raw on_interaction listener never reaches a view's on_error, so this is
+    # the only thing between an exception and a bare "This interaction failed".
     try:
         await handler(interaction, target)
     except Exception as e:
-        logger.error(f"Error handling board action '{action}': {e}", exc_info=True)
-        if not interaction.response.is_done():
-            await interaction.response.send_message(
-                "Something went wrong. Please try again.", ephemeral=True
-            )
+        await send_unexpected_failure(interaction, e, f"board action {action!r}")
 
     return True

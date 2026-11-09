@@ -25,7 +25,7 @@ from __future__ import annotations
 import discord
 
 from storage.log import get_logger
-from ..views.base import AdminLayoutBuilder, build_notice_layout
+from ..views.base import AdminLayoutBuilder, build_failure_notice_layout, build_notice_layout
 from ..views.panel_engine import ActionContext, PanelNode
 
 logger = get_logger("PanelFlow")
@@ -83,6 +83,18 @@ class PanelFlow:
                 await interaction.response.send_message(view=view, ephemeral=True)
         except discord.HTTPException as exc:
             logger.warning("Could not deliver %s notice: %s", self.node_key, exc)
+
+    async def _failure_notice(self, interaction: discord.Interaction, title: str, body: str) -> None:
+        """``_notice`` for an UNEXPECTED failure (a write that did not go through):
+        the same notice, ending with the support-server line. Never for a refusal."""
+        view = build_failure_notice_layout(title, body)
+        try:
+            if interaction.response.is_done():
+                await interaction.followup.send(view=view, ephemeral=True)
+            else:
+                await interaction.response.send_message(view=view, ephemeral=True)
+        except discord.HTTPException as exc:
+            logger.warning("Could not deliver %s failure notice: %s", self.node_key, exc)
 
     async def _refresh_then_notice(
         self, interaction: discord.Interaction, title: str, body: str,

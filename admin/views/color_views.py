@@ -19,6 +19,7 @@ import discord
 
 from .base import (
     AdminLayoutBuilder,
+    SupportAwareModal,
     cid,
     create_empty_layout,
     readonly_container,
@@ -42,7 +43,7 @@ TIER_LABELS = {
 
 # ── Modals ─────────────────────────────────────────────────────────────────────
 
-class DefaultColorModal(discord.ui.Modal):
+class DefaultColorModal(SupportAwareModal):
     """Modal to set or change the server default color (one color, always available to all members)."""
 
     color_input = discord.ui.TextInput(
@@ -68,7 +69,7 @@ class DefaultColorModal(discord.ui.Modal):
         await self._callback(interaction, self.color_input.value.strip())
 
 
-class ColorSetCreateModal(discord.ui.Modal, title="Create Color Set"):
+class ColorSetCreateModal(SupportAwareModal, title="Create Color Set"):
     """Modal to create a new color set (name + initial named colors)."""
 
     name_input = discord.ui.TextInput(
@@ -97,7 +98,7 @@ class ColorSetCreateModal(discord.ui.Modal, title="Create Color Set"):
         )
 
 
-class ColorAddModal(discord.ui.Modal, title="Add Colors"):
+class ColorAddModal(SupportAwareModal, title="Add Colors"):
     """Modal to add more named colors to an existing color set."""
 
     colors_input = discord.ui.TextInput(

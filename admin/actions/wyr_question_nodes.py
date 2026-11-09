@@ -137,7 +137,7 @@ class _AddQuestionFlow(PanelFlow):
             ok = await WYRQuestionActions.enable_format(self.guild.id, question_format)
             label = FORMAT_LABELS.get(question_format, question_format)
             if not ok:
-                await self._notice(
+                await self._failure_notice(
                     interaction, "Could not turn that on",
                     f"**{label}** questions could not be turned on. Try the "
                     f"**Question Types** setting instead.",

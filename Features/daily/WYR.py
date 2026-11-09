@@ -34,6 +34,8 @@ from storage.settings.collections import db_manager
 from storage.settings.config_manager import get_config, get_guild_config_manager
 from admin.actions.wyr_question_actions import WYRQuestionActions
 from admin.setup_notice import send_setup_notice
+from Features.interaction_errors import SupportAwareViewMixin
+from commands.help.help_content import SUPPORT_LINE
 
 # Load environment variables
 load_dotenv()
@@ -281,7 +283,8 @@ class WYRCommandGroup(app_commands.Group):
             logger.error(f"Error opening WYR submit for {interaction.user}: {e}", exc_info=True)
             if not interaction.response.is_done():
                 await interaction.response.send_message(
-                    "❌ Something went wrong opening the suggestion box.", ephemeral=True
+                    f"❌ Something went wrong opening the suggestion box.\n\n{SUPPORT_LINE}",
+                    ephemeral=True,
                 )
 
     @app_commands.command(name="stats", description="Check WYR voting statistics for yourself or another user")
@@ -365,7 +368,9 @@ class WYRCommandGroup(app_commands.Group):
 
         except Exception as e:
             logger.error(f"Error retrieving WYR stats for {target_user}: {e}", exc_info=True)
-            await interaction.response.send_message("❌ An error occurred while fetching stats.", ephemeral=True)
+            await interaction.response.send_message(
+                f"❌ An error occurred while fetching stats.\n\n{SUPPORT_LINE}", ephemeral=True
+            )
 
     @app_commands.command(name="notify", description="Get pinged (or stop being pinged) when a new WYR question is posted")
     async def wyr_notify_command(self, interaction: discord.Interaction):
@@ -380,7 +385,8 @@ class WYRCommandGroup(app_commands.Group):
         except Exception as e:
             logger.error(f"Error opening WYR notify settings for {interaction.user}: {e}", exc_info=True)
             await interaction.response.send_message(
-                "❌ An error occurred while checking your notification settings.", ephemeral=True
+                f"❌ An error occurred while checking your notification settings.\n\n{SUPPORT_LINE}",
+                ephemeral=True,
             )
 
     @app_commands.command(name="results", description="Show results for a specific WYR question")
@@ -457,7 +463,9 @@ class WYRCommandGroup(app_commands.Group):
             await interaction.response.send_message("Invalid message ID or message not found.", ephemeral=True)
         except Exception as e:
             logger.error(f"Error fetching WYR results for message {message_id}: {e}", exc_info=True)
-            await interaction.response.send_message("An error occurred while fetching results.", ephemeral=True)
+            await interaction.response.send_message(
+                f"An error occurred while fetching results.\n\n{SUPPORT_LINE}", ephemeral=True
+            )
 
     @app_commands.command(name="leaderboard", description="Show the WYR voting leaderboard")
     @app_commands.describe(limit="Number of users to show in leaderboard (default: 10)")
@@ -520,8 +528,10 @@ class WYRCommandGroup(app_commands.Group):
 
         except Exception as e:
             logger.error(f"Error generating WYR leaderboard: {e}", exc_info=True)
-            await interaction.response.send_message("❌ An error occurred while generating the leaderboard.",
-                                                    ephemeral=True)
+            await interaction.response.send_message(
+                f"❌ An error occurred while generating the leaderboard.\n\n{SUPPORT_LINE}",
+                ephemeral=True,
+            )
 
 
 class WYR(commands.Cog):
@@ -1069,7 +1079,8 @@ class WYR(commands.Cog):
             )
             if not submission:
                 await interaction.response.send_message(
-                    "❌ Could not save your suggestion. Please try again.", ephemeral=True
+                    f"❌ Could not save your suggestion. Please try again.\n\n{SUPPORT_LINE}",
+                    ephemeral=True,
                 )
                 return
 
@@ -1102,7 +1113,8 @@ class WYR(commands.Cog):
                          exc_info=True)
             if not interaction.response.is_done():
                 await interaction.response.send_message(
-                    "❌ Something went wrong sending your suggestion.", ephemeral=True
+                    f"❌ Something went wrong sending your suggestion.\n\n{SUPPORT_LINE}",
+                    ephemeral=True,
                 )
 
     async def _post_submission_for_review(self, submission, guild_id, settings) -> bool:
@@ -1258,7 +1270,8 @@ class WYR(commands.Cog):
                 # Put it back in the queue rather than stranding it as claimed.
                 await wyr_submissions.release_claim(submission_id)
                 await interaction.response.send_message(
-                    "❌ Could not add that question. It has been put back in the queue.",
+                    "❌ Could not add that question. It has been put back in the queue."
+                    f"\n\n{SUPPORT_LINE}",
                     ephemeral=True,
                 )
                 return
@@ -1293,7 +1306,8 @@ class WYR(commands.Cog):
             await wyr_submissions.release_claim(submission_id)
             if not interaction.response.is_done():
                 await interaction.response.send_message(
-                    "❌ Something went wrong. The suggestion is back in the queue.",
+                    "❌ Something went wrong. The suggestion is back in the queue."
+                    f"\n\n{SUPPORT_LINE}",
                     ephemeral=True,
                 )
 
@@ -2032,7 +2046,7 @@ class WYR(commands.Cog):
             )
 
 
-class OpenQuestionView(discord.ui.View):
+class OpenQuestionView(SupportAwareViewMixin, discord.ui.View):
     """Persistent view for an open-ended question - discussion only.
 
     Deliberately NOT registered with ``bot.add_view``: its only component is
@@ -2045,7 +2059,7 @@ class OpenQuestionView(discord.ui.View):
         self.add_item(wyr_notify.NotifyButton())
 
 
-class WYRView(discord.ui.View):
+class WYRView(SupportAwareViewMixin, discord.ui.View):
     def __init__(self, question_id=None, cog=None, has_option3=False, option_count=None):
         super().__init__(timeout=None)
         self.question_id = question_id
@@ -2198,7 +2212,9 @@ class WYRView(discord.ui.View):
 
         except Exception as e:
             logger.error(f"Error showing results: {e}", exc_info=True)
-            await interaction.response.send_message("❌ An error occurred while fetching results.", ephemeral=True)
+            await interaction.response.send_message(
+                f"❌ An error occurred while fetching results.\n\n{SUPPORT_LINE}", ephemeral=True
+            )
 
     async def handle_vote(self, interaction: discord.Interaction, option):
         try:
@@ -2256,7 +2272,7 @@ class WYRView(discord.ui.View):
             logger.error(f"Error handling vote from {interaction.user} (ID: {interaction.user.id}): {e}", exc_info=True)
             try:
                 await interaction.response.send_message(
-                    "❌ There was an error recording your vote. Please try again.",
+                    f"❌ There was an error recording your vote. Please try again.\n\n{SUPPORT_LINE}",
                     ephemeral=True
                 )
             except:

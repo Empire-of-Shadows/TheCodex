@@ -1,5 +1,54 @@
 # Changelog
 
+## [Unreleased] - 2026-11-07 (help when something breaks)
+
+### Changed
+- **When something breaks, the bot tells you where to report it.** An error that is not
+  your fault now ends with a link to TheCodex's own support server. Joining through it gives
+  you TheCodex's role there, so the team knows which bot you mean. Ordinary "you can't do
+  that" answers, like a missing permission or a cooldown, do not carry the link.
+- **The support server link in the README works again.** The old shared invite had expired.
+
+### Fixed
+- **Buttons, menus and forms no longer end in Discord's bare "This interaction failed".**
+  If something goes wrong behind a button on the guide, the info board, the welcome message,
+  a suggestion, a daily question or the admin panel, you get a short private message saying
+  it did not go through.
+- **/whitelist answers when it fails.** An unexpected error used to leave the admin with no
+  reply at all.
+- **/embed and /suggest answer when they fail after a short wait,** instead of going quiet.
+- **A command you are not allowed to use answers once,** not twice.
+- **Editing an embed where the bot is missing permission says so,** instead of a generic
+  failure message.
+- **Exporting suggestions from the admin panel no longer says there is nothing to export
+  when the export actually failed.**
+- **Error messages no longer show technical error text.** The whitelist, posting the info
+  board and the panel's test greeting showed the raw error; they now give a plain message.
+- **The admin panel's Test Greeting tells you when the greeting was not posted,** instead of
+  saying it was sent. If the cause is something you can fix, like a missing channel
+  permission, it says what to fix.
+- **The bot is slash commands only.** A hidden owner-only text command for reloading the
+  bot's features was removed.
+
+## [Unreleased] - 2026-09-26 (help text)
+
+### Fixed
+- **The dashboard's "add the bot" button asks for exactly the permissions the bot needs.**
+  It now uses the bot's own install settings from Discord: it no longer asks for Add Reactions or Manage Messages, which the bot never used.
+- **The help page says who can use the admin tools.** It said Manage Server was required;
+  a role your server named as a panel admin role works too.
+- **The help overview no longer promises booster perks.** Boosts are logged; what is handed
+  out automatically is the server tag role, for members who wear the tag.
+
+## [Unreleased] - 2026-09-21 (back link returns where you came from)
+
+### Changed
+- **The back link on the dashboard's admin pages now takes you back to where you came
+  from.** Open Settings, Change history or the Builder from a server's overview and the link
+  reads "Overview" and returns you to that server's overview, even after moving between the
+  admin tabs or leaving the Builder with its Back button. Open them from Manage and it still
+  returns you to your servers.
+
 ## [Unreleased] - 2026-09-13 (fixes from a full check of the bot)
 
 ### Fixed

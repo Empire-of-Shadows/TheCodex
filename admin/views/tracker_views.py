@@ -10,7 +10,7 @@ from typing import Callable, Awaitable, Dict, Any, List
 
 from Features.trackers.boosts.boost_tracker import as_utc, boost_level_label, format_duration
 
-from .base import AdminLayoutBuilder, cid, readonly_container, editable_container
+from .base import AdminLayoutBuilder, SupportAwareModal, cid, readonly_container, editable_container
 
 # TextDisplay caps at 4000 characters and the panel header eats some of that, so the
 # boosters display stops adding rows once the body reaches this length.
@@ -117,7 +117,7 @@ def build_tag_tracker_settings_view(
     return builder.build()
 
 
-class TagTrackerServerTagModal(discord.ui.Modal, title="Server Tag"):
+class TagTrackerServerTagModal(SupportAwareModal, title="Server Tag"):
     """Modal for entering the Discord server tag string."""
 
     tag_input = discord.ui.TextInput(

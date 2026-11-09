@@ -1,5 +1,6 @@
 import { NavLink } from "react-router-dom";
 import type { PanelRole } from "../api/types";
+import { fromOverview } from "./AdminNav";
 
 function navClass({ isActive }: { isActive: boolean }) {
   return "nav-button" + (isActive ? " active" : "");
@@ -42,7 +43,7 @@ export default function GuildNav({
       <NavLink to="/me" end className="nav-button">&larr; Servers</NavLink>
       <NavLink to={`/me/guilds/${guildId}/overview`} className={navClass}>Overview</NavLink>
       {canSeeSettings && (
-        <NavLink to={`/settings/guilds/${guildId}/settings`} end className={navClass}>
+        <NavLink to={fromOverview(`/settings/guilds/${guildId}/settings`)} end className={navClass}>
           Settings
         </NavLink>
       )}

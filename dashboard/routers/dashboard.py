@@ -158,29 +158,13 @@ async def bot_invite_url():
     if not bot_id:
         return {"url": None}
 
-    # Least-privilege invite - the specific permissions TheCodex uses, NOT
-    # Administrator (8). Covers posting messages/embeds, managing its own
-    # discussion threads, managing the whitelist/tag/guide roles, and kicking
-    # under-age accounts.
-    permissions = (
-        (1 << 10)    # View Channels
-        | (1 << 11)  # Send Messages
-        | (1 << 6)   # Add Reactions
-        | (1 << 13)  # Manage Messages (thread cleanup, embed clone)
-        | (1 << 14)  # Embed Links
-        | (1 << 16)  # Read Message History
-        | (1 << 34)  # Manage Threads
-        | (1 << 35)  # Create Public Threads
-        | (1 << 38)  # Send Messages in Threads
-        | (1 << 28)  # Manage Roles (whitelist / tag / guide role toggles)
-        | (1 << 1)   # Kick Members (auto-kick under-age accounts)
-    )
-    url = (
-        f"https://discord.com/oauth2/authorize"
-        f"?client_id={bot_id}"
-        f"&permissions={permissions}"
-        f"&scope=bot%20applications.commands"
-    )
+    # Bare install link: scopes and the permission set come from the app's Default
+    # Install Settings in the Discord Developer Portal, so the portal is the one place
+    # they are set and nothing here can drift from it. Portal set (verified 2026-09-26):
+    # 326686067714 - View Channel, Send Messages, Send Messages in Threads, Embed Links,
+    # Attach Files, Read Message History, Create Public Threads, Manage Threads,
+    # Manage Roles, Kick Members.
+    url = f"https://discord.com/oauth2/authorize?client_id={bot_id}"
     return {"url": url}
 
 

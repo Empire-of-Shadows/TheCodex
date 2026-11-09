@@ -18,6 +18,19 @@ import discord
 
 DASHBOARD_URL = "https://codex.eosofficial.club"
 
+# This bot's own invite into the Empires Support server. Joining through it gives
+# the member the TheCodex role, so staff know which bot the question is about.
+# The admin engine reads it through admin/settings/bindings.py
+# (SUPPORT_INVITE_URL); the dashboard keeps a copy in dashboard/frontend/src/links.ts.
+SUPPORT_INVITE_URL = "https://discord.gg/pex4AKTbFV"
+
+# The line every UNEXPECTED failure ends with (a crash or exception path, never an
+# expected refusal). Same wording as the admin engine's SUPPORT_LINE_TEMPLATE in
+# admin/views/base.py; the <url> form stops Discord unfurling an invite card.
+SUPPORT_LINE = (
+    f"If this keeps happening, report it in the [support server](<{SUPPORT_INVITE_URL}>)."
+)
+
 
 @dataclass(frozen=True)
 class HelpCategory:
@@ -53,8 +66,8 @@ OVERVIEW = HelpCategory(
         "greeting message\n"
         "\N{BULLET} Posts in the announcement channel get a discussion thread opened "
         "under them\n"
-        "\N{BULLET} Server boosts and the server tag are tracked, and boosters keep "
-        "their perks automatically\n"
+        "\N{BULLET} Server boosts are logged, and members who wear the server tag "
+        "get its role automatically\n"
         "\n"
         "**Using this help**\n"
         "Pick a category from the dropdown below. Commands with [brackets] have "
@@ -245,7 +258,7 @@ ADMIN = HelpCategory(
     accent=discord.Color.red().value,
     thumbnail=None,
     admin_only=True,
-    blurb="Configuration and staff tools. Manage Server permission required.",
+    blurb="Configuration and staff tools. Needs Manage Server or a panel admin role.",
     body=(
         "**`/admin panel`**\n"
         "The full configuration panel: role access, embed settings, Would You "

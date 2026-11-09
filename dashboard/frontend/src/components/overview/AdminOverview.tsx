@@ -32,6 +32,7 @@ import {
   formatRunway,
   formatShortDate,
 } from "../../_engine/format";
+import { fromOverview } from "../AdminNav";
 import { formatQuestionKind, orderedStatuses, statusColour } from "./format";
 
 /*
@@ -43,24 +44,27 @@ import { formatQuestionKind, orderedStatuses, statusColour } from "./format";
  * handed the settings builder through its documented `settingsHref` prop for
  * the same reason - the engine component is vendored and cannot be taught this
  * bot's shape.
+ *
+ * Every one is marked as coming from the overview, so the admin pages' back
+ * link returns here.
  */
 
 /** One server's settings page, optionally opened on a named section. */
 function settingsHref(guildId: string, section?: string): string {
   const base = `/settings/guilds/${guildId}/settings`;
-  return section ? `${base}?s=${encodeURIComponent(section)}` : base;
+  return fromOverview(section ? `${base}?s=${encodeURIComponent(section)}` : base);
 }
 
 /** One server's change history, a sibling of its settings page. */
 function auditLogHref(guildId: string): string {
-  return `/settings/guilds/${guildId}/audit-log`;
+  return fromOverview(`/settings/guilds/${guildId}/audit-log`);
 }
 
 /** One server's component builder. Guide, board and greeting are modes of the
  *  one page rather than routes of their own, so the mode rides in the query. */
 function builderHref(guildId: string, mode?: "board" | "greeting"): string {
   const base = `/settings/guilds/${guildId}/builder`;
-  return mode ? `${base}?mode=${mode}` : base;
+  return fromOverview(mode ? `${base}?mode=${mode}` : base);
 }
 
 /** The admin home. Every section of the payload can be null on its own. */

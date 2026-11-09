@@ -110,7 +110,7 @@ class _DropsChannelFlow(PanelFlow):
 
         old = (await DropsActions.get_drops_settings(self.guild.id)).get("drops_channel_id")
         if not await DropsActions.set_drops_channel(self.guild.id, channel_id):
-            await self._notice(interaction, "Failed to Save", "Could not save that channel.")
+            await self._failure_notice(interaction, "Failed to Save", "Could not save that channel.")
             return
         await self._after_write(interaction, "set", old, channel_id)
         await self._render(interaction, await self._layout())
@@ -135,7 +135,7 @@ class _DropsChannelFlow(PanelFlow):
             return
 
         if not await DropsActions.set_enabled(self.guild.id, not enabled):
-            await self._notice(
+            await self._failure_notice(
                 interaction, "Failed to Save", "Could not change the Updates & Drops setting.",
             )
             return
@@ -233,7 +233,7 @@ class _DropsTrackerFlow(PanelFlow):
         settings = await DropsActions.get_drops_settings(self.guild.id)
         old = (settings.get("drops_tracker_channels") or {}).get(category)
         if not await DropsActions.set_tracker_channel(self.guild.id, category, channel_id):
-            await self._notice(interaction, "Failed to Save", f"Could not set the {category} channel.")
+            await self._failure_notice(interaction, "Failed to Save", f"Could not set the {category} channel.")
             return
         await self._after_write(interaction, "set", f"{category}:{old}", f"{category}:{channel_id}")
         await self._render(interaction, await self._layout())
@@ -259,7 +259,7 @@ class _DropsTrackerFlow(PanelFlow):
             return
 
         if not await DropsActions.remove_tracker_channel(self.guild.id, category):
-            await self._notice(
+            await self._failure_notice(
                 interaction, "Failed to Save", f"Could not clear the {category} channel.",
             )
             return

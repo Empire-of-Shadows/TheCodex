@@ -159,8 +159,16 @@ style is the part that needs judgment:
 ## Non-obvious conventions
 
 - Slash commands and Components v2 only. `startup/bot.py` builds the bot with
-  `when_mentioned`, so there is no text prefix; `load_cogs` survives only as a mention-only
-  owner command.
+  `when_mentioned` (a mention is the guide's trigger), but there are no text commands at all:
+  the owner-only `load_cogs` mention command was removed 2026-11-08. `load_cogs()` survives
+  as the plain startup loader `Codex.py` calls.
+- Support links: every UNEXPECTED failure a member sees ends with the support line pointing at
+  this bot's own invite into the Empires Support server (`SUPPORT_INVITE_URL` /
+  `SUPPORT_LINE` in `commands/help/help_content.py`, the one Python home of the URL; the admin
+  engine reads it through `admin/settings/bindings.py`). Expected refusals never carry it.
+  Bot-owned Views/Modals take the mixins in `Features/interaction_errors.py`; raw
+  `on_interaction` dispatchers (guide, board, greeting) must call `send_unexpected_failure`
+  themselves, because no view `on_error` ever runs for them. (Added 2026-11-08.)
 - Health endpoint `:50010`, dashboard `:54010`, shared external `obsidian_grid` Docker network.
 - Codex's per-feature logic lives in `Features/` and `commands/`. There is no
   `storage/bot_specific/codex/` - unlike relay, whose feature code is master-owned under

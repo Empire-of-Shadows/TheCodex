@@ -7,6 +7,8 @@ import discord
 from Features.ce_utilities.helpers.embed_confirm import EmbedConfirmView, PREVIEW_TEXT
 from Features.ce_utilities.helpers.embed_config_loader import EMBED_FEATURES
 from storage.log import get_logger, log_context, log_performance
+from Features.interaction_errors import SupportAwareModalMixin
+from commands.help.help_content import SUPPORT_LINE
 
 if TYPE_CHECKING:
     from Features.ce_utilities.helpers.embed_config_loader import EmbedConfigLoader
@@ -162,7 +164,7 @@ def _parse_color_to_int(color_str: str) -> Optional[int]:
         return None
 
 
-class EmbedModal(discord.ui.Modal):
+class EmbedModal(SupportAwareModalMixin, discord.ui.Modal):
     def __init__(self, guild_id: int, max_length: int, user_roles: Set[int],
                  allowed_features: Optional[Set[str]] = None,
                  default_color: Optional[int] = None,
@@ -399,12 +401,16 @@ class EmbedModal(discord.ui.Modal):
                                                 "❌ I don't have permission to send embeds in this channel.")
             except discord.HTTPException as e:
                 logger.error(f"Discord API error during embed submission by {interaction.user}: HTTP {e.status} - {e.text}", exc_info=True)
-                await self._send_error_response(interaction, "❌ Failed to send embed due to Discord API error.")
+                await self._send_error_response(
+                    interaction, f"❌ Failed to send embed due to Discord API error.\n\n{SUPPORT_LINE}"
+                )
 
             except Exception as e:
                 logger.exception(f"Unexpected error during embed submission by {interaction.user}: {e}")
-                await self._send_error_response(interaction,
-                                                "❌ An unexpected error occurred while processing your request.")
+                await self._send_error_response(
+                    interaction,
+                    f"❌ An unexpected error occurred while processing your request.\n\n{SUPPORT_LINE}",
+                )
 
     async def _send_error_response(self, interaction: discord.Interaction, message: str):
         """Helper method to send error responses, handling both cases where response is done or not."""

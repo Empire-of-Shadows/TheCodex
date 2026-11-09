@@ -190,7 +190,7 @@ class _ColorTiersFlow(PanelFlow):
 
             old = await ColorSetActions.get_default_color(self.guild.id)
             if not await ColorSetActions.set_default_color(self.guild.id, color):
-                await self._notice(
+                await self._failure_notice(
                     interaction, "Failed to Save", "Could not save the default color.",
                 )
                 return
@@ -283,7 +283,7 @@ class _ColorTiersFlow(PanelFlow):
 
         previous = await EmbedConfigActions.get_free_color_access(self.guild.id)
         if not await EmbedConfigActions.set_free_color_access(self.guild.id, enabled):
-            await self._notice(
+            await self._failure_notice(
                 interaction, "Failed to Save",
                 "Could not change free color access. Please try again.",
             )
@@ -317,7 +317,7 @@ class _ColorTiersFlow(PanelFlow):
 
         set_id = await ColorSetActions.create_color_set(self.guild.id, name, "", colors)
         if not set_id:
-            await self._notice(interaction, "Failed to Save", f"Could not create **{name}**.")
+            await self._failure_notice(interaction, "Failed to Save", f"Could not create **{name}**.")
             return
         await self._after_write(interaction, "create", None, f"{name} ({len(colors)} colors)")
 
@@ -418,7 +418,7 @@ class _ColorTiersFlow(PanelFlow):
         if not await ColorSetActions.update_color_set_colors(
             self.guild.id, self.set_id, existing + added,
         ):
-            await self._notice(interaction, "Failed to Save", "Could not add those colors.")
+            await self._failure_notice(interaction, "Failed to Save", "Could not add those colors.")
             return
         await self._after_write(interaction, "update", len(existing), len(existing) + len(added))
 
@@ -470,7 +470,7 @@ class _ColorTiersFlow(PanelFlow):
         if not await ColorSetActions.update_color_set_colors(
             self.guild.id, self.set_id, remaining,
         ):
-            await self._notice(interaction, "Failed to Save", "Could not remove that color.")
+            await self._failure_notice(interaction, "Failed to Save", "Could not remove that color.")
             return
         await self._after_write(
             interaction, "remove",
@@ -497,7 +497,7 @@ class _ColorTiersFlow(PanelFlow):
         if not await ColorSetActions.delete_assignment(
             self.guild.id, self.set_id, match["target_type"], match["target_id"],
         ):
-            await self._notice(
+            await self._failure_notice(
                 interaction, "Failed to Save", "Could not remove that assignment.",
             )
             return
@@ -526,7 +526,7 @@ class _ColorTiersFlow(PanelFlow):
         if not await ColorSetActions.upsert_assignment(
             self.guild.id, self.set_id, "role", str(role_id),
         ):
-            await self._notice(
+            await self._failure_notice(
                 interaction, "Failed to Save", "Could not assign that role.",
             )
             return
@@ -564,7 +564,7 @@ class _ColorTiersFlow(PanelFlow):
         if not await ColorSetActions.upsert_assignment(
             self.guild.id, self.set_id, "tier", tier,
         ):
-            await self._notice(
+            await self._failure_notice(
                 interaction, "Failed to Save", "Could not assign that tier.",
             )
             return
@@ -595,7 +595,7 @@ class _ColorTiersFlow(PanelFlow):
 
         name = color_set["name"]
         if not await ColorSetActions.delete_color_set(self.guild.id, self.set_id):
-            await self._notice(interaction, "Failed to Delete", f"Could not delete **{name}**.")
+            await self._failure_notice(interaction, "Failed to Delete", f"Could not delete **{name}**.")
             return
         await self._after_write(interaction, "delete", name, None)
         await self._show_menu(interaction)

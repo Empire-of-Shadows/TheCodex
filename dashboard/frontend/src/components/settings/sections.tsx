@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useAdminHref } from "../AdminNav";
 import type {
   AnnouncementSection,
   BoostSection,
@@ -329,6 +330,7 @@ export function NewMembersSectionForm({
   roles: Role[];
   onChange: (v: NewMembersSection) => void;
 }) {
+  const adminHref = useAdminHref();
   return (
     <>
       <Fieldset title="Screening">
@@ -372,7 +374,7 @@ export function NewMembersSectionForm({
         </FRow>
         <p className="muted" style={{ margin: 0 }}>
           What the greeting actually says is put together in the{" "}
-          <Link to={`/settings/guilds/${guildId}/builder?mode=greeting`}>builder</Link>.
+          <Link to={adminHref(`/settings/guilds/${guildId}/builder?mode=greeting`)}>builder</Link>.
         </p>
       </Fieldset>
 
@@ -662,6 +664,7 @@ export function GuideSectionForm({
   channels: Channel[];
   onChange: (v: GuideSection) => void;
 }) {
+  const adminHref = useAdminHref();
   return (
     <Fieldset title="Guide">
       <FRow>
@@ -681,9 +684,9 @@ export function GuideSectionForm({
       </FRow>
       <p className="muted" style={{ margin: 0 }}>
         Guide content (pages, components) is managed in the{" "}
-        <Link to={`/settings/guilds/${guildId}/builder`}>builder</Link>. The info board, the
-        posted message with buttons that open private answers, is built{" "}
-        <Link to={`/settings/guilds/${guildId}/builder?mode=board`}>there too</Link>.
+        <Link to={adminHref(`/settings/guilds/${guildId}/builder`)}>builder</Link>. The info
+        board, the posted message with buttons that open private answers, is built{" "}
+        <Link to={adminHref(`/settings/guilds/${guildId}/builder?mode=board`)}>there too</Link>.
       </p>
     </Fieldset>
   );

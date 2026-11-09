@@ -406,6 +406,29 @@ class DiscordApiCache:
         roles.sort(key=lambda r: r["position"])
         return roles
 
+    async def guild_roles_all(self, guild_id: str) -> List[dict]:
+        """Every role except @everyone, managed ones INCLUDED, sorted by position.
+
+        For pickers that name a role a member already holds rather than one the bot
+        hands out - a reward paid to whoever has Server Booster, say. ``guild_roles``
+        drops managed roles because the bot cannot assign them; here that is not the
+        question. Each entry carries ``managed`` so the page can say which is which.
+        Empty list on failure."""
+        raw = await self._guild_roles_raw(guild_id)
+        roles = [
+            {
+                "id": r["id"],
+                "name": r["name"],
+                "color": r["color"],
+                "position": r["position"],
+                "managed": r["managed"],
+            }
+            for r in raw
+            if str(r["id"]) != str(guild_id)
+        ]
+        roles.sort(key=lambda r: r["position"])
+        return roles
+
     async def guild_role(self, guild_id: str, role_id: str) -> Optional[dict]:
         """One role with ``managed``/``mentionable``/``permissions``, or None when it is
         not in the guild or the roles could not be fetched."""

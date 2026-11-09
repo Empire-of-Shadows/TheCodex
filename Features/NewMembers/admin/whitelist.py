@@ -10,6 +10,12 @@ from storage.settings.config_manager import get_config
 from admin.setup_notice import permission_notice_embed
 from admin.actions.whitelist_nodes import WhitelistPanelActions
 from Features.error_handler import mark_error_handled
+from Features.interaction_errors import (
+    SupportAwareModalMixin,
+    SupportAwareViewMixin,
+    send_unexpected_failure,
+)
+from commands.help.help_content import SUPPORT_LINE
 
 logger = get_logger("WhitelistManager")
 
@@ -46,7 +52,7 @@ def has_whitelist_admin_app():
     return app_commands.check(predicate)
 
 
-class WhitelistReasonModal(discord.ui.Modal, title="Whitelist Member"):
+class WhitelistReasonModal(SupportAwareModalMixin, discord.ui.Modal, title="Whitelist Member"):
     """Modal for collecting the reason for whitelisting a member.
 
     Opened from the ``/whitelist`` state card, for a first-time add and for a
@@ -113,7 +119,7 @@ class WhitelistReasonModal(discord.ui.Modal, title="Whitelist Member"):
         await interaction.followup.send(embed=embed, ephemeral=True)
 
 
-class WhitelistStateCard(discord.ui.LayoutView):
+class WhitelistStateCard(SupportAwareViewMixin, discord.ui.LayoutView):
     """The one screen behind ``/whitelist``.
 
     It answers "where does this person stand with the screening whitelist?" and
@@ -570,21 +576,30 @@ class WhitelistGroup(commands.Cog):
         The whitelist command is admin-tier, so the notice names the Panel
         Access role and where it is granted. One command now both reads the
         state and changes it, so the wording covers both.
-        """
-        if not isinstance(error, app_commands.CheckFailure):
-            raise error
 
+        Any other error is answered here too. It used to be re-raised, but an
+        exception out of a cog handler stops discord.py before ``tree.on_error``
+        runs, so the admin got no reply at all. This handler must answer on every
+        path and never raise: the tree handler stays quiet for any command that
+        has a local handler.
+        """
         mark_error_handled(interaction)
-        embed = await permission_notice_embed(
-            interaction.guild,
-            action="view or change the screening whitelist",
-        )
+        if not isinstance(error, app_commands.CheckFailure):
+            await send_unexpected_failure(
+                interaction, getattr(error, "original", error), "/whitelist"
+            )
+            return
+
         try:
+            embed = await permission_notice_embed(
+                interaction.guild,
+                action="view or change the screening whitelist",
+            )
             if interaction.response.is_done():
                 await interaction.followup.send(embed=embed, ephemeral=True)
             else:
                 await interaction.response.send_message(embed=embed, ephemeral=True)
-        except discord.HTTPException as e:
+        except Exception as e:
             logger.debug(f"Could not deliver whitelist permission notice: {e}")
 
     async def _ensure_whitelist_role(self, guild: discord.Guild) -> discord.Role:
@@ -784,9 +799,10 @@ class WhitelistGroup(commands.Cog):
 
         except Exception as e:
             logger.error(f"Error adding to whitelist: {e}", exc_info=True)
+            # The exception text stays in the log; the admin gets a plain reason.
             return {
                 'success': False,
-                'message': f"An error occurred: {str(e)}"
+                'message': f"An error occurred while updating the whitelist. Please try again.\n\n{SUPPORT_LINE}"
             }
 
     async def _assign_role_if_new(self, interaction: discord.Interaction, guild: discord.Guild,
@@ -866,7 +882,11 @@ class WhitelistGroup(commands.Cog):
             logger.error(f"Error opening the whitelist card: {e}", exc_info=True)
             embed = discord.Embed(
                 title="❌ Error",
-                description=f"An error occurred: {str(e)}",
+                # The exception text stays in the log; the admin gets a plain reason.
+                description=(
+                    "An error occurred while opening the whitelist card. Please try again."
+                    f"\n\n{SUPPORT_LINE}"
+                ),
                 color=discord.Color.red()
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)

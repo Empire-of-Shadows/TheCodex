@@ -4,9 +4,10 @@ Startup sync seam for TheCodex (bot-owned, NOT vendored).
 The generic cog-loading machinery (discovery, priority/parallel loading, attribute
 attachment, command-table logging) lives in the vendored runtime engine at
 ``startup/loader.py``. This file supplies only what is Codex-specific: the cog
-discovery roots, the owner-only ``load_cogs`` reload command, and
+discovery roots, the quiet handler for mention-prefix text, and
 ``attach_databases()`` (which managers exist and how they wire onto the bot).
-``Codex.py`` keeps importing ``load_cogs`` / ``attach_databases`` /
+There are no prefix commands: the owner-only ``load_cogs`` mention command was
+removed 2026-11-08 (fleet rule: slash commands only). ``Codex.py`` keeps importing ``load_cogs`` / ``attach_databases`` /
 ``log_all_commands`` from here.
 """
 
@@ -34,15 +35,6 @@ async def load_cogs():
     await _engine_load_cogs(bot, COG_DIRECTORIES, PRIORITY_COG_DIRECTORIES)
 
 
-@bot.command(name="load_cogs", help="Loads all cogs in the COG_DIRECTORIES list.")
-@commands.is_owner()
-async def load_cogs_command(ctx):
-    """Owner-only runtime cog (re)load."""
-    await ctx.send("Loading cogs...")
-    await load_cogs()
-    await ctx.send("Cogs loaded successfully.")
-
-
 async def on_command_error(ctx: commands.Context, error: commands.CommandError):
     """Quiet handler for the mention-prefix text command surface.
 
@@ -52,9 +44,6 @@ async def on_command_error(ctx: commands.Context, error: commands.CommandError):
     library default logged each one as an error with a traceback.
     """
     if isinstance(error, commands.CommandNotFound):
-        return
-    if isinstance(error, commands.NotOwner):
-        logger.warning(f"{ctx.author} ({ctx.author.id}) tried the owner-only command {ctx.invoked_with!r}")
         return
     logger.error(f"Text command {ctx.invoked_with!r} failed: {error}", exc_info=error)
 

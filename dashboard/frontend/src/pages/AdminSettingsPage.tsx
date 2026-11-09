@@ -10,7 +10,7 @@ import type {
   SettingsResponse,
   SettingsSection,
 } from "../api/types";
-import AdminNav from "../components/AdminNav";
+import AdminNav, { useAdminHref } from "../components/AdminNav";
 import AppHeader from "../components/AppHeader";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { formatError } from "../_engine/api/formatError";
@@ -262,6 +262,7 @@ function railBadge(slug: Slug, d: GuildSettings): Badge {
 export default function AdminSettingsPage() {
   const { guildId = "" } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
+  const adminHref = useAdminHref();
   const [resp, setResp] = useState<SettingsResponse | null>(null);
   const [draft, setDraft] = useState<GuildSettings | null>(null);
   const [channels, setChannels] = useState<Channel[]>([]);
@@ -494,7 +495,7 @@ export default function AdminSettingsPage() {
                     {showAudit && (
                       <Link
                         className="set-rail__item"
-                        to={`/settings/guilds/${guildId}/audit-log`}
+                        to={adminHref(`/settings/guilds/${guildId}/audit-log`)}
                       >
                         <span>Change history</span>
                       </Link>

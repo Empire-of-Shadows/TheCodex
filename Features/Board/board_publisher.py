@@ -19,6 +19,7 @@ from Features.Board.board_renderer import BoardRenderer
 from Features.Board.board_schema import validate_board_schema
 from Features.Board.board_store import board_store
 from storage.log import get_logger
+from commands.help.help_content import SUPPORT_LINE
 
 logger = get_logger("BoardPublisher")
 
@@ -149,7 +150,11 @@ async def publish(
         )
     except discord.HTTPException as e:
         logger.error(f"Failed to publish board for guild {guild.id}: {e}", exc_info=True)
-        return PublishResult(ok=False, error=f"Discord rejected the board message: {e}")
+        # The raw Discord error text stays in the log; the admin sees the status.
+        return PublishResult(
+            ok=False,
+            error=f"Discord rejected the board message ({e.status}).\n\n{SUPPORT_LINE}",
+        )
 
     await board_store.set_posted_message(guild.id, target.id, message.id)
     logger.info(

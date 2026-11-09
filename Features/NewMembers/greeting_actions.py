@@ -314,11 +314,12 @@ async def dispatch_greeting_action(interaction) -> bool:
         logger.warning(f"Action '{action_name}' is registered but has no handler")
         return False
 
+    # A raw on_interaction listener never reaches a view's on_error, so this is
+    # the only thing between an exception and a bare "This interaction failed".
     try:
         await handler(interaction, params)
     except Exception as e:
-        logger.error(f"Error handling greeting action '{action_name}': {e}", exc_info=True)
-        if not interaction.response.is_done():
-            await interaction.response.send_message("Something went wrong. Please try again.", ephemeral=True)
+        from Features.interaction_errors import send_unexpected_failure
+        await send_unexpected_failure(interaction, e, f"greeting action {action_name!r}")
 
     return True

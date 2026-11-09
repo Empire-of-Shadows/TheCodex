@@ -23,11 +23,13 @@ import discord
 from discord import app_commands
 
 from storage.log import get_logger
+from Features.interaction_errors import SupportAwareViewMixin
+from commands.help.help_content import SUPPORT_LINE
 
 logger = get_logger("CloneEmbed")
 
 
-class _CloneDestinationView(discord.ui.View):
+class _CloneDestinationView(SupportAwareViewMixin, discord.ui.View):
     """Ephemeral picker: choose where the cloned embed(s) should be posted."""
 
     def __init__(self, embeds: list[discord.Embed], source_message_id: int):
@@ -70,7 +72,7 @@ class _CloneDestinationView(discord.ui.View):
         except discord.HTTPException as e:
             logger.error(f"Failed to clone embed(s) for {interaction.user}: {e}", exc_info=True)
             await interaction.response.edit_message(
-                content="Couldn't clone the embed(s). Please try again.", view=None,
+                content=f"Couldn't clone the embed(s). Please try again.\n\n{SUPPORT_LINE}", view=None,
             )
             self.stop()
             return

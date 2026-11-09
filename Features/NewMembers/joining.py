@@ -559,19 +559,26 @@ class GuildEventHandler:
             except Exception as e:
                 self.logger.error(f"Error sending greeting message: {e}\n")
 
-    async def send_greeting_message(self, member: discord.Member, avatar_url: str = None):
-        """Send enhanced greeting message using Discord components v2 through discord.py"""
+    async def send_greeting_message(self, member: discord.Member, avatar_url: str = None) -> bool:
+        """Send enhanced greeting message using Discord components v2 through discord.py
+
+        Returns True only when the greeting was actually posted, False on every
+        path that logs and skips (no channel, channel gone, no greeting saved,
+        Discord refusing the send). The member-join callers ignore the result; the
+        panel's Test Greeting reads it, so it no longer reports a send that never
+        happened.
+        """
         # Get guild config for channel IDs
         guild_config = await get_config(member.guild.id)
 
         if not guild_config.new_members["greeting_channel_id"]:
             self.logger.warning(f"Greeting channel not configured for guild {member.guild.name} ({member.guild.id})")
-            return
+            return False
 
         channel = member.guild.get_channel(guild_config.new_members["greeting_channel_id"])
         if not channel:
             self.logger.error(f"Greeting channel {guild_config.new_members['greeting_channel_id']} not found in guild {member.guild.name}")
-            return
+            return False
 
         # Store guild_id for URL building
         guild_id = member.guild.id
@@ -590,7 +597,7 @@ class GuildEventHandler:
                 self.logger.warning(
                     f"[GREETING] No greeting_components configured for guild {member.guild.id} - skipping greeting message for {member}"
                 )
-                return
+                return False
 
             from Features.NewMembers.greeting_renderer import GreetingRenderer
             layout_view = GreetingRenderer.render(
@@ -599,9 +606,11 @@ class GuildEventHandler:
             await channel.send(view=layout_view)
 
             self.logger.info(f"\n{s}[GREETING] Successfully sent greeting message for {member}\n")
+            return True
 
         except Exception as e:
             self.logger.error(f"Error sending Components v2 greeting message: {e}", exc_info=True)
+            return False
 
     async def handle_interaction(self, interaction: discord.Interaction):
         """Handle component interactions - routes to greeting or guide dispatchers."""

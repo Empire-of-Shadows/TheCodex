@@ -28,6 +28,8 @@ from typing import Awaitable, Callable, Optional
 import discord
 
 from storage.log import get_logger
+from Features.interaction_errors import SupportAwareViewMixin
+from commands.help.help_content import SUPPORT_LINE
 
 logger = get_logger("EmbedConfirm", level=logging.INFO)
 
@@ -40,7 +42,7 @@ PREVIEW_TEXT = "Here is your embed. Adjust it below, then press Post."
 _PLACEHOLDER_OPTION_VALUE = "__pick_a_set__"
 
 
-class EmbedConfirmView(discord.ui.View):
+class EmbedConfirmView(SupportAwareViewMixin, discord.ui.View):
     """Live preview plus the final controls for a member-built embed."""
 
     def __init__(
@@ -247,7 +249,8 @@ class EmbedConfirmView(discord.ui.View):
         """Post the embed publicly, exactly as the pre-confirm flow did."""
         if self.source_interaction is None:
             await self._finish(
-                interaction, "Something went wrong posting this embed. Please try again."
+                interaction,
+                f"Something went wrong posting this embed. Please try again.\n\n{SUPPORT_LINE}",
             )
             return
 
@@ -261,7 +264,9 @@ class EmbedConfirmView(discord.ui.View):
             return
         except discord.HTTPException as e:
             logger.error(f"Discord API error posting a member-built embed: {e}", exc_info=True)
-            await self._finish(interaction, "Failed to post the embed. Please try again.")
+            await self._finish(
+                interaction, f"Failed to post the embed. Please try again.\n\n{SUPPORT_LINE}"
+            )
             return
 
         self.posted = True

@@ -12,6 +12,12 @@ from storage.settings.config_manager import get_config
 from storage.settings.collections import db_manager
 from admin.setup_notice import send_setup_notice
 from Features.error_handler import mark_error_handled
+from Features.interaction_errors import (
+    SupportAwareModalMixin,
+    SupportAwarePlainView,
+    SupportAwareViewMixin,
+)
+from commands.help.help_content import SUPPORT_LINE
 
 logger = get_logger("Suggestion")
 
@@ -103,7 +109,7 @@ async def _opted_out(client, user_id) -> bool:
         return False
 
 
-class SuggestionView(discord.ui.View):
+class SuggestionView(SupportAwareViewMixin, discord.ui.View):
     def __init__(self, suggestion_id: str, db_manager):
         super().__init__(timeout=None)
         self.suggestion_id = suggestion_id
@@ -191,17 +197,20 @@ class SuggestionView(discord.ui.View):
                     else:
                         await interaction.response.send_message(f"✅ {result['message']}", ephemeral=True)
                 else:
+                    # add_vote only reports failure from its exception path.
                     logger.warning(f"Vote processing failed: {result['message']}")
-                    await interaction.response.send_message(f"❌ {result['message']}", ephemeral=True)
+                    await interaction.response.send_message(
+                        f"❌ {result['message']}\n\n{SUPPORT_LINE}", ephemeral=True)
 
             except Exception as e:
                 logger.error(f"Error handling vote: {e}", exc_info=True)
                 if not interaction.response.is_done():
-                    await interaction.response.send_message("❌ An error occurred while processing your vote.",
-                                                            ephemeral=True)
+                    await interaction.response.send_message(
+                        f"❌ An error occurred while processing your vote.\n\n{SUPPORT_LINE}",
+                        ephemeral=True)
 
 
-class SuggestionModal(discord.ui.Modal):
+class SuggestionModal(SupportAwareModalMixin, discord.ui.Modal):
     def __init__(self, template_type: str, anonymous: bool = False):
         super().__init__(title=f"{template_type} Suggestion")
         self.template_type = template_type
@@ -279,11 +288,12 @@ class SuggestionModal(discord.ui.Modal):
                 await cog._process_suggestion(interaction, suggestion_text, self.anonymous, self.template_type)
             else:
                 logger.error("SuggestionCog not found when processing template submission")
-                await interaction.response.send_message("❌ System error: Suggestion service unavailable.",
-                                                        ephemeral=True)
+                await interaction.response.send_message(
+                    f"❌ System error: Suggestion service unavailable.\n\n{SUPPORT_LINE}",
+                    ephemeral=True)
 
 
-class SuggestionBuilderModal(discord.ui.Modal):
+class SuggestionBuilderModal(SupportAwareModalMixin, discord.ui.Modal):
     """Text-field editor for the interactive builder.
 
     Opened from the builder's Edit button. On submit it writes the values
@@ -332,7 +342,7 @@ class SuggestionBuilderModal(discord.ui.Modal):
         await interaction.response.edit_message(view=self.builder)
 
 
-class SuggestionBuilderView(discord.ui.LayoutView):
+class SuggestionBuilderView(SupportAwareViewMixin, discord.ui.LayoutView):
     """Interactive Components v2 builder for composing a suggestion.
 
     Shown when /suggest is run without options. Holds the in-progress draft
@@ -513,7 +523,7 @@ class SuggestionBuilderView(discord.ui.LayoutView):
         self.stop()
 
 
-class SuggestionBrowserView(discord.ui.LayoutView):
+class SuggestionBrowserView(SupportAwareViewMixin, discord.ui.LayoutView):
     """Ephemeral Components v2 browser over one guild's suggestions.
 
     Author-locked and short-lived, following the builder above: `render()`
@@ -1432,7 +1442,7 @@ class SuggestionCog(commands.Cog):
                     description=f"Found {len(similar_suggestions)} similar suggestions:\n\n{similar_list}",
                     color=discord.Color.orange()
                 )
-                view = discord.ui.View()
+                view = SupportAwarePlainView()
 
                 async def continue_anyway(interaction_inner):
                     logger.info(f"User {user.id} chose to submit despite similar suggestions")
@@ -1679,7 +1689,7 @@ class SuggestionCog(commands.Cog):
             except Exception as e:
                 logger.error(f"Error creating suggestion post for user {user.id}: {e}", exc_info=True)
 
-                error_message = "❌ An error occurred while processing your suggestion."
+                error_message = f"❌ An error occurred while processing your suggestion.\n\n{SUPPORT_LINE}"
                 if hasattr(interaction, 'followup'):
                     await interaction.followup.send(error_message, ephemeral=True)
                 else:
@@ -1783,21 +1793,22 @@ class SuggestionCog(commands.Cog):
     # Error handlers for group commands
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         # This handler answers every error itself, so the tree handler stays quiet.
+        # It must reply on every path (after a defer too) and never raise.
         mark_error_handled(interaction)
         if isinstance(error, app_commands.errors.CommandOnCooldown):
             logger.info(f"User {interaction.user.id} hit cooldown on suggestion command")
-            await interaction.response.send_message(
-                f"⏳ You're on cooldown! Please try again in {int(error.retry_after)} seconds.",
-                ephemeral=True
-            )
+            message = f"⏳ You're on cooldown! Please try again in {int(error.retry_after)} seconds."
         else:
             logger.error(f"Unhandled error in suggestion command for user {interaction.user.id}: {error}",
                          exc_info=True)
-            if not interaction.response.is_done():
-                await interaction.response.send_message(
-                    "❌ An unexpected error occurred. Please try again later.",
-                    ephemeral=True
-                )
+            message = f"❌ An unexpected error occurred. Please try again later.\n\n{SUPPORT_LINE}"
+        try:
+            if interaction.response.is_done():
+                await interaction.followup.send(message, ephemeral=True)
+            else:
+                await interaction.response.send_message(message, ephemeral=True)
+        except Exception as e:
+            logger.debug(f"Could not deliver the suggestion command error reply: {e}")
 
 
 async def setup(bot: commands.Bot):

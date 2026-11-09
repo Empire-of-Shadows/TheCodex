@@ -23,6 +23,7 @@ import discord
 
 from storage.log import get_logger
 
+from Features.interaction_errors import SupportAwareModalMixin, SupportAwareViewMixin
 from Features.daily.wyr_bank import FORMAT_LABELS, question_options
 from Features.daily.wyr_question_form import FORMAT_EMOJI, QuestionFormModal
 
@@ -120,7 +121,7 @@ def build_decision_dm_embed(submission: dict, *, guild_name: str, approved: bool
     return embed
 
 
-class RejectReasonModal(discord.ui.Modal, title="Decline this suggestion"):
+class RejectReasonModal(SupportAwareModalMixin, discord.ui.Modal, title="Decline this suggestion"):
     """Optional reason, passed on to the member who suggested it."""
 
     reason_input = discord.ui.TextInput(
@@ -139,7 +140,7 @@ class RejectReasonModal(discord.ui.Modal, title="Decline this suggestion"):
         await self._callback(interaction, (self.reason_input.value or "").strip())
 
 
-class SubmissionReviewView(discord.ui.View):
+class SubmissionReviewView(SupportAwareViewMixin, discord.ui.View):
     """Persistent Approve / Reject / age-restrict buttons on a review post.
 
     Registered once at startup with no submission id. Every handler resolves the
@@ -180,7 +181,7 @@ class SubmissionReviewView(discord.ui.View):
         await self._cog(interaction).handle_submission_nsfw_toggle(interaction, self)
 
 
-class SubmissionBuilderView(discord.ui.LayoutView):
+class SubmissionBuilderView(SupportAwareViewMixin, discord.ui.LayoutView):
     """A member's ephemeral draft of one question.
 
     Author-locked, because it is sent ephemerally but Discord still routes

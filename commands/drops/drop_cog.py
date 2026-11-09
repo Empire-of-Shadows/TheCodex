@@ -16,6 +16,7 @@ from storage.settings.config_manager import get_config
 from storage.settings.collections import db_manager
 from storage.log import get_logger
 from admin.setup_notice import send_setup_notice, setup_notice_text
+from commands.help.help_content import SUPPORT_LINE
 
 from .drop_views import (
     build_drops_browse_view,
@@ -110,7 +111,7 @@ class DropCog(commands.Cog):
             prime_cog = self.bot.get_cog("PrimeDrops")
             if not prime_cog:
                 await btn_interaction.followup.send(
-                    "PrimeDrops cog is not loaded.", ephemeral=True
+                    f"PrimeDrops cog is not loaded.\n\n{SUPPORT_LINE}", ephemeral=True
                 )
                 return
 

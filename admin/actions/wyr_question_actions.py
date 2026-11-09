@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from storage.log import get_logger
 
+from commands.help.help_content import SUPPORT_LINE
 from Features.daily.wyr_bank import (
     FORMAT_LABELS,
     FORMATS,
@@ -461,7 +462,7 @@ class WYRQuestionActions:
             cleaned, guild_id=guild_id, source="admin", nsfw=nsfw
         )
         if not question:
-            return False, "Could not save that question. Please try again.", None
+            return False, f"Could not save that question. Please try again.\n\n{SUPPORT_LINE}", None
         return True, f"Added as question **#{question['id']}**.", question
 
     # -- Bulk import -------------------------------------------------------

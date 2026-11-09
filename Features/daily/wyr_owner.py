@@ -26,6 +26,7 @@ from discord.ext import commands
 
 from startup.owner_guild import get_owner_guild_id
 from storage.log import get_logger
+from Features.interaction_errors import SupportAwareViewMixin
 
 from Features.daily.wyr_bank import (
     FORMAT_LABELS,
@@ -67,7 +68,7 @@ def _describe(question: dict) -> str:
     return "\n".join(lines)
 
 
-class _ReviewView(discord.ui.View):
+class _ReviewView(SupportAwareViewMixin, discord.ui.View):
     """Page through guild-owned questions, promoting or deleting one at a time."""
 
     def __init__(self, owner_id: int, questions: list):
@@ -164,7 +165,7 @@ class _ReviewView(discord.ui.View):
         )
 
 
-class _DecisionView(discord.ui.View):
+class _DecisionView(SupportAwareViewMixin, discord.ui.View):
     """Confirm what happens to one question."""
 
     def __init__(self, parent: _ReviewView, question: dict):
@@ -252,7 +253,7 @@ class _DecisionView(discord.ui.View):
         )
 
 
-class _ConfirmPromoteView(discord.ui.View):
+class _ConfirmPromoteView(SupportAwareViewMixin, discord.ui.View):
     def __init__(self, decision: _DecisionView):
         super().__init__(timeout=120)
         self.decision = decision

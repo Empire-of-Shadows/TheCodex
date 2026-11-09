@@ -11,6 +11,8 @@ from Features.ce_utilities.helpers.embed_modal import (
 	resolve_features,
 )
 from storage.log import get_logger, log_context
+from Features.interaction_errors import SupportAwareModalMixin, SupportAwareViewMixin
+from commands.help.help_content import SUPPORT_LINE
 
 logger = get_logger("EmbedEditModal")
 
@@ -58,7 +60,7 @@ def _parse_color(color_str: str) -> Optional[int]:
 		return None
 
 
-class EditTimestampView(discord.ui.View):
+class EditTimestampView(SupportAwareViewMixin, discord.ui.View):
 	"""The timestamp control for /embed edit, on the ephemeral reply to the modal.
 
 	It cannot live in the modal. Discord allows five components in one, and a fully
@@ -155,7 +157,8 @@ class EditTimestampView(discord.ui.View):
 			self.embed.timestamp = self.original_timestamp if self.timestamp_on else None
 			logger.error(f"Failed to toggle embed timestamp: {e}", exc_info=True)
 			await interaction.response.send_message(
-				"❌ Could not update the embed just now. Please try again.", ephemeral=True
+				f"❌ Could not update the embed just now. Please try again.\n\n{SUPPORT_LINE}",
+				ephemeral=True,
 			)
 			return
 
@@ -171,7 +174,7 @@ class EditTimestampView(discord.ui.View):
 		self.stop()
 
 
-class EditEmbedModal(discord.ui.Modal, title="Edit Embed"):
+class EditEmbedModal(SupportAwareModalMixin, discord.ui.Modal, title="Edit Embed"):
 	def __init__(self, message: discord.Message, guild_id: int, max_length: int, user_roles: Set[int],
 	             allowed_features: Optional[Set[str]] = None, default_color: Optional[int] = None,
 	             has_color_sets: bool = False, free_color_access: bool = False):
@@ -434,13 +437,8 @@ class EditEmbedModal(discord.ui.Modal, title="Edit Embed"):
 						ephemeral=True,
 					)
 					timestamp_view.bind_source(interaction)
-			except discord.HTTPException as e:
-				logger.error(f"Discord HTTP error editing embed: {e.status} {e.text}", exc_info=True)
-				error_msg = "❌ Failed to edit the embed. Please try again later."
-				if interaction.response.is_done():
-					await interaction.followup.send(error_msg, ephemeral=True)
-				else:
-					await interaction.response.send_message(error_msg, ephemeral=True)
+			# Forbidden first: it is a subclass of HTTPException, so listed after it
+			# this permission refusal was unreachable.
 			except discord.Forbidden:
 				logger.error(f"Forbidden error editing embed for message {self.message.id}", exc_info=True)
 				error_msg = "❌ I don't have permission to edit this message."
@@ -448,9 +446,16 @@ class EditEmbedModal(discord.ui.Modal, title="Edit Embed"):
 					await interaction.followup.send(error_msg, ephemeral=True)
 				else:
 					await interaction.response.send_message(error_msg, ephemeral=True)
+			except discord.HTTPException as e:
+				logger.error(f"Discord HTTP error editing embed: {e.status} {e.text}", exc_info=True)
+				error_msg = f"❌ Failed to edit the embed. Please try again later.\n\n{SUPPORT_LINE}"
+				if interaction.response.is_done():
+					await interaction.followup.send(error_msg, ephemeral=True)
+				else:
+					await interaction.response.send_message(error_msg, ephemeral=True)
 			except Exception as e:
 				logger.error(f"Unexpected error editing embed: {e}", exc_info=True)
-				error_msg = "❌ An unexpected error occurred. Please try again later."
+				error_msg = f"❌ An unexpected error occurred. Please try again later.\n\n{SUPPORT_LINE}"
 				if interaction.response.is_done():
 					await interaction.followup.send(error_msg, ephemeral=True)
 				else:

@@ -22,6 +22,7 @@ from storage.settings.collections import db_manager
 
 from ....actions.collections.documents import count_documents
 from ....actions.collections.export import export_documents
+from ....views.base import with_support_line
 
 logger = get_logger("SuggestionActions")
 
@@ -242,7 +243,12 @@ class SuggestionActions:
 
         except Exception as e:
             logger.error("Error updating suggestion status: %s", e, exc_info=True)
-            return {"success": False, "message": "An error occurred while updating the suggestion."}
+            # An unexpected failure, so it ends with the support-server line (a
+            # "no suggestion found" above is a refusal and does not).
+            return {
+                "success": False,
+                "message": with_support_line("An error occurred while updating the suggestion."),
+            }
 
     # -- Export -------------------------------------------------------------
 
@@ -254,6 +260,10 @@ class SuggestionActions:
         """Export all suggestions for a guild as CSV or JSON.
 
         Returns ``(discord.File, count)`` or ``None`` if there are no suggestions.
+        A failure is logged and re-raised rather than returned as ``None``: ``None``
+        reads as "nothing to export", which told the admin their suggestions were
+        missing when the export had broken. The panel layout's support-aware
+        ``on_error`` answers the raised error instead.
         """
         try:
             query = {"guild_id": str(guild_id)}
@@ -272,4 +282,4 @@ class SuggestionActions:
 
         except Exception as e:
             logger.error("Error exporting suggestions: %s", e, exc_info=True)
-            return None
+            raise

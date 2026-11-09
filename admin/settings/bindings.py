@@ -20,6 +20,7 @@ from typing import Any
 
 import discord
 
+from commands.help.help_content import SUPPORT_INVITE_URL as _SUPPORT_INVITE_URL
 from storage.settings.config_manager import (
     _STRUCTURED_KEYS,
     GuildConfig,
@@ -48,6 +49,12 @@ BOT_NAME = "The Codex"
 # "Role Configuration" wrapper menu was flattened per ADMIN_PANEL_STANDARD.md
 # 1.1), so the engine default path would point at a menu that no longer exists.
 ROLE_ACCESS_PATH = "Panel Access Roles"
+
+# This bot's support-server invite (one definition, in commands/help/help_content.py).
+# With it set, the engine ends every panel crash notice with "If this keeps
+# happening, report it in the [support server](<url>)." and gives panel views and
+# modals a support-aware on_error. Expected refusals never carry it.
+SUPPORT_INVITE_URL: str = _SUPPORT_INVITE_URL
 
 # The Codex panel is admin-only: there is no Mod tier. resolve_panel_role below
 # collapses anything that is not "admin" to "none". The engine's mod machinery
