@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased] - 2026-11-09 (status page)
+
+### Added
+- **TheCodex and its dashboard report their status to the server's public status page.**
+  Each one checks itself every 30 seconds and reports whether it is online, how fast it is
+  responding, and in plain words what is wrong when something is: not connected to Discord,
+  database unavailable, or sign-in unavailable on the dashboard. If either one stops
+  reporting, the page marks it down. The bot and the dashboard report separately, so a
+  problem with one never makes the other look down.
+
 ## [Unreleased] - 2026-11-07 (help when something breaks)
 
 ### Changed

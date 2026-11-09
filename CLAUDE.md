@@ -170,6 +170,15 @@ style is the part that needs judgment:
   `on_interaction` dispatchers (guide, board, greeting) must call `send_unexpected_failure`
   themselves, because no view `on_error` ever runs for them. (Added 2026-11-08.)
 - Health endpoint `:50010`, dashboard `:54010`, shared external `obsidian_grid` Docker network.
+- **Uptime Kuma push monitors** (first bot on them, 2026-11-09; they replace HealthCheck's
+  polling). Each process pushes its OWN monitor every 30 s through the vendored
+  `status_push.py`: the bot from `Codex.py` with `KUMA_PUSH_URL_BOT` (verdict =
+  `health_endpoint.status_verdict`, ping = gateway latency), the dashboard from its lifespan
+  with `KUMA_PUSH_URL_DASHBOARD` (verdict = `_status_verdict` in `dashboard/app.py`, same
+  `_check()` as its `/health`, ping = Codex DB round trip). Both vars live in `docker/.env`;
+  unset means off. Degraded is pushed as up for 120 s, then down. Both processes stop the
+  pusher BEFORE closing the databases, or every redeploy would push "Database unavailable"
+  to the public page. Push messages are public: plain words only.
 - Codex's per-feature logic lives in `Features/` and `commands/`. There is no
   `storage/bot_specific/codex/` - unlike relay, whose feature code is master-owned under
   `storage/bot_specific/relay/<feature>/`.

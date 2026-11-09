@@ -6,9 +6,10 @@ Unified startup sequence (mirrors Ecom / TheHost / ImperialReminder):
     2. setup_application_logging  → "Application logging initialized for: discord-bot-codex"
     3. main(): banner + Python/discord.py versions
     4. _async_main(): install signal handlers → init DatabaseManager → start health endpoint (50010)
+       → start the Uptime Kuma status push (only when KUMA_PUSH_URL_BOT is set)
     5. start_services(): bot.start raced against shutdown_event
     6. on_ready (idempotent via _init_done): Database Attachment → Cog Loading → Command Sync → Status Setup
-    7. shutdown_handler(): health → DB → bot
+    7. shutdown_handler(): status push → health → DB → bot
 """
 
 import asyncio
@@ -35,7 +36,12 @@ from startup.phases import (  # noqa: E402
     log_startup_summary,
     startup_phase,
 )
-from health_endpoint import initialize_health_server, stop_health_server  # noqa: E402
+from health_endpoint import (  # noqa: E402
+    initialize_health_server,
+    status_verdict,
+    stop_health_server,
+)
+from status_push import start_status_push, stop_status_push  # noqa: E402
 from storage.settings.collections import db_manager  # noqa: E402
 
 # Guild that owns the private, guild-scoped slash commands (/status, /wyrbank).
@@ -46,6 +52,9 @@ from startup.owner_guild import get_owner_guild_id  # noqa: E402
 # Initialize application-wide logging
 APPLICATION_NAME = "discord-bot-codex"
 HEALTH_PORT = 50010
+
+# The bot's Uptime Kuma push monitor. The dashboard pushes its own (KUMA_PUSH_URL_DASHBOARD).
+_status_push_task = None
 
 app_logger = setup_application_logging(
     app_name=APPLICATION_NAME,
@@ -139,9 +148,16 @@ bot.event(on_ready)  # Register the event
 
 
 async def shutdown_handler():
-    """Graceful shutdown: health server → database → bot."""
+    """Graceful shutdown: status push → health server → database → bot."""
     shutdown_start = time.perf_counter()
     logger.info("🛑 Initiating graceful shutdown...")
+
+    # First, before the database closes: a push sent after that would report
+    # "Database unavailable" on the public status page for every redeploy.
+    try:
+        await stop_status_push(_status_push_task)
+    except Exception as e:
+        logger.error(f"❌ Error stopping status push: {e}")
 
     try:
         stop_health_server()
@@ -244,6 +260,15 @@ async def _async_main(shutdown_event: asyncio.Event):
         logger.info("✅ Health check endpoint initialized")
     except Exception as e:
         logger.error(f"❌ Failed to start health endpoint: {e}")
+
+    # Same verdict as /health, pushed every 30 s. Off (one log line) when the URL is unset.
+    global _status_push_task
+    try:
+        _status_push_task = start_status_push(
+            os.getenv("KUMA_PUSH_URL_BOT"), status_verdict, label="TheCodex bot",
+        )
+    except Exception as e:
+        logger.error(f"❌ Failed to start status push: {e}")
 
     await start_services(shutdown_event)
 
