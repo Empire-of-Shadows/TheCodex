@@ -35,6 +35,12 @@
   role.
 
 ### Fixed
+- **Nobody can sign you into the dashboard as someone else.** A login link started by
+  another person could finish in your browser and sign you in on their account. The
+  dashboard now only finishes a login in the browser that started it.
+- **Other websites can no longer sign you out.** Logging out used to be a plain link, so any
+  site could trigger it and sign you out of every dashboard. The Log out button still works
+  with one click, but only from the dashboard itself.
 - **Settings can only point at your own server's channels.** It was possible to save a
   channel from a different server into a setting, and the bot would then post that server's
   suggestions, questions, drops or boost messages there. The dashboard now refuses any
