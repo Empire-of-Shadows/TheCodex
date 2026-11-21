@@ -55,11 +55,8 @@ export function sectionErrors(section: SettingsSection, d: GuildSettings): Field
       }
       break;
     }
-    case "announcement":
-      if (d.announcement.thread_auto_create && blank(d.announcement.channel_id)) {
-        out.channel_id = "Pick an announcement channel, or switch Auto-Create Threads off.";
-      }
-      break;
+    // No announcement rule: auto-create defaults on with no channel, which is
+    // that feature's normal "off" state. See settings.py for the reasoning.
     case "drops":
       if (d.drops.enabled && blank(d.drops.channel_id)) {
         out.channel_id = "Pick a drops channel, or switch drops off.";

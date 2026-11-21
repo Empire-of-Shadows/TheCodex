@@ -111,11 +111,16 @@ _ROLE_ID_LIST_FIELDS: dict[str, tuple[str, ...]] = {
 # was checked against the code that runs the feature (2026-11-20):
 #
 #   wyr.channel_id              Features/daily/WYR.py posts nowhere without it
-#   wyr review channel OR role  WYR.py:254 refuses every suggestion without both
+#   wyr review channel OR role  WYR.py:254 refuses suggestions when BOTH are unset;
+#                               either one is enough
 #   new_members greeting        joining.py:574 skips the greeting without a channel
 #   new_members starter role    joining.py:455 needs a role or a name to create one
-#   announcement.channel_id     announcements.py:41 does nothing without it
 #   drops.channel_id            prime-drops.py:162 posts nothing without it
+#
+# Announcements deliberately have NO rule: they have no on/off switch, and
+# thread_auto_create defaults to True with no channel, which is the feature's
+# normal "off" state (announcements.py:41 returns early). A rule there would
+# turn every untouched server's Announcements page red (review 2026-11-20).
 #   boost.channel_id            boost_tracker.py:355 logs nothing without it
 #   tag_tracker tag AND role    tag_tracker.py:53 is inactive without both
 #
@@ -153,9 +158,6 @@ def _requirement_errors(section: str, s: dict) -> list[str]:
             errors.append(
                 "Pick a whitelist role or type a name for one, or switch the whitelist system off."
             )
-    elif section == "announcement":
-        if s.get("thread_auto_create") and _blank(s.get("channel_id")):
-            errors.append("Pick an announcement channel, or switch Auto-Create Threads off.")
     elif section == "drops":
         if s.get("enabled") and _blank(s.get("channel_id")):
             errors.append("Pick a drops channel, or switch drops off.")

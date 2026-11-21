@@ -16,7 +16,7 @@
 
 ### Changed
 - **A feature that is switched on cannot be saved without the channel it needs.** Would You
-  Rather, greetings, announcement threads, drops and the boost tracker now mark the missing
+  Rather, greetings, drops and the boost tracker now mark the missing
   channel in red and keep the Save button off until you pick one or switch the feature off.
   The same goes for member suggestions without a review channel or reviewer role, the
   whitelist system without a role or a role name, and the tag tracker without its tag or

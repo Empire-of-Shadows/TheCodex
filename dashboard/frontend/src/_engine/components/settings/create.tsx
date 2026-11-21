@@ -3,7 +3,7 @@
      python EmpireSystems/tools/sync_dashboard_engine.py
    Drift is enforced by:
      python EmpireSystems/tools/sync_dashboard_engine.py --check */
-import { createContext, useContext, useId, useState, type ReactNode } from "react";
+import { createContext, useContext, useId, useRef, useState, type ReactNode } from "react";
 import type { Channel, Role } from "../../api/types";
 import {
   MAX_NAME_LENGTH,
@@ -91,7 +91,9 @@ function blockedReason(creator: EntityCreator, what: "roles" | "channels"): stri
   if (!creator.abilities) return `Checking what ${creator.botName} is allowed to do...`;
   const a = creator.abilities[what];
   if (a.allowed) return null;
-  return `${creator.botName} ${a.reason}. Check the bot's permissions in your Discord server settings, then reload this page.`;
+  // Discord answers are cached for up to a minute, so a permission just granted
+  // can take that long to show here.
+  return `${creator.botName} ${a.reason}. Check the bot's permissions in your Discord server settings, then reload this page in a minute.`;
 }
 
 function errorText(e: unknown, fallback: string): string {
@@ -146,6 +148,13 @@ export function CreateEntityControl(
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<string | null>(null);
+  // The create request can take seconds (a rate-limit retry waits up to 10 s).
+  // Call the LATEST onCreated when it returns, not the one from the render the
+  // click happened in, or every edit made meanwhile would be put back. The page's
+  // own draft update must be functional too (setDraft(prev => ...)), so a create
+  // that lands after the person moved to another section cannot undo it.
+  const onCreatedRef = useRef(props.onCreated);
+  onCreatedRef.current = props.onCreated;
 
   if (!creator) return null;
   const kinds = props.target === "channel" ? props.kinds : [];
@@ -207,7 +216,7 @@ export function CreateEntityControl(
       if (open === "role") {
         const role = await creator.createRole(check.name);
         setCreated(`the role ${role.name}`);
-        props.onCreated(role.id);
+        onCreatedRef.current(role.id);
       } else {
         const channel = await creator.createChannel(
           check.name,
@@ -215,7 +224,7 @@ export function CreateEntityControl(
           showsCategory && parentId ? parentId : null,
         );
         setCreated(open === "category" ? `the category ${channel.name}` : `#${channel.name}`);
-        props.onCreated(channel.id);
+        onCreatedRef.current(channel.id);
       }
       setOpen(null);
     } catch (e) {

@@ -380,7 +380,9 @@ export default function AdminSettingsPage() {
     key: K,
     value: GuildSettings[K],
   ) => {
-    setDraft({ ...draft, [key]: value });
+    // Functional: a Create that finishes after other edits must not put back
+    // the draft from the render it started in.
+    setDraft((prev) => (prev ? { ...prev, [key]: value } : prev));
   };
 
   const isDirty = (section: SettingsSection): boolean => {
@@ -612,7 +614,6 @@ export default function AdminSettingsPage() {
                   value={draft.announcement}
                   channels={channels}
                   onChange={(v) => updateSection("announcement", v)}
-                  errors={sectionErrors("announcement", draft)}
                 />
               )}
               {slug === "guide" && (
