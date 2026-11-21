@@ -28,6 +28,7 @@ import discord
 from storage.log import get_logger
 from Features.interaction_errors import send_unexpected_failure
 from commands.help.help_content import SUPPORT_LINE
+from Features.role_safety import blocked_role_reason, is_blocked
 
 logger = get_logger("BoardActions")
 
@@ -189,6 +190,9 @@ async def _handle_role(interaction: discord.Interaction, role_id: str) -> None:
                 f"Removed **{role.name}** from you.", ephemeral=True
             )
         else:
+            if is_blocked(role, where="info board"):
+                await interaction.response.send_message(blocked_role_reason(role), ephemeral=True)
+                return
             await member.add_roles(role, reason="Info board role toggle")
             await interaction.response.send_message(
                 f"Gave you **{role.name}**!", ephemeral=True

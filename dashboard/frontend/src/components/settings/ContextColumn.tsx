@@ -5,7 +5,8 @@ import type {
   GuildSettings,
   Role,
 } from "../../api/types";
-import { optionLabel, TIMEZONE_OPTIONS } from "../../_engine/components/settings/options";
+import { optionLabel } from "../../_engine/components/settings/options";
+import { timezoneLabel } from "../../_engine/components/settings/timezone";
 import {
   PANEL_ACCESS_ROLE_MAX,
   WYR_CATEGORY_OPTIONS,
@@ -132,7 +133,7 @@ function ContextBody({ slug, draft, channels, roles, overview }: ContextProps) {
       ["Channel", channelName(w.channel_id)],
       [
         "Posts at",
-        `${pad2(w.post_hour)}:${pad2(w.post_minute)} ${optionLabel(TIMEZONE_OPTIONS, w.timezone)}`,
+        `${pad2(w.post_hour)}:${pad2(w.post_minute)} ${timezoneLabel(w.timezone)}`,
       ],
       ["Question types", formats || "None ticked"],
       ["Draws from", optionLabel(WYR_SOURCE_OPTIONS, w.question_source)],
@@ -235,7 +236,7 @@ function ContextBody({ slug, draft, channels, roles, overview }: ContextProps) {
       ["Channel", channelName(d.channel_id)],
       [
         "Posts at",
-        `${pad2(d.post_hour)}:${pad2(d.post_minute)} ${optionLabel(TIMEZONE_OPTIONS, d.timezone)}`,
+        `${pad2(d.post_hour)}:${pad2(d.post_minute)} ${timezoneLabel(d.timezone)}`,
       ],
       ["Can manage drops", roleName(d.manager_role_id)],
       ["Updates list", channelName(tracker.Updates ?? null)],

@@ -30,8 +30,8 @@ import {
   ARCHIVE_OPTIONS,
   HOUR_OPTIONS,
   MINUTE_OPTIONS,
-  TIMEZONE_OPTIONS,
 } from "../../_engine/components/settings/options";
+import { TimezoneField } from "../../_engine/components/settings/timezone";
 import {
   ACCOUNT_AGE_OPTIONS,
   DROPS_TRACKER_BUCKETS,
@@ -156,10 +156,9 @@ export function WyrSectionForm({
           />
         </FRow>
         <FRow>
-          <OptionSelect<string>
+          <TimezoneField
             label="Timezone"
             value={value.timezone}
-            options={TIMEZONE_OPTIONS}
             onChange={(v) => onChange({ ...value, timezone: v })}
           />
           <OptionSelect<string>
@@ -565,10 +564,9 @@ export function DropsSectionForm({
           />
         </FRow>
         <FRow>
-          <OptionSelect<string>
+          <TimezoneField
             label="Timezone"
             value={value.timezone}
-            options={TIMEZONE_OPTIONS}
             onChange={(v) => onChange({ ...value, timezone: v })}
           />
         </FRow>

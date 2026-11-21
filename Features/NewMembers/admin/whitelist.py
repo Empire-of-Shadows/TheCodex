@@ -16,6 +16,7 @@ from Features.interaction_errors import (
     send_unexpected_failure,
 )
 from commands.help.help_content import SUPPORT_LINE
+from Features.role_safety import is_blocked
 
 logger = get_logger("WhitelistManager")
 
@@ -818,6 +819,8 @@ class WhitelistGroup(commands.Cog):
             return False, account_age
         try:
             role = await self._ensure_whitelist_role(guild)
+            if is_blocked(role, where="whitelist"):
+                return False, account_age
             await member.add_roles(role, reason=f"Whitelisted by {interaction.user}")
             await whitelist_collection.update_one(
                 {'guild_id': str(guild.id), 'user_id': str(member.id)},

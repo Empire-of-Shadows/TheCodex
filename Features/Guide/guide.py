@@ -26,6 +26,7 @@ from Features.Guide.guide_actions import (
 from admin.setup_notice import setup_notice_text
 from Features.interaction_errors import SupportAwareModalMixin, send_unexpected_failure
 from commands.help.help_content import SUPPORT_LINE
+from Features.role_safety import blocked_role_reason, is_blocked
 
 logger = get_logger("Guide")
 
@@ -586,6 +587,9 @@ async def _handle_role_action(interaction: discord.Interaction, role_id: str):
 			await member.remove_roles(role, reason="Guide role toggle")
 			await interaction.response.send_message(f"Removed **{role.name}** from you.", ephemeral=True)
 		else:
+			if is_blocked(role, where="guide"):
+				await interaction.response.send_message(blocked_role_reason(role), ephemeral=True)
+				return
 			await member.add_roles(role, reason="Guide role toggle")
 			await interaction.response.send_message(f"Gave you **{role.name}**!", ephemeral=True)
 	except discord.Forbidden:

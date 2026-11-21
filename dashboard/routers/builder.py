@@ -3,11 +3,13 @@
 import os
 import sys
 from datetime import datetime, timezone
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from dashboard import db
+from dashboard._engine.discord_cache import dangerous_role_permissions, discord_cache
 from dashboard.auth.panel_role import require_guild_admin
 from storage.log import get_logger
 
@@ -26,6 +28,48 @@ from Features.Board.board_schema import validate_board_schema  # noqa: E402
 logger = get_logger("dashboard.routers.builder")
 
 router = APIRouter(tags=["builder"])
+
+
+# ── Role buttons: no moderator powers (owner ruling 2026-11-20) ──────────────
+#
+# A guide or board button with action "role" lets ANY member give themselves
+# that role. One carrying Administrator, Manage Server, Manage Roles, Manage
+# Channels, Ban or Kick Members would hand those powers to whoever clicks, so the
+# save is refused. The bot also refuses at click time (Features/role_safety.py),
+# which covers a role that gains a permission after the button was saved.
+
+
+def _role_targets(node: Any) -> set[str]:
+    """Every role id a guide or board layout lets members toggle, at any depth."""
+    found: set[str] = set()
+    if isinstance(node, dict):
+        if node.get("action") == "role" and node.get("target"):
+            found.add(str(node["target"]))
+        for v in node.values():
+            found |= _role_targets(v)
+    elif isinstance(node, list):
+        for v in node:
+            found |= _role_targets(v)
+    return found
+
+
+async def _refuse_dangerous_role_buttons(guild_id: str, data: Any) -> None:
+    targets = _role_targets(data)
+    if not targets:
+        return
+    roles = await discord_cache.guild_roles_raw(str(int(guild_id)))
+    for role in roles:  # empty when Discord could not be reached: let it through
+        if str(role["id"]) in targets:
+            found = dangerous_role_permissions(role.get("permissions"))
+            if found:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"The button for @{role['name']} would let any member give "
+                        f"themselves {', '.join(found)}. Pick a role without those "
+                        f"permissions, or remove them from the role in Server Settings > Roles."
+                    ),
+                )
 
 # Boards are keyed by (guild_id, board_id). One board per guild today; the key
 # leaves room for more without a storage change.
@@ -67,6 +111,7 @@ async def put_guide(
     ok, error = validate_guide_schema(guide_data)
     if not ok:
         raise HTTPException(status_code=422, detail=error)
+    await _refuse_dangerous_role_buttons(guild_id, guide_data)
 
     user_id = int(session["user_data"]["id"])
     logger.info("Saving guide for guild %s by user %s", guild_id, user_id)
@@ -165,6 +210,7 @@ async def put_board(
     ok, error = validate_board_schema(board_data)
     if not ok:
         raise HTTPException(status_code=422, detail=error)
+    await _refuse_dangerous_role_buttons(guild_id, board_data)
 
     user_id = int(session["user_data"]["id"])
     logger.info("Saving board for guild %s by user %s", guild_id, user_id)

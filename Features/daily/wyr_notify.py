@@ -31,6 +31,7 @@ from commands.help.help_content import SUPPORT_LINE
 from storage.settings.collections import db_manager
 from storage.settings.config_manager import get_config
 from admin.setup_notice import setup_notice_text
+from Features.role_safety import blocked_role_reason, is_blocked
 
 logger = get_logger("WYRNotify")
 
@@ -291,6 +292,10 @@ async def apply_subscription(interaction: discord.Interaction, *, subscribe: boo
         return
 
     already_has = role in member.roles
+
+    if subscribe and not already_has and is_blocked(role, where="WYR notifications"):
+        await _reply(interaction, blocked_role_reason(role), None)
+        return
 
     try:
         if subscribe and not already_has:

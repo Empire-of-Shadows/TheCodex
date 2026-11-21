@@ -13,12 +13,14 @@ import sys
 from datetime import datetime, timezone
 from typing import Any
 
+import pytz
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from dashboard import db
 from dashboard._engine.discord_cache import (
     PERMISSION_BITS,
+    dangerous_role_permissions,
     discord_cache,
     missing_permissions,
     permission_label,
@@ -221,6 +223,10 @@ _ASSIGNED_ROLES: dict[tuple[str, str], str] = {
 }
 
 
+# Sections whose `timezone` the bot schedules with (the dashboard's region/zone picker).
+_TIMEZONE_SECTIONS = frozenset({"wyr", "drops"})
+
+
 def _id_changed(new: Any, old: Any) -> bool:
     return new not in (None, "") and str(new) != str(old or "")
 
@@ -234,6 +240,16 @@ async def _channel_problem(gid: str, channel_id: Any, perms_needed: list[str], l
         f"TheCodex is missing permissions in that {label}: "
         f"{', '.join(permission_label(m) for m in missing)}. Grant them in the "
         f"channel's settings, or pick another channel."
+    )
+
+
+def _dangerous_role_text(name: str, found: list[str]) -> str:
+    """The refusal for a role the bot would hand out that carries moderator powers
+    (owner ruling 2026-11-20; same words as the panel's dangerous_role_message)."""
+    return (
+        f"@{name} has {', '.join(found)}, so TheCodex will not hand it out: members "
+        f"would get those powers without an admin choosing them. Pick a role without "
+        f"them, or remove them from the role in Server Settings > Roles."
     )
 
 
@@ -253,6 +269,9 @@ async def _role_problem(gid: str, role_id: Any, label: str) -> str | None:
             f"@{role['name']} is managed by an integration, so Discord does not let "
             f"anyone hand it out. Pick a normal role for the {label}."
         )
+    dangerous = dangerous_role_permissions(role.get("permissions"))
+    if dangerous:
+        return _dangerous_role_text(role["name"], dangerous)
     if not perms & PERMISSION_BITS["manage_roles"]:
         return (
             f"TheCodex needs the Manage Roles permission to hand out the {label}. "
@@ -465,6 +484,20 @@ async def update_settings(
         missing = _requirement_errors(section, {**defaults, **existing, **value})
         if missing:
             raise HTTPException(status_code=400, detail=" ".join(missing))
+
+        # WYR.py:800 and prime-drops.py:207 hand this straight to pytz; an unknown
+        # name stops that guild's daily post (WYR raises, drops skips). Checked
+        # on change only, so a stored older name never blocks an unrelated save.
+        if (
+            section in _TIMEZONE_SECTIONS
+            and "timezone" in value
+            and value["timezone"] != existing.get("timezone", defaults.get("timezone"))
+            and value["timezone"] not in pytz.all_timezones_set
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="That timezone is not one TheCodex knows. Pick a region and a zone from the lists.",
+            )
 
         problems = await _discord_problems(gid, section, value, existing)
         if problems:

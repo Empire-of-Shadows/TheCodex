@@ -689,6 +689,19 @@ a.ov-qrow:hover, button.ov-qrow:hover { background: var(--eos-glass-heavy); }
   font-weight: var(--eos-fw-medium);
 }
 
+/* ── Timezone picker (timezone.tsx, added 2026-11-20) ────────────────
+   Region and zone side by side; stacked on a narrow screen. */
+
+.eos-tz {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: 8px;
+}
+@media (max-width: 520px) {
+  .eos-tz { grid-template-columns: minmax(0, 1fr); }
+}
+.eos-tz__note { font-size: var(--eos-fs-label); margin: 6px 0 0; }
+
 /* ── Create role / channel (create.tsx, added 2026-11-20) ───────────── */
 
 .eos-create { margin-top: 8px; }

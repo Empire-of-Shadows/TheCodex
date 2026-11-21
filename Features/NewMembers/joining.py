@@ -10,6 +10,7 @@ from storage.settings.config_manager import get_config, GuildConfig
 from storage.settings.collections import db_manager
 from storage.settings.config_manager import get_guild_config_manager
 from storage.log import get_logger
+from Features.role_safety import is_blocked
 
 
 # How long to wait after the bot is removed from a guild before wiping that
@@ -466,6 +467,10 @@ class GuildEventHandler:
                                         reason="Whitelist role for new members with new accounts",
                                         mentionable=False,
                                         hoist=True
+                                    )
+                                if is_blocked(role, where="whitelist on join"):
+                                    raise RuntimeError(
+                                        f"whitelist role {role.name} carries moderator permissions"
                                     )
                                 await member.add_roles(role, reason="Whitelisted new member")
 

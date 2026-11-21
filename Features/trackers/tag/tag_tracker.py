@@ -5,6 +5,7 @@ from discord.ext import commands, tasks
 
 from storage.settings.config_manager import get_config, get_guild_config_manager
 from storage.log import get_logger
+from Features.role_safety import has_dangerous_permissions, is_blocked
 
 # Logger
 logger = get_logger("tag_tracker")
@@ -26,7 +27,14 @@ class TagTracker(commands.Cog):
             self.check_tags.cancel()
 
     async def _safe_role_change(self, member: discord.Member, role: discord.Role, *, add: bool) -> bool:
-        """Add or remove a role with 429 retry handling. Returns True on success."""
+        """Add or remove a role with 429 retry handling. Returns True on success.
+
+        Never ADDS a role carrying moderator powers (Features/role_safety.py);
+        removing it still works, so wearers who drop the tag lose it as before.
+        The refusal is logged once per sweep in _resolve_tag_settings, not here.
+        """
+        if add and has_dangerous_permissions(role):
+            return False
         for _attempt in range(3):
             try:
                 if add:
@@ -56,6 +64,7 @@ class TagTracker(commands.Cog):
         if not role:
             logger.warning(f"Tag role {role_id} not found in guild {guild.name}. Skipping.")
             return None
+        is_blocked(role, where="tag tracker")  # logs; adds are refused in _safe_role_change
         return role, server_tag
 
     async def _sync_member(self, member: discord.Member, role: discord.Role, server_tag: str) -> bool:

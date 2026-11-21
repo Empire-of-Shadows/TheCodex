@@ -65,8 +65,11 @@ _MAX_GUILD_ENTRIES = 512  # bound on the per-guild caches (oldest evicted)
 
 # Discord permission bits used by settings validation (discord.com/developers/docs/topics/permissions).
 PERMISSION_BITS: Dict[str, int] = {
+    "kick_members": 1 << 1,
+    "ban_members": 1 << 2,
     "administrator": 1 << 3,
     "manage_channels": 1 << 4,
+    "manage_guild": 1 << 5,
     "add_reactions": 1 << 6,
     "view_channel": 1 << 10,
     "send_messages": 1 << 11,
@@ -85,7 +88,32 @@ _ALL_PERMISSIONS = (1 << 53) - 1
 
 def permission_label(name: str) -> str:
     """'read_message_history' -> 'Read Message History'."""
+    if name == "manage_guild":
+        return "Manage Server"  # Discord's own name for it
     return " ".join(part.capitalize() for part in name.split("_"))
+
+
+# Permissions a role the bot hands out must not carry (owner ruling 2026-11-20).
+# The same list as admin_engine/permission_checks.py DANGEROUS_ROLE_PERMISSIONS,
+# which explains why; a test pins the two together.
+DANGEROUS_ROLE_PERMISSIONS: tuple = (
+    "administrator",
+    "manage_guild",
+    "manage_roles",
+    "manage_channels",
+    "ban_members",
+    "kick_members",
+)
+
+
+def dangerous_role_permissions(role_perms: Optional[int]) -> List[str]:
+    """Readable names of the dangerous permissions in a role's permission bits."""
+    if not role_perms:
+        return []
+    return [
+        permission_label(p) for p in DANGEROUS_ROLE_PERMISSIONS
+        if int(role_perms) & PERMISSION_BITS[p]
+    ]
 
 
 def compute_channel_permissions(

@@ -15,6 +15,11 @@
   shown but cannot be picked.
 
 ### Changed
+- **Picking a timezone on the dashboard works like it does in Discord.** Instead of a short
+  list of nine places, you pick a region first and then a zone in it, from the same full list
+  the admin panel uses. Each zone shows its current offset from UTC, so you can tell
+  "New York - UTC-05:00" from "Chicago - UTC-06:00" at a glance. A timezone set from the
+  panel that the old list did not have now shows correctly instead of looking like US Eastern.
 - **A feature that is switched on cannot be saved without the channel it needs.** Would You
   Rather, greetings, drops and the boost tracker now mark the missing
   channel in red and keep the Save button off until you pick one or switch the feature off.
@@ -23,6 +28,12 @@
   role.
 
 ### Fixed
+- **TheCodex no longer hands out roles with moderator powers.** A role that has
+  Administrator, Manage Server, Manage Roles, Manage Channels, Ban Members or Kick Members
+  can no longer be used as the WYR ping role, the whitelist role, the tag role, or on a
+  guide or info board role button, in Discord or on the dashboard. If a role gains one of
+  those permissions later, the bot refuses to give it out and tells the member to ask an
+  admin. Members can still remove such a role from themselves.
 - **The dashboard no longer saves a channel or role TheCodex cannot use.** Picking a channel
   where the bot is missing a permission it needs, or a role it cannot hand out (one above
   its own role, or one managed by an integration), now explains what is wrong instead of
