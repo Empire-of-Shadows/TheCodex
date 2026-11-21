@@ -1082,6 +1082,12 @@ export default function BuilderPage() {
 
   // ── Import JSON ────────────────────────────────────────────────────────
 
+  // Import and Save name the server they act on. A board once went to the wrong
+  // server because the picker was on another one and nothing on the way said so
+  // (2026-11-21); the header badge alone was not enough.
+  const serverName = guild?.name ?? "this server";
+  const notSavedYet = `Not saved yet - press Save to keep it in ${serverName}.`;
+
   const handleImport = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
@@ -1151,7 +1157,7 @@ export default function BuilderPage() {
               setComponents([]);
             }
             setSelectedId(null);
-            pushToast(`Imported ${imported.length} pages`, "success");
+            pushToast(`Imported ${imported.length} pages for ${serverName}. ${notSavedYet}`, "success");
           } else if (mode === "board") {
             if (!data.components || !Array.isArray(data.components)) {
               pushToast("Invalid board JSON - expected { components: [...] }", "error");
@@ -1178,7 +1184,7 @@ export default function BuilderPage() {
             if (data.accent_color) setAccentColor(data.accent_color as string);
             setSelectedId(null);
             pushToast(
-              `Imported the board and ${importedResponses.length} response(s)`,
+              `Imported the board and ${importedResponses.length} response(s) for ${serverName}. ${notSavedYet}`,
               "success",
             );
           } else {
@@ -1196,7 +1202,7 @@ export default function BuilderPage() {
             setComponents(addIds(data.components));
             if (data.accent_color) setAccentColor(data.accent_color as string);
             setSelectedId(null);
-            pushToast(`Imported ${data.components.length} components`, "success");
+            pushToast(`Imported ${data.components.length} components for ${serverName}. ${notSavedYet}`, "success");
           }
         } catch {
           pushToast("Failed to parse JSON file", "error");
@@ -1206,7 +1212,7 @@ export default function BuilderPage() {
       };
       reader.readAsText(file);
     },
-    [mode, pushToast]
+    [mode, pushToast, serverName, notSavedYet]
   );
 
   // ── Export JSON ────────────────────────────────────────────────────────
@@ -1343,7 +1349,7 @@ export default function BuilderPage() {
           }
         }
         setSavedSigs((prev) => ({ ...prev, guide: currentGuideSig }));
-        pushToast("Guide saved!", "success");
+        pushToast(`Guide saved to ${serverName}!`, "success");
       } else if (mode === "board") {
         const folded = foldBoard(boardMain, boardResponses, boardCurrentId, components);
         const data = buildBoardData(folded.main, folded.responses, accentColor);
@@ -1359,8 +1365,8 @@ export default function BuilderPage() {
         setSavedSigs((prev) => ({ ...prev, board: currentBoardSig }));
         pushToast(
           boardPosted
-            ? "Board saved! Update the posted message from /admin panel -> Info Board -> Post / Update Board."
-            : "Board saved! Put it up from /admin panel -> Info Board -> Post / Update Board.",
+            ? `Board saved to ${serverName}! Update the posted message from /admin panel -> Info Board -> Post / Update Board in that server.`
+            : `Board saved to ${serverName}! Put it up from /admin panel -> Info Board -> Post / Update Board in that server.`,
           "success",
         );
       } else {
@@ -1369,7 +1375,7 @@ export default function BuilderPage() {
         // Update greeting cache with current state
         greetingCacheRef.current = { components: [...components], accentColor };
         setSavedSigs((prev) => ({ ...prev, greeting: currentGreetingSig }));
-        pushToast("Greeting saved!", "success");
+        pushToast(`Greeting saved to ${serverName}!`, "success");
       }
       setSaveState("saved");
       setTimeout(() => setSaveState((s) => (s === "saved" ? "idle" : s)), 1500);
@@ -1506,16 +1512,17 @@ export default function BuilderPage() {
             className={`btn btn-success save-btn save-btn--${saveState}`}
             onClick={save}
             disabled={saving || errors.length > 0 || !dirty}
-            title="Save (Ctrl+S)"
+            title={`Save to ${serverName} (Ctrl+S)`}
+            style={{ maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
           >
             {saveState === "saving"
-              ? "Saving…"
+              ? `Saving to ${serverName}…`
               : saveState === "saved"
                 ? "Saved ✓"
                 : saveState === "error"
                   ? "Retry"
                   : dirty
-                    ? "Save"
+                    ? `Save to ${serverName}`
                     : "Saved"}
           </button>
         </div>

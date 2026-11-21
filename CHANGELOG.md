@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased] - 2026-11-21 (builder names the server)
+
+### Changed
+- **The dashboard builder tells you which server you are saving to.** The Save button now
+  reads "Save to" and the server's name, and the messages after importing a file or saving
+  name the server too. Importing a file also reminds you that nothing is kept until you press
+  Save. This stops a guide, board or greeting from quietly landing on the wrong server when
+  you manage more than one.
+
 ## [Unreleased] - 2026-11-21 (support server link)
 
 ### Fixed
