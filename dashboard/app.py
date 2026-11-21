@@ -84,7 +84,10 @@ async def lifespan(app: FastAPI):
     await db.close()
 
 
-app = FastAPI(title="TheCodex Dashboard", lifespan=lifespan)
+# No public API docs in production (security review 2026-11-20): /docs, /redoc and
+# /openapi.json listed every route for any anonymous visitor.
+_docs = {} if not IS_PRODUCTION else {"docs_url": None, "redoc_url": None, "openapi_url": None}
+app = FastAPI(title="TheCodex Dashboard", lifespan=lifespan, **_docs)
 
 app.add_middleware(
     CORSMiddleware,

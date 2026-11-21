@@ -683,6 +683,7 @@ export interface AnnouncementSection {
 
 export interface TagTrackerSection {
   enabled: boolean;
+  /** Filled in by the bot from members wearing the tag; read-only here. */
   server_tag: string | null;
   role_id: string | null;
 }
@@ -735,4 +736,7 @@ export interface SettingsResponse {
   config: GuildSettings;
   defaults: GuildSettings;
   panel_role: PanelRole;
+  /** Whether Discord lets this server have a server tag (GUILD_TAGS feature).
+   *  null when the dashboard could not ask Discord. */
+  tag_tracker_available?: boolean | null;
 }

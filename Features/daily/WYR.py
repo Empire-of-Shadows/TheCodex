@@ -36,6 +36,7 @@ from admin.actions.wyr_question_actions import WYRQuestionActions
 from admin.setup_notice import send_setup_notice
 from Features.interaction_errors import SupportAwareViewMixin
 from commands.help.help_content import SUPPORT_LINE
+from Features.channel_scope import in_guild
 
 # Load environment variables
 load_dotenv()
@@ -870,7 +871,9 @@ class WYR(commands.Cog):
 
         try:
             with PerformanceLogger(logger, f"wyr_post_guild_{guild_id}"):
-                channel = self.bot.get_channel(guild_config.wyr["channel_id"])
+                channel = in_guild(
+                    self.bot.get_channel(guild_config.wyr["channel_id"]), guild_id, where="WYR post",
+                )
                 if not channel:
                     # The channel may simply not be in cache yet after a restart,
                     # so this is a retryable failure rather than a settled state.
@@ -1133,6 +1136,10 @@ class WYR(commands.Cog):
             except (discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
                 logger.warning(f"WYR review channel {channel_id} unreachable: {e}")
                 return False
+        # The lookups above search every server the bot is in; never post a
+        # review into another server's channel (security review 2026-11-20).
+        if in_guild(channel, guild_id, where="WYR review post") is None:
+            return False
 
         warning = await WYRQuestionActions.warning_for_format(
             guild_id, submission.get("format")
@@ -1397,6 +1404,8 @@ class WYR(commands.Cog):
             channel = self.bot.get_channel(int(channel_id))
             if channel is None:
                 channel = await self.bot.fetch_channel(int(channel_id))
+            if in_guild(channel, submission.get("guild_id"), where="WYR review edit") is None:
+                return False
             post = await channel.fetch_message(int(message_id))
             await post.edit(embed=embed, view=None)
             return True

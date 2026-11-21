@@ -18,6 +18,7 @@ from Features.interaction_errors import (
     SupportAwareViewMixin,
 )
 from commands.help.help_content import SUPPORT_LINE
+from Features.channel_scope import in_guild
 
 logger = get_logger("Suggestion")
 
@@ -1488,7 +1489,10 @@ class SuggestionCog(commands.Cog):
         accumulates suggestions that were never posted anywhere.
         """
         guild_config = await get_config(interaction.guild.id)
-        channel = self.bot.get_channel(guild_config.suggestions["channel_id"])
+        channel = in_guild(
+            self.bot.get_channel(guild_config.suggestions["channel_id"]),
+            interaction.guild.id, where="suggestion post",
+        )
         if channel:
             return channel
 
@@ -1601,7 +1605,10 @@ class SuggestionCog(commands.Cog):
 
                 # Optional mirror of the suggestion for staff; absent on a server
                 # that has not set an admin channel.
-                admin_channel = self.bot.get_channel(guild_config.server["admin_channel_id"])
+                admin_channel = in_guild(
+                    self.bot.get_channel(guild_config.server["admin_channel_id"]),
+                    interaction.guild.id, where="suggestion staff copy",
+                )
 
                 # Create suggestion view
                 view = SuggestionView(suggestion_id, self.db_manager)

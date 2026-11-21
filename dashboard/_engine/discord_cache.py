@@ -234,6 +234,8 @@ class DiscordApiCache:
         # resources; a miss (left the guild, bad id) is cached too so a page that shows
         # many names does not re-ask Discord for the same absent member on every render.
         self._members = _BoundedTTLMap(_MAX_MEMBER_ENTRIES, _RESOURCE_TTL)
+        # Guild feature flags (guild_features, 2026-11-20); change only with boosts.
+        self._features = _BoundedTTLMap(_MAX_GUILD_ENTRIES, _GUILDS_TTL)
         # Per-guild single-flight locks; pruned alongside the caches by virtue of
         # being recreated rarely (a lock per active guild, bounded in practice by
         # the caches above - stale locks are just idle asyncio.Lock objects).
@@ -542,6 +544,30 @@ class DiscordApiCache:
         if member is None:
             return None
         return list(member.get("roles") or [])
+
+    async def guild_features(self, guild_id: str) -> Optional[List[str]]:
+        """The guild's Discord feature flags (``GET /guilds/{id}`` ``features``), or
+        None when they could not be read. Cached like the bot guild list (300 s):
+        features change only with boosts or Community settings. Added 2026-11-20
+        so a dashboard can tell whether a server may have a server tag
+        (``GUILD_TAGS``); additive."""
+        guild_id = str(guild_id)
+        hit = self._features.get(guild_id)
+        if hit is not None:
+            return list(hit)
+        async with self._resource_locks[f"f:{guild_id}"]:
+            hit = self._features.get(guild_id)
+            if hit is not None:
+                return list(hit)
+            if not _token():
+                return None
+            async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+                resp = await _get_with_retry(client, f"{_api_base()}/guilds/{guild_id}")
+            if resp is None:
+                return None
+            features = [str(f) for f in (resp.json().get("features") or [])]
+            self._features.set(guild_id, features)
+            return list(features)
 
     def invalidate_guild(self, guild_id: str) -> None:
         """Drop a guild's cached channels and roles, so the next picker read sees

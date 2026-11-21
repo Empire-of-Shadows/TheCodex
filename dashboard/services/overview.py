@@ -1013,8 +1013,9 @@ def build_features(
     boost_on = bool(boost_cfg.get("enabled", False))
     if not tag_on and not boost_on:
         state, detail = "off", "Turned off"
-    elif tag_on and not (tag_cfg.get("server_tag") and tag_cfg.get("role_id")):
-        state, detail = "needs_setup", "Server tag needs a tag and a role"
+    elif tag_on and not tag_cfg.get("role_id"):
+        # Only the role is needed: the tag text is filled in by the bot (2026-11-20).
+        state, detail = "needs_setup", "Server tag needs a role"
     elif boost_on and not boost_cfg.get("channel_id"):
         state, detail = "needs_setup", "Boost announcements need a channel"
     else:

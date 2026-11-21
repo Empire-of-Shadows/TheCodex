@@ -301,7 +301,7 @@ function ContextBody({ slug, draft, channels, roles, overview }: ContextProps) {
     const b = draft.boost;
     const rows: [string, string][] = [
       ["Tag tracking", onOff(t.enabled)],
-      ["Tag members must wear", t.server_tag ? t.server_tag : "Not set"],
+      ["Your server's tag", t.server_tag ? t.server_tag : "Not seen yet"],
       ["Role it grants", roleName(t.role_id)],
       ["Boost log", onOff(b.enabled)],
       ["Boost log channel", channelName(b.channel_id)],

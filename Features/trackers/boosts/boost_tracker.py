@@ -6,6 +6,7 @@ import datetime
 from storage.settings.collections import db_manager
 from storage.settings.config_manager import get_config
 from storage.log import get_logger
+from Features.channel_scope import in_guild
 
 logger = get_logger("BoostTracker")
 
@@ -356,7 +357,7 @@ class BoostTracker(commands.Cog):
             logger.debug(f"No boost log channel configured for guild {guild.name}, skipping log")
             return
 
-        log_channel = self.bot.get_channel(channel_id)
+        log_channel = in_guild(self.bot.get_channel(channel_id), guild.id, where="boost log")
         if not log_channel:
             logger.debug(f"Boost log channel {channel_id} not found in guild {guild.name}")
             return

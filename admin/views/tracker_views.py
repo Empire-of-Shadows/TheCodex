@@ -10,28 +10,61 @@ from typing import Callable, Awaitable, Dict, Any, List
 
 from Features.trackers.boosts.boost_tracker import as_utc, boost_level_label, format_duration
 
-from .base import AdminLayoutBuilder, SupportAwareModal, cid, readonly_container, editable_container
+from .base import AdminLayoutBuilder, cid, readonly_container, editable_container
 
 # TextDisplay caps at 4000 characters and the panel header eats some of that, so the
 # boosters display stops adding rows once the body reaches this length.
 _BOOSTERS_BODY_BUDGET = 3400
 
 
+# Shown when a server cannot have a tag, or nobody wears it yet (2026-11-20).
+NO_TAGS_TEXT = (
+    "This server cannot have a server tag yet. Server tags are a boost perk: once "
+    "Discord unlocks them for this server, set your tag in Server Settings and then "
+    "switch Tag Tracker on here."
+)
+NO_WEARERS_TEXT = (
+    "Nobody in this server is wearing its tag right now, so there is no tag text to "
+    "read yet. Tag Tracker works without it: it fills the tag in by itself as soon as "
+    "someone wears it."
+)
+
+
+def tag_status_line(available: bool, detected_tag, wearers: int, stored_tag) -> str:
+    """The **Server Tag:** line: what the bot can see, never something typed in."""
+    if not available:
+        return "Not available (server tags are a boost perk this server does not have)"
+    if detected_tag:
+        people = "1 member" if wearers == 1 else f"{wearers} members"
+        return f"`{detected_tag}` (worn by {people})"
+    if stored_tag:
+        return f"`{stored_tag}` (nobody is wearing it right now)"
+    return "Nobody is wearing this server's tag yet"
+
+
 def build_tag_tracker_settings_view(
     settings: Dict[str, Any],
     guild: discord.Guild,
+    available: bool,
+    detected_tag,
+    wearers: int,
     on_toggle: Callable[[discord.Interaction, bool], Awaitable[None]],
     on_role_select: Callable[[discord.Interaction, int], Awaitable[None]],
-    on_edit_tag: Callable[[discord.Interaction], Awaitable[None]],
-    on_detect_tag: Callable[[discord.Interaction], Awaitable[None]],
+    on_refresh_tag: Callable[[discord.Interaction], Awaitable[None]],
     on_cancel: Callable[[discord.Interaction], Awaitable[None]],
 ) -> discord.ui.LayoutView:
-    """Build the Tag Tracker settings view."""
+    """Build the Tag Tracker settings view.
+
+    The tag is not typed in (changed 2026-11-20): members are matched by this
+    server's id, and the tag text shown here is read from members wearing it.
+    """
     builder = AdminLayoutBuilder()
 
     enabled = settings.get("tag_tracker_enabled", False)
     role_id = settings.get("tag_tracker_role_id")
-    server_tag = settings.get("tag_tracker_server_tag") or "Not set"
+    server_tag = tag_status_line(
+        available, detected_tag, wearers, settings.get("tag_tracker_server_tag"),
+    )
 
     # Role display
     if role_id:
@@ -42,14 +75,20 @@ def build_tag_tracker_settings_view(
 
     builder.add_header("## Tag Tracker Settings")
 
-    builder.add_item(readonly_container(discord.ui.TextDisplay(
-        "Track members holding a specific server tag and assign them a role."
-    )))
+    intro = (
+        "Gives a role to members wearing this server's tag, and takes it back when "
+        "they stop. Tags from other servers never count, even with the same letters."
+    )
+    if not available:
+        intro += f"\n\n{NO_TAGS_TEXT}"
+    builder.add_item(readonly_container(discord.ui.TextDisplay(intro)))
 
     toggle_btn = discord.ui.Button(
         label=f"Tag Tracker: {'ON' if enabled else 'OFF'}",
         style=discord.ButtonStyle.green if enabled else discord.ButtonStyle.danger,
         custom_id=cid("editor", "toggle", "tag_tracker"),
+        # Switching ON is impossible without server tags; switching OFF always works.
+        disabled=not available and not enabled,
     )
 
     async def toggle_callback(interaction: discord.Interaction):
@@ -57,19 +96,13 @@ def build_tag_tracker_settings_view(
 
     toggle_btn.callback = toggle_callback
 
-    tag_btn = discord.ui.Button(
-        label="Edit Server Tag",
-        style=discord.ButtonStyle.primary,
-        custom_id=cid("editor", "edit", "tag_tracker_tag"),
-    )
-    tag_btn.callback = on_edit_tag
-
     detect_btn = discord.ui.Button(
-        label="Detect Tag",
+        label="Refresh Tag",
         style=discord.ButtonStyle.primary,
         custom_id=cid("editor", "detect", "tag_tracker_tag"),
+        disabled=not available,
     )
-    detect_btn.callback = on_detect_tag
+    detect_btn.callback = on_refresh_tag
 
     role_select = discord.ui.RoleSelect(
         placeholder="Select role to assign for server tag...",
@@ -87,7 +120,6 @@ def build_tag_tracker_settings_view(
 
     btn_row = discord.ui.ActionRow()
     btn_row.add_item(toggle_btn)
-    btn_row.add_item(tag_btn)
     btn_row.add_item(detect_btn)
 
     select_row = discord.ui.ActionRow()
@@ -117,25 +149,8 @@ def build_tag_tracker_settings_view(
     return builder.build()
 
 
-class TagTrackerServerTagModal(SupportAwareModal, title="Server Tag"):
-    """Modal for entering the Discord server tag string."""
-
-    tag_input = discord.ui.TextInput(
-        label="Server Tag",
-        placeholder="e.g., EoS",
-        required=True,
-        min_length=1,
-        max_length=32,
-    )
-
-    def __init__(self, callback: Callable, current_tag: str = ""):
-        super().__init__()
-        self._callback = callback
-        self.tag_input.default = current_tag
-
-    async def on_submit(self, interaction: discord.Interaction):
-        tag = self.tag_input.value.strip()
-        await self._callback(interaction, tag)
+# TagTrackerServerTagModal (type the tag in) was removed 2026-11-20 on the owner's
+# ruling: the tag is read from members wearing it, never typed.
 
 
 def build_boost_tracker_settings_view(
@@ -326,7 +341,7 @@ def format_tracker_status(overview: Dict[str, Any], guild: discord.Guild) -> str
     # Tag tracker info
     tt_enabled = overview.get("tag_tracker_enabled", False)
     tt_role_id = overview.get("tag_tracker_role_id")
-    tt_tag = overview.get("tag_tracker_server_tag") or "Not set"
+    tt_tag = overview.get("tag_tracker_server_tag") or "Not seen yet"
 
     if tt_role_id:
         role = guild.get_role(tt_role_id)

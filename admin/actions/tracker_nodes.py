@@ -24,7 +24,8 @@ from storage.log import get_logger
 from ..permission_checks import check_channel_permissions, check_role_permissions
 from ..views.panel_engine import ActionContext, PanelNode
 from ..views.tracker_views import (
-    TagTrackerServerTagModal,
+    NO_TAGS_TEXT,
+    NO_WEARERS_TEXT,
     build_boost_tracker_settings_view,
     build_tag_tracker_settings_view,
 )
@@ -46,18 +47,15 @@ _BOOST_CHANNEL_PERMS = ["view_channel", "send_messages"]
 # ── Tag Tracker ───────────────────────────────────────────────────────────────
 
 async def tag_tracker_summary_values(guild_id: int) -> list:
-    """Non-empty when Tag Tracker has something configured (role and/or tag)."""
+    """Non-empty when Tag Tracker has something configured. Only the role counts:
+    the tag text is filled in by the bot from members wearing it (2026-11-20), so
+    it is not something an admin set."""
     try:
         s = await TrackerActions.get_tag_tracker_settings(guild_id)
     except Exception:
         logger.debug("tag_tracker summary lookup failed", exc_info=True)
         return []
-    out = []
-    if s.get("tag_tracker_role_id"):
-        out.append("role")
-    if s.get("tag_tracker_server_tag"):
-        out.append("tag")
-    return out
+    return ["role"] if s.get("tag_tracker_role_id") else []
 
 
 async def tag_tracker_summary_text(guild_id: int) -> str:
@@ -75,12 +73,12 @@ async def tag_tracker_summary_text(guild_id: int) -> str:
 
     tag = s.get("tag_tracker_server_tag")
     has_role = bool(s.get("tag_tracker_role_id"))
-    if not tag and not has_role:
+    if not has_role and not s.get("tag_tracker_enabled"):
         return "Not configured"
 
     state = "On" if s.get("tag_tracker_enabled") else "Off"
     parts = [state]
-    parts.append(f"tag {tag}" if tag else "no tag")
+    parts.append(f"tag {tag}" if tag else "tag not seen yet")
     parts.append("role set" if has_role else "no role")
     return ", ".join(parts)
 
@@ -91,13 +89,16 @@ class _TagTrackerFlow(PanelFlow):
 
     async def _layout(self) -> discord.ui.LayoutView:
         settings = await TrackerActions.get_tag_tracker_settings(self.guild.id)
+        tag, wearers = TrackerActions.detect_server_tag(self.guild)
         return build_tag_tracker_settings_view(
             settings=settings,
             guild=self.guild,
+            available=TrackerActions.server_tags_available(self.guild),
+            detected_tag=tag,
+            wearers=wearers,
             on_toggle=self._toggle,
             on_role_select=self._select_role,
-            on_edit_tag=self._open_tag_modal,
-            on_detect_tag=self._detect_tag,
+            on_refresh_tag=self._refresh_tag,
             on_cancel=self._back_to_parent,
         )
 
@@ -105,20 +106,19 @@ class _TagTrackerFlow(PanelFlow):
         await self._render(interaction, await self._layout())
 
     async def _toggle(self, interaction: discord.Interaction, enabled: bool) -> None:
-        # Turning the tracker on without a role or tag would leave it running with
-        # nothing to match, so require both first.
+        # Switching on needs a server that can have a tag at all, and a role to
+        # hand out. The tag itself is not needed: members are matched by this
+        # server's id, and its text is filled in from whoever wears it.
         if enabled:
+            if not TrackerActions.server_tags_available(self.guild):
+                await self._notice(interaction, "Server Tags Not Available", NO_TAGS_TEXT)
+                return
             settings = await TrackerActions.get_tag_tracker_settings(self.guild.id)
-            missing = []
             if not settings.get("tag_tracker_role_id"):
-                missing.append("a **tracked role**")
-            if not settings.get("tag_tracker_server_tag"):
-                missing.append("a **server tag**")
-            if missing:
                 await self._notice(
                     interaction, "Not Ready Yet",
-                    "Set " + " and ".join(missing) + " before switching Tag Tracker on. "
-                    "Without both it has nothing to match members against.",
+                    "Pick the **tracked role** before switching Tag Tracker on. "
+                    "It is the role members get while they wear this server's tag.",
                 )
                 return
 
@@ -149,71 +149,31 @@ class _TagTrackerFlow(PanelFlow):
         await self._after_write(interaction, "set", old, role_id)
         await self._render(interaction, await self._layout())
 
-    async def _open_tag_modal(self, interaction: discord.Interaction) -> None:
-        settings = await TrackerActions.get_tag_tracker_settings(self.guild.id)
-        await interaction.response.send_modal(TagTrackerServerTagModal(
-            callback=self._submit_tag,
-            current_tag=settings.get("tag_tracker_server_tag") or "",
-        ))
+    async def _refresh_tag(self, interaction: discord.Interaction) -> None:
+        """Re-read the tag text from members wearing it right now and save it.
 
-    async def _submit_tag(self, interaction: discord.Interaction, tag: str) -> None:
+        No network call: it reads the bot's member cache, so it answers inside
+        the interaction window. The screen already shows the live reading; this
+        button is for storing it straight away instead of at the next hourly
+        sweep, so the dashboard shows it too."""
+        tag, wearers = TrackerActions.detect_server_tag(self.guild)
         if not tag:
+            await self._render(interaction, await self._layout())
             await self._notice(
-                interaction, "Empty Tag", "Enter the server tag you want to track.",
+                interaction, "Nobody Is Wearing It Yet",
+                NO_WEARERS_TEXT if TrackerActions.server_tags_available(self.guild) else NO_TAGS_TEXT,
             )
             return
-        if not self._allowed(interaction):
-            await self._too_fast(interaction)
-            return
-
         old = (await TrackerActions.get_tag_tracker_settings(self.guild.id)).get("tag_tracker_server_tag")
-        if not await TrackerActions.set_tag_tracker_server_tag(self.guild.id, tag):
-            await self._failure_notice(interaction, "Failed to Save", "Could not save that server tag.")
-            return
-        await self._after_write(interaction, "set", old, tag)
-        await self._render_via_modal(interaction, await self._layout())
-
-    async def _detect_tag(self, interaction: discord.Interaction) -> None:
-        # Fetching from Discord is network I/O, so defer first rather than risk
-        # blowing the 3-second interaction response window.
-        try:
-            await interaction.response.defer()
-        except discord.HTTPException as exc:
-            logger.warning("Could not defer tag detection: %s", exc)
-            return
-
-        tag = await TrackerActions.fetch_server_tag(self.cog.bot, self.guild.id)
-        if not tag:
-            await self._render(interaction, await self._layout())
-            await self._notice(
-                interaction, "No Server Tag Found",
-                "This server does not have a tag set on Discord's side, so there is "
-                "nothing to detect. Set one in Server Settings, or use **Edit Server "
-                "Tag** to type it in manually.",
-            )
-            return
-
-        settings = await TrackerActions.get_tag_tracker_settings(self.guild.id)
-        old = settings.get("tag_tracker_server_tag")
-        if old == tag:
-            await self._render(interaction, await self._layout())
-            await self._notice(
-                interaction, "Already Up To Date",
-                f"This server's tag is `{tag}`, which is what Tag Tracker is already using.",
-            )
-            return
-        if not self._allowed(interaction):
-            await self._too_fast(interaction)
-            return
-
-        if not await TrackerActions.set_tag_tracker_server_tag(self.guild.id, tag):
-            await self._failure_notice(interaction, "Failed to Save", "Could not save the detected tag.")
-            return
-        await self._after_write(interaction, "set", old, tag)
+        if old != tag:
+            if not self._allowed(interaction):
+                await self._too_fast(interaction)
+                return
+            if not await TrackerActions.set_tag_tracker_server_tag(self.guild.id, tag):
+                await self._failure_notice(interaction, "Failed to Save", "Could not save the server tag.")
+                return
+            await self._after_write(interaction, "set", old, tag)
         await self._render(interaction, await self._layout())
-        await self._notice(
-            interaction, "Server Tag Detected", f"Tag Tracker is now matching `{tag}`.",
-        )
 
 
 def build_tag_tracker_node() -> PanelNode:

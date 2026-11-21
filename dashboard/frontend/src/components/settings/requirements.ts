@@ -19,7 +19,25 @@ function blank(v: unknown): boolean {
   return v === null || v === undefined || (typeof v === "string" && v.trim() === "");
 }
 
-export function sectionErrors(section: SettingsSection, d: GuildSettings): FieldErrors {
+/** Same words as dashboard/routers/settings.py NO_SERVER_TAGS. */
+export const NO_SERVER_TAGS =
+  "This server cannot have a server tag yet. Server tags are a boost perk: once " +
+  "Discord unlocks them for this server, set your tag in Server Settings and then " +
+  "switch the Tag Tracker on.";
+
+/** Facts about the server the rules need beyond the draft itself. */
+export interface RuleContext {
+  /** GUILD_TAGS from Discord; null/undefined when unknown (never blocks). */
+  tagTrackerAvailable?: boolean | null;
+  /** The saved value: switching it OFF and back ON is not "switching on". */
+  tagTrackerWasOn?: boolean;
+}
+
+export function sectionErrors(
+  section: SettingsSection,
+  d: GuildSettings,
+  ctx: RuleContext = {},
+): FieldErrors {
   const out: FieldErrors = {};
   switch (section) {
     case "wyr": {
@@ -68,11 +86,13 @@ export function sectionErrors(section: SettingsSection, d: GuildSettings): Field
       }
       break;
     case "tag_tracker":
-      if (d.tag_tracker.enabled && blank(d.tag_tracker.server_tag)) {
-        out.server_tag = "Type your server tag, or switch the Tag Tracker off.";
-      }
+      // No tag-text rule (2026-11-20): members are matched by this server's id
+      // and the bot fills the text in from whoever wears it.
       if (d.tag_tracker.enabled && blank(d.tag_tracker.role_id)) {
         out.role_id = "Pick a tag role, or switch the Tag Tracker off.";
+      }
+      if (d.tag_tracker.enabled && ctx.tagTrackerAvailable === false && !ctx.tagTrackerWasOn) {
+        out.enabled = NO_SERVER_TAGS;
       }
       break;
     default:
@@ -82,6 +102,10 @@ export function sectionErrors(section: SettingsSection, d: GuildSettings): Field
 }
 
 /** The section-level messages, one per rule, for the save bar. */
-export function sectionProblems(section: SettingsSection, d: GuildSettings): string[] {
-  return Object.values(sectionErrors(section, d)).filter((m) => !m.startsWith("Or "));
+export function sectionProblems(
+  section: SettingsSection,
+  d: GuildSettings,
+  ctx: RuleContext = {},
+): string[] {
+  return Object.values(sectionErrors(section, d, ctx)).filter((m) => !m.startsWith("Or "));
 }

@@ -42,7 +42,7 @@ import {
   WYR_MAX_PENDING_OPTIONS,
   WYR_SOURCE_OPTIONS,
 } from "./options";
-import type { FieldErrors } from "./requirements";
+import { NO_SERVER_TAGS, type FieldErrors } from "./requirements";
 
 /*
  * The settings form, one component per rail section.
@@ -714,7 +714,7 @@ export function GuideSectionForm({
 
 export const SEARCH_TRACKERS = [
   "Server Tag",
-  "The exact server tag string members must wear to qualify.",
+  "Filled in by TheCodex from members wearing your tag. Members are matched by your server, so another server's tag with the same letters never counts.",
   "Tag Role",
   "Role granted to members wearing the tag.",
   "Enabled",
@@ -732,6 +732,8 @@ export function TrackersSectionForm({
   onBoostChange,
   tagErrors,
   boostErrors,
+  tagAvailable,
+  tagWasOn,
 }: {
   tag: TagTrackerSection;
   boost: BoostSection;
@@ -741,6 +743,10 @@ export function TrackersSectionForm({
   onBoostChange: (v: BoostSection) => void;
   tagErrors?: FieldErrors;
   boostErrors?: FieldErrors;
+  /** GUILD_TAGS from Discord; null/undefined when unknown. */
+  tagAvailable?: boolean | null;
+  /** Whether the saved setting is on. */
+  tagWasOn?: boolean;
 }) {
   return (
     <>
@@ -749,21 +755,38 @@ export function TrackersSectionForm({
           Gives a role to every member who is wearing your server tag, and takes
           it back when they stop.
         </p>
+        {tagAvailable === false && (
+          <p className="eos-field__error" style={{ margin: 0 }}>
+            {NO_SERVER_TAGS}
+          </p>
+        )}
         <FRow>
           <ToggleField
             label="Enabled"
             value={tag.enabled}
+            // Switching ON needs server tags; switching OFF always works, and so
+            // does keeping a tracker that was already on.
+            disabled={tagAvailable === false && !tagWasOn && !tag.enabled}
             onChange={(v) => onTagChange({ ...tag, enabled: v })}
           />
-          <TextField
-            label="Server Tag"
-            value={tag.server_tag ?? ""}
-            maxLength={32}
-            onChange={(v) => onTagChange({ ...tag, server_tag: v || null })}
-            error={tagErrors?.server_tag}
-            description="The exact server tag string members must wear to qualify."
-          />
+          <div className="eos-field">
+            <label>Server Tag</label>
+            <p className="eos-muted" style={{ marginTop: 0, marginBottom: 6 }}>
+              Filled in by TheCodex from members wearing your tag. Members are matched
+              by your server, so another server's tag with the same letters never counts.
+            </p>
+            <p style={{ margin: 0 }}>
+              {tagAvailable === false
+                ? "Not available"
+                : tag.server_tag
+                  ? <code>{tag.server_tag}</code>
+                  : "Nobody is wearing your tag yet"}
+            </p>
+          </div>
         </FRow>
+        {tagErrors?.enabled && tagAvailable !== false && (
+          <p className="eos-field__error" style={{ margin: 0 }}>{tagErrors.enabled}</p>
+        )}
         <FRow>
           <RoleField
             label="Tag Role"

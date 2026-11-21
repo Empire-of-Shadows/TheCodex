@@ -47,30 +47,32 @@ class TrackerActions:
 
     @staticmethod
     async def set_tag_tracker_server_tag(guild_id: int, tag: str) -> bool:
-        """Set the Discord server tag to match."""
+        """Store the server tag text the bot detected (display only - matching is
+        by server id, see Features/trackers/tag/tag_tracker.py)."""
         manager = await get_guild_config_manager()
         config = await manager.get_config(guild_id)
         config.tag_tracker["server_tag"] = tag
         return await manager.save_config(config)
 
     @staticmethod
-    async def fetch_server_tag(bot, guild_id: int) -> str | None:
-        """Read the guild's current clan ("server") tag straight from Discord.
+    def server_tags_available(guild) -> bool:
+        """Whether Discord lets this server have a tag (the GUILD_TAGS boost perk)."""
+        from Features.trackers.tag.tag_tracker import GUILD_TAGS_FEATURE
 
-        Returns the tag string, or None when the guild has no clan tag set or the
-        lookup fails. Nothing is saved - the caller decides whether to store it.
+        return GUILD_TAGS_FEATURE in (getattr(guild, "features", None) or [])
 
-        The tag is not exposed on discord.py's Guild model, so this goes to the raw
-        HTTP route, the same way ``Features/trackers/tag/tag_tracker.py`` does when it
-        auto-syncs the tag on ``on_guild_update``.
+    @staticmethod
+    def detect_server_tag(guild) -> tuple[str | None, int]:
+        """(tag text, members wearing it) read from the bot's member cache.
+
+        Replaced 2026-11-20: the old version read a ``clan`` field from the raw
+        server object, which Discord does not send to bots (checked against a live
+        pull), so it always answered "no tag". The tag text is only knowable from a
+        member wearing it.
         """
-        try:
-            data = await bot.http.get_guild(guild_id)
-        except Exception as e:
-            logger.error(f"fetch_server_tag failed for guild {guild_id}: {e}", exc_info=True)
-            return None
-        clan = data.get("clan")
-        return clan.get("tag") if clan else None
+        from Features.trackers.tag.tag_tracker import detect_server_tag
+
+        return detect_server_tag(guild)
 
     # -- Boost Tracker Read -------------------------------------------------
 

@@ -15,6 +15,13 @@
   shown but cannot be picked.
 
 ### Changed
+- **The Tag Tracker finds your server tag by itself.** You no longer type the tag in. The
+  bot reads it from members wearing it and shows it in the admin panel and on the dashboard;
+  until someone wears it, both say nobody is wearing it yet. The old Detect Tag button never
+  found anything and is replaced by Refresh Tag, which reads it from your members.
+- **The Tag Tracker can only be switched on in servers that can have a tag.** Server tags
+  are a boost perk. In a server Discord has not unlocked them for, the switch stays off in
+  both places and says why. Switching it off always works.
 - **Picking a timezone on the dashboard works like it does in Discord.** Instead of a short
   list of nine places, you pick a region first and then a zone in it, from the same full list
   the admin panel uses. Each zone shows its current offset from UTC, so you can tell
@@ -28,6 +35,15 @@
   role.
 
 ### Fixed
+- **Settings can only point at your own server's channels.** It was possible to save a
+  channel from a different server into a setting, and the bot would then post that server's
+  suggestions, questions, drops or boost messages there. The dashboard now refuses any
+  channel that is not in your server, and the bot also refuses to post outside the server a
+  setting belongs to.
+- **Another server's tag no longer earns your tag role.** The Tag Tracker used to compare
+  only the letters of a tag, so a member wearing a different server's tag that happened to
+  read the same got your role. It now checks that the tag belongs to your server, and that
+  the member is actually showing it.
 - **You can pick an Announcement channel on the dashboard.** The Announcements setting
   only listed regular text channels, so a server's real Announcement channel could be chosen
   in Discord but not on the dashboard. It now lists both, the same as Discord does. Guide

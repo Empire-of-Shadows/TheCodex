@@ -9,6 +9,7 @@ from discord.ext import commands, tasks
 from storage.settings.collections import db_manager
 from storage.settings.config_manager import get_guild_config_manager
 from storage.log import get_logger
+from Features.channel_scope import in_guild
 
 logger = get_logger("PrimeDrops")
 
@@ -133,7 +134,7 @@ class PrimeDrops(commands.Cog):
     async def _post_drops_to_guild(
         self, guild_id: int, channel_id: int, drops: list[Dict[str, Any]]
     ) -> list[Dict[str, Any]]:
-        channel = self.bot.get_channel(channel_id)
+        channel = in_guild(self.bot.get_channel(channel_id), guild_id, where="drops post")
         if not channel:
             logger.warning(f"Drops channel {channel_id} not found for guild {guild_id}")
             return []

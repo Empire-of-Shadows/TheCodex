@@ -248,7 +248,8 @@ function railBadge(slug: Slug, d: GuildSettings): Badge {
       const tagOn = d.tag_tracker.enabled;
       const boostOn = d.boost.enabled;
       if (!tagOn && !boostOn) return { text: "Off", tone: "" };
-      const tagGap = tagOn && (!d.tag_tracker.server_tag || !d.tag_tracker.role_id);
+      // Only the role is needed: the tag text is filled in by the bot (2026-11-20).
+      const tagGap = tagOn && !d.tag_tracker.role_id;
       const boostGap = boostOn && !d.boost.channel_id;
       return tagGap || boostGap
         ? { text: "Set up", tone: "warn" }
@@ -415,7 +416,13 @@ export default function AdminSettingsPage() {
   const active = RAIL_ITEMS.find((i) => i.slug === slug) ?? RAIL_ITEMS[0];
   const activeDirty = active.saves.some((s) => isDirty(s.section));
   // A switched-on feature missing what it needs: red on the field, Save held off.
-  const activeProblems = active.saves.flatMap((s) => sectionProblems(s.section, draft));
+  // What the rules need beyond the draft: can this server have a tag at all,
+  // and was the Tag Tracker already on when the page loaded.
+  const ruleCtx = {
+    tagTrackerAvailable: resp.tag_tracker_available ?? null,
+    tagTrackerWasOn: resp.config.tag_tracker.enabled,
+  };
+  const activeProblems = active.saves.flatMap((s) => sectionProblems(s.section, draft, ruleCtx));
 
   // Creating a role or channel adds it to the picker lists straight away (the
   // field then selects it); the abilities are re-read because counts and
@@ -632,7 +639,9 @@ export default function AdminSettingsPage() {
                   roles={roles}
                   onTagChange={(v) => updateSection("tag_tracker", v)}
                   onBoostChange={(v) => updateSection("boost", v)}
-                  tagErrors={sectionErrors("tag_tracker", draft)}
+                  tagErrors={sectionErrors("tag_tracker", draft, ruleCtx)}
+                  tagAvailable={resp.tag_tracker_available ?? null}
+                  tagWasOn={resp.config.tag_tracker.enabled}
                   boostErrors={sectionErrors("boost", draft)}
                 />
               )}
@@ -648,7 +657,7 @@ export default function AdminSettingsPage() {
                 {active.saves.map((s) => {
                   const dirty = isDirty(s.section);
                   const saving = savingSection === s.section;
-                  const blocked = sectionProblems(s.section, draft).length > 0;
+                  const blocked = sectionProblems(s.section, draft, ruleCtx).length > 0;
                   return (
                     <button
                       key={s.section}

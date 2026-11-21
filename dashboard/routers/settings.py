@@ -124,7 +124,9 @@ _ROLE_ID_LIST_FIELDS: dict[str, tuple[str, ...]] = {
 # normal "off" state (announcements.py:41 returns early). A rule there would
 # turn every untouched server's Announcements page red (review 2026-11-20).
 #   boost.channel_id            boost_tracker.py:355 logs nothing without it
-#   tag_tracker tag AND role    tag_tracker.py:53 is inactive without both
+#   tag_tracker role            tag_tracker.py _resolve_tag_settings is inactive
+#                               without it (the tag text is no longer needed:
+#                               matching is by server id since 2026-11-20)
 #
 # The settings page shows the same messages in red and keeps Save switched off
 # (components/settings/requirements.ts, which must say the same thing). This
@@ -167,8 +169,8 @@ def _requirement_errors(section: str, s: dict) -> list[str]:
         if s.get("enabled") and _blank(s.get("channel_id")):
             errors.append("Pick a boost log channel, or switch the Boost Tracker off.")
     elif section == "tag_tracker":
-        if s.get("enabled") and _blank(s.get("server_tag")):
-            errors.append("Type your server tag, or switch the Tag Tracker off.")
+        # No tag-text rule (2026-11-20): members are matched by this server's id
+        # and the bot fills the text in from whoever wears it.
         if s.get("enabled") and _blank(s.get("role_id")):
             errors.append("Pick a tag role, or switch the Tag Tracker off.")
     return errors
@@ -289,8 +291,45 @@ async def _role_problem(gid: str, role_id: Any, label: str) -> str | None:
     return None
 
 
+def _changed_channel_ids(section: str, value: dict, existing: dict) -> list[str]:
+    """Every channel id this save sets to something new, across all channel fields."""
+    out: list[str] = []
+    for key in _CHANNEL_ID_FIELDS.get(section, ()):
+        if key in value and _id_changed(value[key], existing.get(key)):
+            out.append(str(value[key]))
+    if section == "drops" and isinstance(value.get("tracker_channels"), dict):
+        old = existing.get("tracker_channels") or {}
+        for bucket, cid in value["tracker_channels"].items():
+            if _id_changed(cid, old.get(bucket)):
+                out.append(str(cid))
+    return out
+
+
+async def _foreign_channel_problem(gid: str, section: str, value: dict, existing: dict) -> str | None:
+    """Refuse a channel that is not in THIS server (security review 2026-11-20).
+
+    The bot resolves several of these ids with the global ``bot.get_channel``, so
+    an admin of one server could otherwise point a setting at another server's
+    channel and have the bot post there. Fail CLOSED: unlike the permission
+    checks, an unreadable channel list refuses, because this is a security
+    boundary, not a convenience check."""
+    changed = _changed_channel_ids(section, value, existing)
+    if not changed:
+        return None
+    channels = await discord_cache.guild_channels_raw(gid)
+    if not channels:
+        return "Could not check that channel against this server's channel list. Try again in a moment."
+    ids = {str(c["id"]) for c in channels}
+    if any(cid not in ids for cid in changed):
+        return "That channel is not in this server. Pick one of this server's channels."
+    return None
+
+
 async def _discord_problems(gid: str, section: str, value: dict, existing: dict) -> list[str]:
     """What the bot cannot do with the channels and roles this save changes."""
+    foreign = await _foreign_channel_problem(gid, section, value, existing)
+    if foreign:
+        return [foreign]  # nothing else is worth checking for a channel elsewhere
     problems: list[str] = []
     for (sec, key), needed in _CHANNEL_PERMS.items():
         if sec == section and key in value and _id_changed(value[key], existing.get(key)):
@@ -414,6 +453,30 @@ class SettingsPatch(BaseModel):
 # ── Routes ──────────────────────────────────────────────────────────────────
 
 
+# ── Server tags ────────────────────────────────────────────────────────────
+#
+# Whether Discord lets a server have a tag is the GUILD_TAGS server feature (a
+# boost perk; checked against a live pull of the community server 2026-11-20).
+# The tag's TEXT is not on the server object for a bot, so the bot learns it from
+# members wearing it and stores it in tag_tracker.server_tag; the dashboard only
+# shows it and never writes it.
+_GUILD_TAGS_FEATURE = "GUILD_TAGS"
+
+NO_SERVER_TAGS = (
+    "This server cannot have a server tag yet. Server tags are a boost perk: once "
+    "Discord unlocks them for this server, set your tag in Server Settings and then "
+    "switch the Tag Tracker on."
+)
+
+
+async def _tag_tracker_available(gid: str) -> bool | None:
+    """True / False from the server's features, None when they could not be read."""
+    features = await discord_cache.guild_features(gid)
+    if features is None:
+        return None
+    return _GUILD_TAGS_FEATURE in features
+
+
 @router.get("/guilds/{guild_id}/settings")
 async def get_settings(guild_id: str, session: dict = Depends(get_current_user)):
     role = await require_panel_access(session, guild_id)
@@ -423,6 +486,7 @@ async def get_settings(guild_id: str, session: dict = Depends(get_current_user))
         "config": _serialize_config(doc),
         "defaults": _serialize_defaults(),
         "panel_role": role,
+        "tag_tracker_available": await _tag_tracker_available(gid),
     }
 
 
@@ -468,6 +532,13 @@ async def update_settings(
                 )
 
         _coerce_section_ids(section, value)
+
+        if section == "tag_tracker":
+            # The tag text is the bot's to fill in; an echoed copy is ignored.
+            value.pop("server_tag", None)
+            was_on = bool(((doc or {}).get("tag_tracker") or {}).get("enabled", False))
+            if value.get("enabled") and not was_on and await _tag_tracker_available(gid) is False:
+                raise HTTPException(status_code=400, detail=NO_SERVER_TAGS)
 
         if section == "announcement" and "thread_name_format" in value:
             format_error = thread_name_format_error(value["thread_name_format"])
