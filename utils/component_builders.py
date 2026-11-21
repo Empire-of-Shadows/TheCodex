@@ -122,15 +122,26 @@ def build_container(
     button_builder: ButtonBuilder,
     select_builder: Optional[SelectBuilder] = None,
     resolve_media: Optional[Callable[[str], str]] = None,
+    default_accent: Any = None,
 ) -> discord.ui.Container:
+    """Build a container.
+
+    default_accent: the colour a container takes when it sets none of its own.
+    Discord draws an accent stripe only on a container, never on the message, so
+    a layout-wide colour (a board's or greeting's top-level accent_color) has to
+    be handed down here or it never shows.
+    """
     children = []
     for child in comp.get("components", []):
         item = build_component(child, placeholders, button_builder, select_builder, resolve_media)
         if item is not None:
             children.append(item)
     container = discord.ui.Container(*children, spoiler=comp.get("spoiler", False))
-    if comp.get("accent_color"):
-        container.accent_colour = resolve_color(comp["accent_color"])
+    accent = comp.get("accent_color")
+    if accent is None:
+        accent = default_accent
+    if accent is not None:
+        container.accent_colour = resolve_color(accent)
     return container
 
 
@@ -140,8 +151,12 @@ def build_component(
     button_builder: ButtonBuilder,
     select_builder: Optional[SelectBuilder] = None,
     resolve_media: Optional[Callable[[str], str]] = None,
+    default_accent: Any = None,
 ):
-    """Build a single component from its JSON definition. Returns None for unknown types."""
+    """Build a single component from its JSON definition. Returns None for unknown types.
+
+    default_accent only reaches a container (see build_container).
+    """
     comp_type = comp.get("type")
     if comp_type == "separator":
         return build_separator()
@@ -152,7 +167,10 @@ def build_component(
     if comp_type == "action_row":
         return build_action_row(comp, placeholders, button_builder, select_builder)
     if comp_type == "container":
-        return build_container(comp, placeholders, button_builder, select_builder, resolve_media)
+        return build_container(
+            comp, placeholders, button_builder, select_builder, resolve_media,
+            default_accent=default_accent,
+        )
     if comp_type == "media_gallery":
         return build_media_gallery(comp)
     return None

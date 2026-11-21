@@ -13,7 +13,6 @@ from typing import Any, Dict, Optional
 from Features.NewMembers.joining_responses import joining_responses
 from Features.NewMembers.greeting_actions import encode_custom_id
 from utils.component_builders import (
-    resolve_color,
     apply_placeholders,
     build_component,
     build_link_button,
@@ -44,9 +43,10 @@ class GreetingRenderer:
         placeholders = cls._build_placeholders(member, member_number, analytics)
         layout_view = discord.ui.LayoutView()
 
+        # A LayoutView has no colour of its own: the top-level accent shows only
+        # as the stripe of each container that sets none of its own. Unset means
+        # no stripe, as before.
         raw_color = components_config.get("accent_color")
-        if raw_color is not None:
-            layout_view.accent_color = resolve_color(raw_color)
 
         def resolve_media(media: str) -> str:
             if media == "member_avatar":
@@ -60,6 +60,7 @@ class GreetingRenderer:
                 button_builder=cls._build_button,
                 select_builder=cls._build_select,
                 resolve_media=resolve_media,
+                default_accent=raw_color,
             )
             if item is not None:
                 layout_view.add_item(item)

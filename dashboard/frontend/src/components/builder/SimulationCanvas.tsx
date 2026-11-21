@@ -9,6 +9,7 @@ import DiscordPreview from "../preview/DiscordPreview";
 import SelectPreview from "../preview/SelectPreview";
 import MessageChrome from "../preview/MessageChrome";
 import { GuideBreadcrumb, GuideNavRow } from "../preview/GuideChrome";
+import { BOARD_DEFAULT_ACCENT, InheritedAccentContext } from "../preview/accentContext";
 
 interface Props {
   mode: BuilderMode;
@@ -23,6 +24,8 @@ interface Props {
   /** Board mode: the response currently "opened" by a click, if any. */
   openResponseId?: string | null;
   onCloseResponse?: () => void;
+  /** Board mode: the board's own top-level colour, unset if none was picked. */
+  boardAccent?: string | number;
 }
 
 // The Home page is the top page of the tree (lowest `order`). A bare mention,
@@ -68,6 +71,7 @@ export default function SimulationCanvas({
   boardResponses = [],
   openResponseId = null,
   onCloseResponse,
+  boardAccent,
 }: Props) {
   if (mode === "guide") {
     // A null simulation page means "Home" - resolve it to the top page.
@@ -98,9 +102,14 @@ export default function SimulationCanvas({
     const openResponse = openResponseId
       ? boardResponses.find((r) => r.id === openResponseId)
       : null;
+    // Mirrors the bot: the board's colour, or its default; a response's own
+    // colour, or the board's.
+    const mainAccent = boardAccent ?? BOARD_DEFAULT_ACCENT;
+    const responseAccent = openResponse?.accent_color || mainAccent;
 
     return (
       <>
+        <InheritedAccentContext.Provider value={mainAccent}>
         <MessageChrome>
           <div className="discord-preview">
             <div className="canvas-drop-zone">
@@ -114,8 +123,10 @@ export default function SimulationCanvas({
             </div>
           </div>
         </MessageChrome>
+        </InheritedAccentContext.Provider>
 
         {openResponseId && (
+          <InheritedAccentContext.Provider value={responseAccent}>
           <div style={{ marginTop: 12 }}>
             <div
               style={{
@@ -158,6 +169,7 @@ export default function SimulationCanvas({
               </div>
             </MessageChrome>
           </div>
+          </InheritedAccentContext.Provider>
         )}
       </>
     );

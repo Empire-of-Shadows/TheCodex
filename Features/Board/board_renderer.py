@@ -24,7 +24,6 @@ from utils.component_builders import (
     apply_placeholders,
     build_component,
     build_link_button,
-    resolve_color,
 )
 
 _STYLE_MAP = {
@@ -77,7 +76,8 @@ class BoardRenderer:
         """Render one named response as an ephemeral layout.
 
         A response without its own accent_color inherits the board's, so a board
-        and everything it reveals read as one thing.
+        and everything it reveals read as one thing. The colour lands on every
+        container that sets none of its own.
         """
         accent = response.get("accent_color") or board_data.get("accent_color", _DEFAULT_ACCENT)
         return cls._render_components(
@@ -100,7 +100,6 @@ class BoardRenderer:
         member: Optional[Union[discord.Member, discord.User]],
     ) -> discord.ui.LayoutView:
         layout = discord.ui.LayoutView(timeout=None)
-        layout.accent_color = resolve_color(accent)
 
         placeholders = cls._build_placeholders(guild, member)
 
@@ -116,6 +115,9 @@ class BoardRenderer:
                 button_builder=cls._build_button,
                 select_builder=cls._build_select,
                 resolve_media=resolve_media,
+                # A LayoutView has no colour of its own; the accent shows only as
+                # each container's stripe, so containers without one take it here.
+                default_accent=accent,
             )
             if item is not None:
                 layout.add_item(item)

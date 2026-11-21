@@ -1,5 +1,7 @@
+import { useContext } from "react";
 import type { ContainerComponent, SimulationAction } from "../../api/types";
 import DiscordPreview from "./DiscordPreview";
+import { InheritedAccentContext } from "./accentContext";
 
 interface Props {
   comp: ContainerComponent;
@@ -7,11 +9,13 @@ interface Props {
 }
 
 export default function ContainerPreview({ comp, onInteract }: Props) {
+  const inherited = useContext(InheritedAccentContext);
+  const accent = comp.accent_color ?? inherited;
   let barColor = "#4e5058";
-  if (comp.accent_color) {
-    barColor = typeof comp.accent_color === "string"
-      ? comp.accent_color
-      : `#${comp.accent_color.toString(16).padStart(6, "0")}`;
+  if (accent !== undefined && accent !== null) {
+    barColor = typeof accent === "string"
+      ? accent
+      : `#${accent.toString(16).padStart(6, "0")}`;
   }
   return (
     <div className="dc-container">

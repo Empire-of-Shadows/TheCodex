@@ -36,6 +36,7 @@ import PageTreeEditor from "../components/builder/PageTreeEditor";
 import ResponseListEditor, { BOARD_MAIN_ID } from "../components/builder/ResponseListEditor";
 import Canvas from "../components/builder/Canvas";
 import SimulationCanvas from "../components/builder/SimulationCanvas";
+import { BOARD_DEFAULT_ACCENT, InheritedAccentContext } from "../components/preview/accentContext";
 import PropertyPanel from "../components/builder/PropertyPanel";
 import ValidationErrors from "../components/builder/ValidationErrors";
 import DocsPanel from "../components/builder/DocsPanel";
@@ -1010,6 +1011,21 @@ export default function BuilderPage() {
     return foldBoard(boardMain, boardResponses, boardCurrentId, components);
   }, [mode, boardMain, boardResponses, boardCurrentId, components]);
 
+  // The colour a container without its own takes in the editor preview,
+  // mirroring the bot: a board falls back to its default and a response to the
+  // board's colour; a greeting with no colour set draws none; the guide is
+  // unchanged.
+  const editorAccent = useMemo(() => {
+    if (mode === "board") {
+      const editing = boardCurrentId === BOARD_MAIN_ID
+        ? undefined
+        : boardResponses.find((r) => r.id === boardCurrentId);
+      return editing?.accent_color || (accentColor ?? BOARD_DEFAULT_ACCENT);
+    }
+    if (mode === "greeting") return accentColor;
+    return undefined;
+  }, [mode, boardCurrentId, boardResponses, accentColor]);
+
   const toggleSimulation = useCallback(() => {
     if (!simulating) {
       snapshotToCache();
@@ -1463,7 +1479,7 @@ export default function BuilderPage() {
             Accent
             <input
               type="color"
-              value={accentColor || "#5865f2"}
+              value={accentColor || (mode === "greeting" ? "#5865f2" : BOARD_DEFAULT_ACCENT)}
               onChange={(e) => setAccentColor(e.target.value)}
               style={{ width: 28, height: 28, border: "none", background: "none", cursor: "pointer" }}
             />
@@ -1591,6 +1607,7 @@ export default function BuilderPage() {
               style={{ "--canvas-preview-width": `${canvasWidth}px` } as React.CSSProperties}
             >
               <div className="canvas-preview-container">
+                <InheritedAccentContext.Provider value={editorAccent}>
                 {simulating ? (
                   <SimulationCanvas
                     mode={mode}
@@ -1603,6 +1620,7 @@ export default function BuilderPage() {
                     boardResponses={latestBoard.responses}
                     openResponseId={simResponseId}
                     onCloseResponse={() => setSimResponseId(null)}
+                    boardAccent={accentColor}
                   />
                 ) : (
                   <Canvas
@@ -1613,6 +1631,7 @@ export default function BuilderPage() {
                     emptyMessage={mode === "guide" && pages.length === 0 ? "Create a page first using the left sidebar" : undefined}
                   />
                 )}
+                </InheritedAccentContext.Provider>
                 <div className="canvas-resize-handle" onMouseDown={onCanvasResizeStart} />
               </div>
             </div>

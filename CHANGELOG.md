@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased] - 2026-11-21 (board and greeting colours)
+
+### Fixed
+- **The colour you pick for an info board or a greeting now shows in Discord.** It was saved
+  but never drawn. Every boxed section without a colour of its own now gets the colour
+  stripe down its side, and so does every private answer a board button sends, unless that
+  answer has its own colour. A board with no colour picked shows the default purple. A
+  greeting with no colour picked looks the same as before.
+- **The dashboard builder preview shows the same colours Discord will.** Boxed sections in
+  the board and greeting preview now take the colour from the Accent picker, and the picker
+  shows the default purple for boards and guides instead of a colour the bot never used.
+
 ## [Unreleased] - 2026-11-20 (dashboard settings: required channels, create roles and channels)
 
 ### Added
