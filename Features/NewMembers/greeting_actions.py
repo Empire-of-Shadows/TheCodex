@@ -6,6 +6,7 @@ Replaces freeform custom_id strings with a discoverable, multi-guild-safe regist
 """
 
 from storage.log import get_logger
+from utils.component_builders import strip_duplicate_suffix
 
 logger = get_logger("GreetingActions")
 
@@ -42,11 +43,12 @@ def encode_custom_id(action: str, params: dict | None = None) -> str:
 def decode_custom_id(raw: str) -> tuple[str | None, dict]:
     """Decode a custom_id string back into (action_name, params).
 
-    Returns (None, {}) if the string doesn't match our prefix.
+    Returns (None, {}) if the string doesn't match our prefix. A repeat number
+    added by the renderer (``gr:server_info~2``) is ignored.
     """
     if not raw.startswith(f"{_PREFIX}:"):
         return None, {}
-    rest = raw[len(_PREFIX) + 1:]
+    rest = strip_duplicate_suffix(raw)[len(_PREFIX) + 1:]
     # For now all actions are parameterless
     action = rest
     if action not in VALID_ACTIONS:

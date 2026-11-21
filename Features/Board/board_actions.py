@@ -29,6 +29,7 @@ from storage.log import get_logger
 from Features.interaction_errors import send_unexpected_failure
 from commands.help.help_content import SUPPORT_LINE
 from Features.role_safety import blocked_role_reason, is_blocked
+from utils.component_builders import strip_duplicate_suffix
 
 logger = get_logger("BoardActions")
 
@@ -85,10 +86,13 @@ def decode_custom_id(raw: str) -> Tuple[Optional[str], Optional[str]]:
         ("role", role_id)        for b:role:<role_id>
         ("_select", None)        for b:_select
         (None, None)             if this is not a board custom_id
+
+    A repeat number added by the renderer (``b:r:faq~2``) is ignored, so every
+    copy of a button does the same thing.
     """
     if not raw.startswith(f"{_PREFIX}:"):
         return None, None
-    rest = raw[len(_PREFIX) + 1:]
+    rest = strip_duplicate_suffix(raw)[len(_PREFIX) + 1:]
 
     if rest.startswith("r:"):
         return "reply", rest[2:]

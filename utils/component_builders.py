@@ -176,6 +176,52 @@ def build_component(
     return None
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Repeated custom_ids
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# A custom_id is built from what a component does (b:r:<response>, g:nav:<page>,
+# gr:<action>), so two buttons that do the same thing get the same id - and
+# Discord refuses a message whose components repeat a custom_id. Rather than ban
+# a reasonable layout (a "Get help" button in two places), the renderers number
+# the repeats: the first keeps its id, the next becomes "<id>~2", then "<id>~3".
+# The first copy never changes, so a message posted before this keeps working.
+#
+# "~" never appears in an id the builders make: response ids and page ids are
+# slugs, targets are snowflakes, action names are fixed words. So every decoder
+# can drop everything from the first "~" and get the original id back.
+
+DUPLICATE_ID_SEPARATOR = "~"
+
+# Room a numbered repeat needs on top of its id: "~" plus up to two digits,
+# since a message holds at most 40 components. Validators that cap an encoded
+# custom_id leave this much of Discord's 100 free.
+DUPLICATE_ID_ROOM = 3
+
+
+def strip_duplicate_suffix(custom_id: str) -> str:
+    """Return a custom_id without the repeat number make_custom_ids_unique added."""
+    return custom_id.split(DUPLICATE_ID_SEPARATOR, 1)[0]
+
+
+def make_custom_ids_unique(view: discord.ui.LayoutView) -> discord.ui.LayoutView:
+    """Number repeated custom_ids in a built layout so Discord accepts it.
+
+    Walks every component, accessories included. Link buttons and display-only
+    components have no custom_id and are skipped. Returns the same view.
+    """
+    seen: Dict[str, int] = {}
+    for item in view.walk_children():
+        custom_id = getattr(item, "custom_id", None)
+        if not custom_id:
+            continue
+        count = seen.get(custom_id, 0) + 1
+        seen[custom_id] = count
+        if count > 1:
+            item.custom_id = f"{custom_id}{DUPLICATE_ID_SEPARATOR}{count}"
+    return view
+
+
 def build_link_button(btn_def: Dict[str, Any], placeholders: Dict[str, str]) -> discord.ui.Button:
     """Build a link-style button (shared across features)."""
     label = apply_placeholders(btn_def.get("label", "Button"), placeholders)

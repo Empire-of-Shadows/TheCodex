@@ -9,6 +9,7 @@ and the info board ("b:"). The prefix is always matched with its colon, so "g:" 
 
 import discord
 from storage.log import get_logger
+from utils.component_builders import strip_duplicate_suffix
 
 logger = get_logger("GuideActions")
 
@@ -52,10 +53,12 @@ def decode_custom_id(raw: str) -> tuple[str | None, str | None]:
 		("_select", None)      for g:_select  (value carries the page_id)
 		("_uselect", None)     for g:_uselect (user-defined select)
 		(None, None)           if not a guide custom_id
+
+	A repeat number added by the renderer (``g:nav:rules~2``) is ignored.
 	"""
 	if not raw.startswith(f"{_PREFIX}:"):
 		return None, None
-	rest = raw[len(_PREFIX) + 1:]
+	rest = strip_duplicate_suffix(raw)[len(_PREFIX) + 1:]
 
 	if rest.startswith("nav:"):
 		return "nav", rest[4:]

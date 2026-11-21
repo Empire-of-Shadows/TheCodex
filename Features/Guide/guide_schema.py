@@ -13,12 +13,20 @@ import json
 import re
 from typing import Any, Dict, List, Set, Tuple
 
+from Features.Guide.guide_actions import encode_channel, encode_nav, encode_role, encode_select_value
+from utils.component_builders import DUPLICATE_ID_ROOM
 from utils.component_validators import (
 	trunc_label,
 	validate_accent_color,
 	validate_components_list,
 )
 from utils.safe_content import check_no_dangerous_content
+
+# Discord caps a custom_id and a select option value at 100 characters. A button
+# id also keeps room for the number the renderer adds to a repeat ("~2").
+_MAX_BUTTON_ID = 100 - DUPLICATE_ID_ROOM
+_MAX_OPTION_VALUE = 100
+_BUTTON_ENCODERS = {"navigate": encode_nav, "channel": encode_channel, "role": encode_role}
 
 _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9\-]*$")
 _MAX_LABEL = 100
@@ -289,6 +297,12 @@ def _validate_guide_button(comp: dict, prefix: str, navigate_targets: list) -> T
 		target = comp.get("target")
 		if not isinstance(target, str) or not target:
 			return False, f"{prefix} - target is required for {action} buttons."
+		encoded = _BUTTON_ENCODERS[action](target)
+		if len(encoded) > _MAX_BUTTON_ID:
+			return False, (
+				f"{prefix} - target \"{trunc_label(target)}\" is too long: it makes a button id of "
+				f"{len(encoded)} characters; max is {_MAX_BUTTON_ID}. Use a shorter page id."
+			)
 		if action == "navigate":
 			navigate_targets.append(target)
 
@@ -324,6 +338,12 @@ def _validate_guide_select_option(opt: Any, prefix: str, navigate_targets: list)
 	target = opt.get("target")
 	if not isinstance(target, str) or not target:
 		return False, f"{prefix} - target is required for {action} options."
+	value = encode_select_value(action, target)
+	if len(value) > _MAX_OPTION_VALUE:
+		return False, (
+			f"{prefix} - target \"{trunc_label(target)}\" is too long: it makes an option value of "
+			f"{len(value)} characters; max is {_MAX_OPTION_VALUE}. Use a shorter page id."
+		)
 	if action == "navigate":
 		navigate_targets.append(target)
 

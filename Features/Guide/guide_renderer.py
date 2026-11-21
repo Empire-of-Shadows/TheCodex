@@ -35,6 +35,7 @@ from utils.component_builders import (
 	apply_placeholders,
 	build_component,
 	build_link_button,
+	make_custom_ids_unique,
 )
 from storage.log import get_logger
 
@@ -145,7 +146,9 @@ class GuideRenderer:
 		# ── Navigation chrome ───────────────────────────────────────────
 		layout.add_item(cls._build_nav_row(is_root=is_root))
 
-		return layout
+		# Two content buttons to the same page, or two dropdowns of the page's
+		# own, share an id; Discord would refuse the page, so number the repeats.
+		return make_custom_ids_unique(layout)
 
 	@classmethod
 	def render_empty(

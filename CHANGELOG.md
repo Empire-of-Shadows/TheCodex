@@ -1,8 +1,16 @@
 # Changelog
 
-## [Unreleased] - 2026-11-21 (board and greeting colours)
+## [Unreleased] - 2026-11-21 (board and greeting colours, repeated buttons)
 
 ### Fixed
+- **Two buttons can now do the same thing in one message.** An info board, greeting or guide
+  page with two buttons opening the same answer, the same page or the same action (say a
+  "Get help" button at the top and the bottom) used to fail to post, because Discord refused
+  the whole message. It now posts, and both buttons work. The same goes for two dropdowns in
+  one message. Boards already posted keep working as they are.
+- **The guide warns you about a page name too long for a button.** A button or dropdown
+  option leading to a page with a very long id could not be sent by Discord. Uploading or
+  saving a guide like that now stops with a message telling you to use a shorter page id.
 - **The colour you pick for an info board or a greeting now shows in Discord.** It was saved
   but never drawn. Every boxed section without a colour of its own now gets the colour
   stripe down its side, and so does every private answer a board button sends, unless that

@@ -27,6 +27,7 @@ from admin.setup_notice import setup_notice_text
 from Features.interaction_errors import SupportAwareModalMixin, send_unexpected_failure
 from commands.help.help_content import SUPPORT_LINE
 from Features.role_safety import blocked_role_reason, is_blocked
+from utils.component_builders import strip_duplicate_suffix
 
 logger = get_logger("Guide")
 
@@ -644,7 +645,9 @@ async def dispatch_guide_interaction(interaction: discord.Interaction) -> bool:
 	if not interaction.guild:
 		return False
 
-	custom_id = interaction.data.get("custom_id", "")
+	# Drop a repeat number added by the renderer (g:_uselect~2), so the exact
+	# matches below and the decoder see the original id.
+	custom_id = strip_duplicate_suffix(interaction.data.get("custom_id", ""))
 	if not custom_id.startswith("g:"):
 		return False
 

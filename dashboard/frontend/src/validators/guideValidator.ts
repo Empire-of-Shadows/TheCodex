@@ -22,6 +22,14 @@ const MAX_DEPTH = 5;
 const VALID_BUTTON_STYLES = new Set(["primary", "secondary", "success", "danger", "link"]);
 const VALID_GUIDE_ACTIONS = new Set(["navigate", "channel", "role"]);
 
+// Discord caps a custom_id and a select option value at 100 characters. A button
+// id also keeps room for the number the bot adds to a repeat ("~2"); mirrors
+// _MAX_BUTTON_ID / _MAX_OPTION_VALUE in guide_schema.py.
+const DUPLICATE_ID_ROOM = 3;
+const MAX_BUTTON_ID = 100 - DUPLICATE_ID_ROOM;
+const MAX_OPTION_VALUE = 100;
+const BUTTON_PREFIXES: Record<string, string> = { navigate: "g:nav:", channel: "g:channel:", role: "g:role:" };
+
 function pageLabel(page: unknown, idx: number): string {
   if (typeof page === "object" && page !== null) {
     const label = (page as Record<string, unknown>).label;
@@ -205,6 +213,15 @@ function validateGuideButton(
     if (typeof comp.target !== "string" || !comp.target) {
       return { valid: false, error: `${prefix} - target is required for ${comp.action} buttons.` };
     }
+    const encoded = BUTTON_PREFIXES[comp.action as string] + (comp.target as string);
+    if (encoded.length > MAX_BUTTON_ID) {
+      return {
+        valid: false,
+        error:
+          `${prefix} - target "${truncLabel(comp.target as string)}" is too long: it makes a button id of ` +
+          `${encoded.length} characters; max is ${MAX_BUTTON_ID}. Use a shorter page id.`,
+      };
+    }
     if (comp.action === "navigate") {
       navigateTargets.push(comp.target as string);
     }
@@ -225,6 +242,15 @@ function validateGuideSelect(
       return { valid: false, error: `${pfx} - action "${opt.action}" is not valid. Guide select options support: channel, navigate, role.` };
     }
     if (typeof opt.target !== "string" || !opt.target) return { valid: false, error: `${pfx} - target is required for ${opt.action} options.` };
+    const value = `${opt.action}:${opt.target}`;
+    if (value.length > MAX_OPTION_VALUE) {
+      return {
+        valid: false,
+        error:
+          `${pfx} - target "${truncLabel(opt.target as string)}" is too long: it makes an option value of ` +
+          `${value.length} characters; max is ${MAX_OPTION_VALUE}. Use a shorter page id.`,
+      };
+    }
     if (opt.action === "navigate") {
       navigateTargets.push(opt.target as string);
     }

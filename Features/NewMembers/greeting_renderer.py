@@ -16,6 +16,7 @@ from utils.component_builders import (
     apply_placeholders,
     build_component,
     build_link_button,
+    make_custom_ids_unique,
 )
 
 _STYLE_MAP = {
@@ -65,7 +66,9 @@ class GreetingRenderer:
             if item is not None:
                 layout_view.add_item(item)
 
-        return layout_view
+        # A button's id is its action, so two buttons with the same action would
+        # repeat an id and Discord would refuse the greeting; number the repeats.
+        return make_custom_ids_unique(layout_view)
 
     # ─────────────────────────────────────────────────────────────────────────
     # Greeting-specific builders

@@ -24,6 +24,7 @@ from utils.component_builders import (
     apply_placeholders,
     build_component,
     build_link_button,
+    make_custom_ids_unique,
 )
 
 _STYLE_MAP = {
@@ -122,7 +123,9 @@ class BoardRenderer:
             if item is not None:
                 layout.add_item(item)
 
-        return layout
+        # Two buttons that open the same answer share an id; Discord would
+        # refuse the whole message, so the repeats are numbered.
+        return make_custom_ids_unique(layout)
 
     # ─────────────────────────────────────────────────────────────────────────
     # Board-specific builders
