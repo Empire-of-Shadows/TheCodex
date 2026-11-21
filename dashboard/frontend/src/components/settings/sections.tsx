@@ -621,7 +621,8 @@ export function AnnouncementSectionForm({
             label="Announcement Channel"
             value={value.channel_id}
             channels={channels}
-            filterType={0}
+            // Text or Announcement channels, the same two the Discord panel offers.
+            channelTypes={[0, 5]}
             onChange={(v) => onChange({ ...value, channel_id: v })}
             error={errors?.channel_id}
           />

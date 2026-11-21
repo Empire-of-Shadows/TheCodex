@@ -179,15 +179,26 @@ async def bot_invite_url():
 # accepts (live MANAGE_GUILD OR roles.admin_role_ids), so this matches the page
 # it serves without widening access.
 
+# Discord channel types the settings pickers can use: text (0) and Announcement (5).
+PICKER_CHANNEL_TYPES = (0, 5)
+
+
 @router.get("/guilds/{guild_id}/channels")
 async def guild_channels(
     guild_id: str,
     _session: dict = Depends(require_guild_admin),
 ):
-    """Return text channels for a guild (engine cache, 60s TTL)."""
+    """Return text and Announcement channels for a guild (engine cache, 60s TTL).
+
+    Announcement channels (Discord type 5) are included because the panel's
+    Announcement Channel picker accepts them (panel_configs.py, text + news) and
+    the dashboard used to list text channels only, so a server's real
+    Announcement channel could be picked in Discord but not here (owner report
+    2026-11-20). Every other picker filters to text itself (`filterType={0}`).
+    """
     if not BOT_TOKEN:
         raise HTTPException(status_code=503, detail="Bot token not configured")
-    return await discord_cache.guild_text_channels(guild_id)
+    return await discord_cache.guild_channels(guild_id, types=PICKER_CHANNEL_TYPES)
 
 
 @router.get("/guilds/{guild_id}/roles")

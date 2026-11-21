@@ -28,6 +28,10 @@
   role.
 
 ### Fixed
+- **You can pick an Announcement channel on the dashboard.** The Announcements setting
+  only listed regular text channels, so a server's real Announcement channel could be chosen
+  in Discord but not on the dashboard. It now lists both, the same as Discord does. Guide
+  and info board buttons that link to a channel can point at Announcement channels too.
 - **TheCodex no longer hands out roles with moderator powers.** A role that has
   Administrator, Manage Server, Manage Roles, Manage Channels, Ban Members or Kick Members
   can no longer be used as the WYR ping role, the whitelist role, the tag role, or on a
