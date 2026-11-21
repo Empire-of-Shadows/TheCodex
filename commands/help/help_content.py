@@ -22,7 +22,7 @@ DASHBOARD_URL = "https://codex.eosofficial.club"
 # the member the TheCodex role, so staff know which bot the question is about.
 # The admin engine reads it through admin/settings/bindings.py
 # (SUPPORT_INVITE_URL); the dashboard keeps a copy in dashboard/frontend/src/links.ts.
-SUPPORT_INVITE_URL = "https://discord.gg/pex4AKTbFV"
+SUPPORT_INVITE_URL = "https://discord.gg/6GBCTu84aS"
 
 # The line every UNEXPECTED failure ends with (a crash or exception path, never an
 # expected refusal). Same wording as the admin engine's SUPPORT_LINE_TEMPLATE in

@@ -7,7 +7,7 @@
 [![Add to Discord](https://img.shields.io/badge/Add_to-Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.com/oauth2/authorize?client_id=1372808379000684584)
 [![Dashboard](https://img.shields.io/badge/Dashboard-codex.eosofficial.club-7603FF?style=for-the-badge)](https://codex.eosofficial.club)
 [![Docs](https://img.shields.io/badge/Docs-Wiki-7603FF?style=for-the-badge)](https://wiki.eosofficial.club/bots/thecodex)
-[![Support](https://img.shields.io/badge/Support-Server-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/pex4AKTbFV)
+[![Support](https://img.shields.io/badge/Support-Server-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/6GBCTu84aS)
 
 [![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](https://www.python.org)
 [![discord.py](https://img.shields.io/badge/discord.py-2.7-5865F2?logo=discord&logoColor=white)](https://github.com/Rapptz/discord.py)
@@ -222,7 +222,7 @@ folder.
 - [Changelog](CHANGELOG.md) - what changed, in plain language
 - [TheCodex on the wiki](https://wiki.eosofficial.club/bots/thecodex)
 - [All six bots](https://wiki.eosofficial.club/bots) and [the main site](https://eosofficial.club)
-- [Support server](https://discord.gg/pex4AKTbFV) for help and bug reports
+- [Support server](https://discord.gg/6GBCTu84aS) for help and bug reports
 - [Community server](https://discord.gg/xx86YEhaYF), where the bots were built and are played
 
 ## Contributing, security and license

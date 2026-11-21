@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased] - 2026-11-21 (support server link)
+
+### Fixed
+- **The support server link works again.** The link on the Support Server button in `/help` and in the
+  "report it in the support server" line of an error message pointed at an invite that has been
+  replaced. It now takes you to the support server, with the TheCodex role, as before.
+
 ## [Unreleased] - 2026-11-21 (board and greeting colours, repeated buttons)
 
 ### Fixed
