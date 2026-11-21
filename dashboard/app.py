@@ -31,6 +31,7 @@ from dashboard.routers.settings import router as settings_router
 from dashboard.routers.overview import router as overview_router
 from dashboard.routers.user_data import router as user_data_router
 from dashboard.routers.entitlements import router as entitlements_router
+from dashboard.routers.discord_objects import router as discord_objects_router
 from status_push import start_status_push, stop_status_push
 from storage.log import get_logger
 
@@ -130,6 +131,7 @@ app.include_router(settings_router, prefix="/api")
 app.include_router(overview_router, prefix="/api")
 app.include_router(user_data_router, prefix="/api")
 app.include_router(entitlements_router, prefix="/api")
+app.include_router(discord_objects_router, prefix="/api")
 
 
 # Each database gets this long to answer. Both pings run at once, so /health stays inside

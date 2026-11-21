@@ -26,6 +26,7 @@ from commands.help.help_content import (
     CATEGORY_ORDER,
     DASHBOARD_URL,
     DEFAULT_CATEGORY,
+    SUPPORT_INVITE_URL,
     SUPPORT_LINE,
 )
 from Features.interaction_errors import SupportAwareViewMixin
@@ -126,9 +127,11 @@ class CodexHelpView(SupportAwareViewMixin, ui.LayoutView):
         self.add_item(ui.ActionRow(select))
 
         dashboard_btn = ui.Button(label="Dashboard", url=DASHBOARD_URL)
+        # This bot's own invite, so joining through it gives the member this bot's role.
+        support_btn = ui.Button(label="Support Server", url=SUPPORT_INVITE_URL)
         close_btn = ui.Button(label="Close", style=discord.ButtonStyle.secondary)
         close_btn.callback = self._on_close
-        self.add_item(ui.ActionRow(dashboard_btn, close_btn))
+        self.add_item(ui.ActionRow(dashboard_btn, support_btn, close_btn))
 
     async def _on_select(self, interaction: discord.Interaction) -> None:
         selected = (interaction.data or {}).get("values", [DEFAULT_CATEGORY])[0]

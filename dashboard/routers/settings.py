@@ -17,6 +17,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from dashboard import db
+from dashboard._engine.discord_cache import (
+    PERMISSION_BITS,
+    discord_cache,
+    missing_permissions,
+    permission_label,
+)
 from dashboard.auth.dependencies import get_current_user
 from dashboard.auth.panel_role import require_panel_access
 from storage.log import get_logger
@@ -96,6 +102,193 @@ _ROLE_ID_FIELDS: dict[str, tuple[str, ...]] = {
 _ROLE_ID_LIST_FIELDS: dict[str, tuple[str, ...]] = {
     "roles": ("admin_role_ids",),
 }
+
+
+# ── Required fields ─────────────────────────────────────────────────────────
+#
+# A feature that is switched on but missing the channel (or role, or tag) it
+# cannot run without saves fine and then silently does nothing. Each rule below
+# was checked against the code that runs the feature (2026-11-20):
+#
+#   wyr.channel_id              Features/daily/WYR.py posts nowhere without it
+#   wyr review channel OR role  WYR.py:254 refuses every suggestion without both
+#   new_members greeting        joining.py:574 skips the greeting without a channel
+#   new_members starter role    joining.py:455 needs a role or a name to create one
+#   announcement.channel_id     announcements.py:41 does nothing without it
+#   drops.channel_id            prime-drops.py:162 posts nothing without it
+#   boost.channel_id            boost_tracker.py:355 logs nothing without it
+#   tag_tracker tag AND role    tag_tracker.py:53 is inactive without both
+#
+# The settings page shows the same messages in red and keeps Save switched off
+# (components/settings/requirements.ts, which must say the same thing). This
+# copy is the one that holds when a request does not come from that page.
+
+def _blank(v: Any) -> bool:
+    return v is None or (isinstance(v, str) and not v.strip())
+
+
+def _requirement_errors(section: str, s: dict) -> list[str]:
+    """What a switched-on feature in ``s`` (the section as it would be saved) is missing."""
+    errors: list[str] = []
+    if section == "wyr":
+        if s.get("enabled") and _blank(s.get("channel_id")):
+            errors.append("Pick a WYR channel, or switch Would You Rather off.")
+        if (
+            s.get("submissions_enabled")
+            and _blank(s.get("submission_review_channel_id"))
+            and _blank(s.get("submission_moderator_role_id"))
+        ):
+            errors.append(
+                "Pick a suggestion review channel or a reviewer role, or switch member suggestions off."
+            )
+    elif section == "new_members":
+        if s.get("enabled") and s.get("greeting_enabled") and _blank(s.get("greeting_channel_id")):
+            errors.append("Pick a greeting channel, or switch greeting messages off.")
+        if (
+            s.get("enabled")
+            and s.get("whitelist_enabled")
+            and _blank(s.get("whitelist_role_id"))
+            and _blank(s.get("whitelist_role_name"))
+        ):
+            errors.append(
+                "Pick a whitelist role or type a name for one, or switch the whitelist system off."
+            )
+    elif section == "announcement":
+        if s.get("thread_auto_create") and _blank(s.get("channel_id")):
+            errors.append("Pick an announcement channel, or switch Auto-Create Threads off.")
+    elif section == "drops":
+        if s.get("enabled") and _blank(s.get("channel_id")):
+            errors.append("Pick a drops channel, or switch drops off.")
+    elif section == "boost":
+        if s.get("enabled") and _blank(s.get("channel_id")):
+            errors.append("Pick a boost log channel, or switch the Boost Tracker off.")
+    elif section == "tag_tracker":
+        if s.get("enabled") and _blank(s.get("server_tag")):
+            errors.append("Type your server tag, or switch the Tag Tracker off.")
+        if s.get("enabled") and _blank(s.get("role_id")):
+            errors.append("Pick a tag role, or switch the Tag Tracker off.")
+    return errors
+
+
+# ── What the bot needs in a picked channel or role ─────────────────────────
+#
+# The panel refuses a channel the bot cannot use and a role it cannot hand out;
+# the dashboard used to save both, and the feature then failed silently (found
+# 2026-11-20). The lists are the panel's own, copied here because the dashboard
+# process does not import the admin package; a test compares them with the panel
+# constants (panel_configs, wyr_question_nodes, drops_nodes, tracker_nodes) so
+# they cannot drift. Only a CHANGED value is checked, and a Discord lookup that
+# fails lets the save through, like every other dashboard's check.
+
+_CHANNEL_PERMS: dict[tuple[str, str], list[str]] = {
+    ("wyr", "channel_id"): [
+        "view_channel", "send_messages", "embed_links",
+        "create_public_threads", "send_messages_in_threads",
+    ],
+    ("wyr", "submission_review_channel_id"): ["view_channel", "send_messages", "embed_links"],
+    ("new_members", "greeting_channel_id"): ["view_channel", "send_messages"],
+    ("announcement", "channel_id"): [
+        "view_channel", "read_message_history", "create_public_threads",
+        "send_messages_in_threads", "embed_links",
+    ],
+    ("suggestions", "channel_id"): [
+        "view_channel", "send_messages", "embed_links",
+        "create_public_threads", "send_messages_in_threads",
+    ],
+    ("drops", "channel_id"): ["view_channel", "send_messages", "embed_links"],
+    ("boost", "channel_id"): ["view_channel", "send_messages"],
+}
+_TRACKER_CHANNEL_PERMS = ["view_channel"]
+
+_CHANNEL_LABELS: dict[tuple[str, str], str] = {
+    ("wyr", "channel_id"): "WYR channel",
+    ("wyr", "submission_review_channel_id"): "suggestion review channel",
+    ("new_members", "greeting_channel_id"): "greeting channel",
+    ("announcement", "channel_id"): "announcement channel",
+    ("suggestions", "channel_id"): "suggestion channel",
+    ("drops", "channel_id"): "drops channel",
+    ("boost", "channel_id"): "boost log channel",
+}
+
+# Roles the bot hands out itself, so it must be able to assign them (the panel's
+# requires_role_manage nodes: WYR ping role, whitelist role, tag role).
+_ASSIGNED_ROLES: dict[tuple[str, str], str] = {
+    ("wyr", "ping_role_id"): "ping role",
+    ("new_members", "whitelist_role_id"): "whitelist role",
+    ("tag_tracker", "role_id"): "tag role",
+}
+
+
+def _id_changed(new: Any, old: Any) -> bool:
+    return new not in (None, "") and str(new) != str(old or "")
+
+
+async def _channel_problem(gid: str, channel_id: Any, perms_needed: list[str], label: str) -> str | None:
+    perms = await discord_cache.bot_channel_permissions(gid, str(channel_id))
+    missing = missing_permissions(perms, perms_needed)
+    if not missing:
+        return None
+    return (
+        f"TheCodex is missing permissions in that {label}: "
+        f"{', '.join(permission_label(m) for m in missing)}. Grant them in the "
+        f"channel's settings, or pick another channel."
+    )
+
+
+async def _role_problem(gid: str, role_id: Any, label: str) -> str | None:
+    roles = await discord_cache.guild_roles_raw(gid)
+    bot_roles = await discord_cache.bot_member_role_ids(gid)
+    perms = await discord_cache.bot_guild_permissions(gid)
+    if not roles or bot_roles is None or perms is None:
+        return None  # could not check - let it through
+    role = next((r for r in roles if str(r["id"]) == str(role_id)), None)
+    if role is None:
+        return f"That {label} is not in this server any more. Pick another role."
+    if str(role["id"]) == gid:
+        return f"@everyone cannot be the {label}. Pick a normal role."
+    if role.get("managed"):
+        return (
+            f"@{role['name']} is managed by an integration, so Discord does not let "
+            f"anyone hand it out. Pick a normal role for the {label}."
+        )
+    if not perms & PERMISSION_BITS["manage_roles"]:
+        return (
+            f"TheCodex needs the Manage Roles permission to hand out the {label}. "
+            f"Grant it in Server Settings > Roles."
+        )
+    top = max(
+        (int(r.get("position", 0)) for r in roles if str(r["id"]) in {str(b) for b in bot_roles}),
+        default=0,
+    )
+    if int(role.get("position", 0)) >= top:
+        return (
+            f"TheCodex's highest role must be above @{role['name']} to hand it out. "
+            f"Move the bot's role up in Server Settings > Roles, or pick a lower role."
+        )
+    return None
+
+
+async def _discord_problems(gid: str, section: str, value: dict, existing: dict) -> list[str]:
+    """What the bot cannot do with the channels and roles this save changes."""
+    problems: list[str] = []
+    for (sec, key), needed in _CHANNEL_PERMS.items():
+        if sec == section and key in value and _id_changed(value[key], existing.get(key)):
+            p = await _channel_problem(gid, value[key], needed, _CHANNEL_LABELS[(sec, key)])
+            if p:
+                problems.append(p)
+    if section == "drops" and isinstance(value.get("tracker_channels"), dict):
+        old = existing.get("tracker_channels") or {}
+        for bucket, cid in value["tracker_channels"].items():
+            if _id_changed(cid, old.get(bucket)):
+                p = await _channel_problem(gid, cid, _TRACKER_CHANNEL_PERMS, f"{bucket} tracker channel")
+                if p:
+                    problems.append(p)
+    for (sec, key), label in _ASSIGNED_ROLES.items():
+        if sec == section and key in value and _id_changed(value[key], existing.get(key)):
+            p = await _role_problem(gid, value[key], label)
+            if p:
+                problems.append(p)
+    return problems
 
 
 def _stringify_id(v: Any) -> Any:
@@ -260,13 +453,24 @@ async def update_settings(
             if format_error:
                 raise HTTPException(status_code=400, detail=format_error)
 
-        # Surgical dotted $set of only the leaf keys that actually change, so a
-        # concurrent edit to a different key in the same section isn't clobbered
-        # by a whole-section overwrite.
         existing = (doc or {}).get(section)
         if not isinstance(existing, dict):
             existing = {}
         defaults = DEFAULT_CONFIG.get(section, {})
+
+        # Judge the section as it would stand after this save, so a patch that
+        # carries only some keys is checked against what is already stored.
+        missing = _requirement_errors(section, {**defaults, **existing, **value})
+        if missing:
+            raise HTTPException(status_code=400, detail=" ".join(missing))
+
+        problems = await _discord_problems(gid, section, value, existing)
+        if problems:
+            raise HTTPException(status_code=400, detail=" ".join(problems))
+
+        # Surgical dotted $set of only the leaf keys that actually change, so a
+        # concurrent edit to a different key in the same section isn't clobbered
+        # by a whole-section overwrite.
         for leaf_key, new_val in value.items():
             old_val = existing.get(leaf_key, defaults.get(leaf_key))
             if old_val != new_val:

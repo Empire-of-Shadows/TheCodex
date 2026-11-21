@@ -17,6 +17,8 @@ import type {
   GuildSettings,
 } from "./types";
 import { apiFetch, apiUrl } from "../_engine/api/http";
+import type { CreateAbilities } from "../_engine/components/settings/create";
+import type { CreatableKind } from "../_engine/components/settings/names";
 
 // Re-export the shared transport surface for pages/components.
 export {
@@ -106,6 +108,25 @@ export const api = {
     apiFetch<Channel[]>(`/api/guilds/${guildId}/channels`),
   getRoles: (guildId: string) =>
     apiFetch<Role[]>(`/api/guilds/${guildId}/roles`),
+
+  // Create a role or channel from a settings picker (2026-11-20). Saves no setting.
+  getCreateAbilities: (guildId: string) =>
+    apiFetch<CreateAbilities>(`/api/guilds/${guildId}/create-abilities`),
+  createRole: (guildId: string, name: string) =>
+    apiFetch<Role>(`/api/guilds/${guildId}/roles`, {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
+  createChannel: (
+    guildId: string,
+    name: string,
+    kind: CreatableKind,
+    parentId: string | null,
+  ) =>
+    apiFetch<Channel>(`/api/guilds/${guildId}/channels`, {
+      method: "POST",
+      body: JSON.stringify({ name, kind, parent_id: parentId }),
+    }),
 
   getDocs: (builder: "guide" | "greeting" | "board", topic: string) =>
     apiFetch<{ title: string; content: string }>(`/api/docs/${builder}/${topic}`),

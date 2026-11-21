@@ -15,6 +15,12 @@ import AppHeader from "../components/AppHeader";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { formatError } from "../_engine/api/formatError";
 import { PickerStatusProvider } from "../_engine/components/settings/fields";
+import {
+  EntityCreatorProvider,
+  type CreateAbilities,
+  type EntityCreator,
+} from "../_engine/components/settings/create";
+import { sectionErrors, sectionProblems } from "../components/settings/requirements";
 import ContextColumn from "../components/settings/ContextColumn";
 import {
   AnnouncementSectionForm,
@@ -270,6 +276,10 @@ export default function AdminSettingsPage() {
   const [channelsFailed, setChannelsFailed] = useState(false);
   const [rolesFailed, setRolesFailed] = useState(false);
   const [overview, setOverview] = useState<GuildOverview | null>(null);
+  // What the bot may create (Create role / Create channel buttons). Null while
+  // loading; on failure every Create button is greyed out with the reason.
+  const [abilities, setAbilities] = useState<CreateAbilities | null>(null);
+  const [abilitiesFailed, setAbilitiesFailed] = useState(false);
   const [savingSection, setSavingSection] = useState<SettingsSection | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -325,6 +335,13 @@ export default function AdminSettingsPage() {
       .getGuildOverview(guildId)
       .then((o) => setOverview(o))
       .catch(() => setOverview(null));
+
+    setAbilities(null);
+    setAbilitiesFailed(false);
+    api
+      .getCreateAbilities(guildId)
+      .then((a) => setAbilities(a))
+      .catch(() => setAbilitiesFailed(true));
   }, [guildId]);
 
   // The loading and failure branches carry the same shell as the loaded page:
@@ -395,6 +412,40 @@ export default function AdminSettingsPage() {
 
   const active = RAIL_ITEMS.find((i) => i.slug === slug) ?? RAIL_ITEMS[0];
   const activeDirty = active.saves.some((s) => isDirty(s.section));
+  // A switched-on feature missing what it needs: red on the field, Save held off.
+  const activeProblems = active.saves.flatMap((s) => sectionProblems(s.section, draft));
+
+  // Creating a role or channel adds it to the picker lists straight away (the
+  // field then selects it); the abilities are re-read because counts and
+  // categories may have changed. Nothing is saved until the section is.
+  const refreshAbilities = () => {
+    api
+      .getCreateAbilities(guildId)
+      .then((a) => {
+        setAbilities(a);
+        setAbilitiesFailed(false);
+      })
+      .catch(() => {});
+  };
+  const creator: EntityCreator = {
+    botName: "TheCodex",
+    abilities,
+    abilitiesFailed,
+    createRole: async (name) => {
+      const role = await api.createRole(guildId, name);
+      setRoles((prev) => (prev.some((r) => r.id === role.id) ? prev : [...prev, role]));
+      refreshAbilities();
+      return role;
+    },
+    createChannel: async (name, kind, parentId) => {
+      const channel = await api.createChannel(guildId, name, kind, parentId);
+      setChannels((prev) =>
+        prev.some((c) => c.id === channel.id) ? prev : [...prev, channel],
+      );
+      refreshAbilities();
+      return channel;
+    },
+  };
 
   const goTo = (next: Slug) => {
     setSearchParams(
@@ -512,6 +563,7 @@ export default function AdminSettingsPage() {
           </div>
 
           <PickerStatusProvider value={{ channelsFailed, rolesFailed }}>
+           <EntityCreatorProvider value={creator}>
             <div className="set-main">
               <div className="set-head">
                 <h1>{active.title}</h1>
@@ -524,6 +576,7 @@ export default function AdminSettingsPage() {
                   channels={channels}
                   roles={roles}
                   onChange={(v) => updateSection("wyr", v)}
+                  errors={sectionErrors("wyr", draft)}
                 />
               )}
               {slug === "new_members" && (
@@ -533,6 +586,7 @@ export default function AdminSettingsPage() {
                   channels={channels}
                   roles={roles}
                   onChange={(v) => updateSection("new_members", v)}
+                  errors={sectionErrors("new_members", draft)}
                 />
               )}
               {slug === "suggestions" && (
@@ -550,6 +604,7 @@ export default function AdminSettingsPage() {
                   channels={channels}
                   roles={roles}
                   onChange={(v) => updateSection("drops", v)}
+                  errors={sectionErrors("drops", draft)}
                 />
               )}
               {slug === "announcement" && (
@@ -557,6 +612,7 @@ export default function AdminSettingsPage() {
                   value={draft.announcement}
                   channels={channels}
                   onChange={(v) => updateSection("announcement", v)}
+                  errors={sectionErrors("announcement", draft)}
                 />
               )}
               {slug === "guide" && (
@@ -575,6 +631,8 @@ export default function AdminSettingsPage() {
                   roles={roles}
                   onTagChange={(v) => updateSection("tag_tracker", v)}
                   onBoostChange={(v) => updateSection("boost", v)}
+                  tagErrors={sectionErrors("tag_tracker", draft)}
+                  boostErrors={sectionErrors("boost", draft)}
                 />
               )}
               {slug === "panel_access" && (
@@ -589,23 +647,32 @@ export default function AdminSettingsPage() {
                 {active.saves.map((s) => {
                   const dirty = isDirty(s.section);
                   const saving = savingSection === s.section;
+                  const blocked = sectionProblems(s.section, draft).length > 0;
                   return (
                     <button
                       key={s.section}
                       type="button"
                       className="btn btn-primary"
-                      disabled={!dirty || saving}
+                      disabled={!dirty || saving || blocked}
+                      title={blocked ? "Fix the fields marked in red first." : undefined}
                       onClick={() => saveSection(s.section)}
                     >
                       {saving ? "Saving..." : s.label}
                     </button>
                   );
                 })}
+                {activeProblems.length > 0 ? (
+                  <span className="savebar__problems" role="status">
+                    Cannot save yet: {activeProblems.join(" ")}
+                  </span>
+                ) : (
                 <span className="muted" style={{ fontSize: 13 }}>
                   {activeDirty ? "Unsaved changes" : "Everything here is saved"}
                 </span>
+                )}
               </div>
             </div>
+           </EntityCreatorProvider>
           </PickerStatusProvider>
 
           <aside className="set-ctx" aria-label="Current state">

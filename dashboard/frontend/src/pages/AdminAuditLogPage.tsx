@@ -47,6 +47,8 @@ const SECTIONS: SectionDef[] = [
   { key: "boost", label: "Boost tracker", short: "Boosts" },
   { key: "guide", label: "Guide and board", short: "Guide" },
   { key: "embed", label: "Embeds", short: "Embeds" },
+  // Roles and channels made with a settings picker's Create button (2026-11-20).
+  { key: "discord", label: "Roles and channels created", short: "Created" },
 ];
 
 /** A section the map does not know is shown as it was stored, never dropped. */

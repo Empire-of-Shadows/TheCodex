@@ -42,6 +42,7 @@ import {
   WYR_MAX_PENDING_OPTIONS,
   WYR_SOURCE_OPTIONS,
 } from "./options";
+import type { FieldErrors } from "./requirements";
 
 /*
  * The settings form, one component per rail section.
@@ -96,11 +97,13 @@ export function WyrSectionForm({
   channels,
   roles,
   onChange,
+  errors,
 }: {
   value: WyrSection;
   channels: Channel[];
   roles: Role[];
   onChange: (v: WyrSection) => void;
+  errors?: FieldErrors;
 }) {
   return (
     <>
@@ -125,6 +128,7 @@ export function WyrSectionForm({
             channels={channels}
             filterType={0}
             onChange={(v) => onChange({ ...value, channel_id: v })}
+            error={errors?.channel_id}
           />
           <RoleField
             label="Ping Role"
@@ -211,6 +215,7 @@ export function WyrSectionForm({
             channels={channels}
             filterType={0}
             onChange={(v) => onChange({ ...value, submission_review_channel_id: v })}
+            error={errors?.submission_review_channel_id}
             description="Where member suggestions land to be approved or rejected."
           />
           <RoleField
@@ -218,6 +223,7 @@ export function WyrSectionForm({
             value={value.submission_moderator_role_id}
             roles={roles}
             onChange={(v) => onChange({ ...value, submission_moderator_role_id: v })}
+            error={errors?.submission_moderator_role_id}
             description="Members with this role can approve or reject suggestions."
           />
         </FRow>
@@ -323,12 +329,14 @@ export function NewMembersSectionForm({
   channels,
   roles,
   onChange,
+  errors,
 }: {
   guildId: string;
   value: NewMembersSection;
   channels: Channel[];
   roles: Role[];
   onChange: (v: NewMembersSection) => void;
+  errors?: FieldErrors;
 }) {
   const adminHref = useAdminHref();
   return (
@@ -370,6 +378,7 @@ export function NewMembersSectionForm({
             channels={channels}
             filterType={0}
             onChange={(v) => onChange({ ...value, greeting_channel_id: v })}
+            error={errors?.greeting_channel_id}
           />
         </FRow>
         <p className="muted" style={{ margin: 0 }}>
@@ -390,6 +399,7 @@ export function NewMembersSectionForm({
             value={value.whitelist_role_id}
             roles={roles}
             onChange={(v) => onChange({ ...value, whitelist_role_id: v })}
+            error={errors?.whitelist_role_id}
           />
         </FRow>
         <FRow>
@@ -398,6 +408,7 @@ export function NewMembersSectionForm({
             value={value.whitelist_role_name}
             maxLength={100}
             onChange={(v) => onChange({ ...value, whitelist_role_name: v })}
+            error={errors?.whitelist_role_name}
             description="Used when auto-creating the whitelist role if one is not set above."
           />
         </FRow>
@@ -475,11 +486,13 @@ export function DropsSectionForm({
   channels,
   roles,
   onChange,
+  errors,
 }: {
   value: DropsSection;
   channels: Channel[];
   roles: Role[];
   onChange: (v: DropsSection) => void;
+  errors?: FieldErrors;
 }) {
   const tracker = value.tracker_channels ?? {};
   return (
@@ -497,6 +510,7 @@ export function DropsSectionForm({
             channels={channels}
             filterType={0}
             onChange={(v) => onChange({ ...value, channel_id: v })}
+            error={errors?.channel_id}
           />
         </FRow>
         <FRow>
@@ -581,10 +595,12 @@ export function AnnouncementSectionForm({
   value,
   channels,
   onChange,
+  errors,
 }: {
   value: AnnouncementSection;
   channels: Channel[];
   onChange: (v: AnnouncementSection) => void;
+  errors?: FieldErrors;
 }) {
   return (
     <>
@@ -609,6 +625,7 @@ export function AnnouncementSectionForm({
             channels={channels}
             filterType={0}
             onChange={(v) => onChange({ ...value, channel_id: v })}
+            error={errors?.channel_id}
           />
           <OptionSelect<number>
             label="Auto-Archive"
@@ -714,6 +731,8 @@ export function TrackersSectionForm({
   roles,
   onTagChange,
   onBoostChange,
+  tagErrors,
+  boostErrors,
 }: {
   tag: TagTrackerSection;
   boost: BoostSection;
@@ -721,6 +740,8 @@ export function TrackersSectionForm({
   roles: Role[];
   onTagChange: (v: TagTrackerSection) => void;
   onBoostChange: (v: BoostSection) => void;
+  tagErrors?: FieldErrors;
+  boostErrors?: FieldErrors;
 }) {
   return (
     <>
@@ -740,6 +761,7 @@ export function TrackersSectionForm({
             value={tag.server_tag ?? ""}
             maxLength={32}
             onChange={(v) => onTagChange({ ...tag, server_tag: v || null })}
+            error={tagErrors?.server_tag}
             description="The exact server tag string members must wear to qualify."
           />
         </FRow>
@@ -749,6 +771,7 @@ export function TrackersSectionForm({
             value={tag.role_id}
             roles={roles}
             onChange={(v) => onTagChange({ ...tag, role_id: v })}
+            error={tagErrors?.role_id}
             description="Role granted to members wearing the tag."
           />
         </FRow>
@@ -770,6 +793,7 @@ export function TrackersSectionForm({
             channels={channels}
             filterType={0}
             onChange={(v) => onBoostChange({ ...boost, channel_id: v })}
+            error={boostErrors?.channel_id}
           />
         </FRow>
       </Fieldset>

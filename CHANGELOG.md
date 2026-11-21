@@ -1,5 +1,40 @@
 # Changelog
 
+## [Unreleased] - 2026-11-20 (dashboard settings: required channels, create roles and channels)
+
+### Added
+- **You can create a role or a channel right from the dashboard settings.** Every role and
+  channel picker has a Create button next to it. Type a name, pick a category if you want
+  one, and the new role or channel is made and picked for you; save the section to keep it.
+  Channel names follow Discord's rules, and the form shows you the exact name Discord will
+  give a text channel before you create it. Each one you create shows up in the change
+  history.
+- **The Create button tells you when TheCodex is not allowed to create.** If the bot does
+  not have Manage Roles or Manage Channels, the button is greyed out, and hovering over it
+  says which permission to give the bot. Categories the bot cannot add channels to are
+  shown but cannot be picked.
+
+### Changed
+- **A feature that is switched on cannot be saved without the channel it needs.** Would You
+  Rather, greetings, announcement threads, drops and the boost tracker now mark the missing
+  channel in red and keep the Save button off until you pick one or switch the feature off.
+  The same goes for member suggestions without a review channel or reviewer role, the
+  whitelist system without a role or a role name, and the tag tracker without its tag or
+  role.
+
+### Fixed
+- **The dashboard no longer saves a channel or role TheCodex cannot use.** Picking a channel
+  where the bot is missing a permission it needs, or a role it cannot hand out (one above
+  its own role, or one managed by an integration), now explains what is wrong instead of
+  saving a setup that would quietly do nothing. The Discord admin panel already refused
+  these.
+
+## [Unreleased] - 2026-11-19 (support button in /help)
+
+### Added
+- **`/help` now has a Support Server button.** It sits next to the Dashboard button on every
+  help page and takes you straight into our support server.
+
 ## [Unreleased] - 2026-11-09 (status page)
 
 ### Added
