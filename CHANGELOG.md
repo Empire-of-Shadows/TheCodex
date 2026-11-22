@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased] - 2026-11-21 (roles with access limit)
+
+### Fixed
+- **@everyone can never open the admin panel.** If @everyone had somehow been saved as a
+  role with access, every member of the server could open the full admin panel. It now grants
+  nothing; members with Manage Server and real roles with access are not affected.
+- **"Roles with access" stops at 10 everywhere.** The dashboard page already stopped at 10
+  roles, the most the Discord admin panel can show, but a save sent another way could store
+  more, and that admin panel screen then would not open. Saving more than 10 is now refused.
+  A list that is already longer can still be saved as it is, or made shorter.
+
 ## [Unreleased] - 2026-11-21 (builder names the server)
 
 ### Changed

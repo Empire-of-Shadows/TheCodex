@@ -105,6 +105,13 @@ _ROLE_ID_LIST_FIELDS: dict[str, tuple[str, ...]] = {
     "roles": ("admin_role_ids",),
 }
 
+# The most roles the panel's Panel Access Roles picker holds (its node's max_values,
+# the engine panel_roles_pair default). The panel passes every stored id to that
+# picker as a default value with no trim, so a longer list saved here would stop the
+# panel screen from opening (found 2026-11-21). The page stops at the same number
+# (options.ts PANEL_ACCESS_ROLE_MAX); a test pins both to the node.
+PANEL_ACCESS_ROLE_MAX = 10
+
 
 # ── Required fields ─────────────────────────────────────────────────────────
 #
@@ -569,6 +576,18 @@ async def update_settings(
                 status_code=400,
                 detail="That timezone is not one TheCodex knows. Pick a region and a zone from the lists.",
             )
+
+        # A list may always shrink, and one already over the cap may be saved back
+        # unchanged, so an unrelated save never fails and the way back stays open.
+        if section == "roles" and "admin_role_ids" in value:
+            wanted = value["admin_role_ids"] or []
+            stored = existing.get("admin_role_ids") or []
+            if len(wanted) > PANEL_ACCESS_ROLE_MAX and len(wanted) > len(stored):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Roles with access can hold at most {PANEL_ACCESS_ROLE_MAX} roles, the "
+                           f"same as in the Discord admin panel. Remove some, then save again.",
+                )
 
         problems = await _discord_problems(gid, section, value, existing)
         if problems:
