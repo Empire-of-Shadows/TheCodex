@@ -6,6 +6,7 @@ testing drops and viewing unsent drops.
 """
 
 import math
+from datetime import datetime, timezone
 
 import discord
 from discord import app_commands
@@ -53,8 +54,14 @@ class DropCog(commands.Cog):
             )
 
         async def _fetch_unsent():
+            # Matches what the scheduled post will send: an expired drop still waiting
+            # for ScrapePrime's cleanup is not listed as about to post.
+            now = datetime.now(timezone.utc)
             return await collection.find_many(
-                {sent_field: {"$exists": False}},
+                {
+                    sent_field: {"$exists": False},
+                    "$or": [{"expires_at": {"$exists": False}}, {"expires_at": {"$gt": now}}],
+                },
                 sort=[("expires", 1)],
             )
 

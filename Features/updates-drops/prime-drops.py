@@ -115,8 +115,14 @@ class PrimeDrops(commands.Cog):
     async def _fetch_unsent_for_guild(self, guild_id: int) -> list[Dict[str, Any]]:
         if not self.collection_manager:
             return []
+        # ScrapePrime deletes expired drops when it next runs; until then an expired one
+        # is still stored, so skip it here rather than post a drop nobody can claim.
+        now = datetime.now(timezone.utc)
         return await self.collection_manager.find_many(
-            {_sent_key(guild_id): {"$exists": False}},
+            {
+                _sent_key(guild_id): {"$exists": False},
+                "$or": [{"expires_at": {"$exists": False}}, {"expires_at": {"$gt": now}}],
+            },
             sort=[("expires", 1)],
         )
 

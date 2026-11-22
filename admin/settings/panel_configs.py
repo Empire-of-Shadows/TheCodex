@@ -262,17 +262,9 @@ _FEATURE_AUTO_ENABLE = {
         ),
         "view_factory": lambda guild_id: _SkipInitialPostView(guild_id),
     },
-    "new_members": {
-        "get_enabled": NewMemberActions.get_enabled,
-        "has_config":  NewMemberActions.has_channel_configured,
-        "set_enabled": NewMemberActions.set_enabled,
-        "invalidate":  setup_gatekeeper.invalidate_new_members,
-        "message": (
-            "✅ **New Member processing is now enabled.** Members will now be screened on join. "
-            "Use **General Settings** to configure the age requirement and auto-kick, and "
-            "**Greeting Message Builder** to upload a custom JSON layout."
-        ),
-    },
+    # New Members is deliberately NOT here: screening has its own Enable switch and auto-kick
+    # defaults on, so switching it on because a greeting channel was saved would start kicking
+    # accounts nobody chose to screen. (An unused entry for it was removed 2026-11-22.)
 }
 
 

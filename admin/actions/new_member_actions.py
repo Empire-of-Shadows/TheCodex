@@ -232,9 +232,3 @@ class NewMemberActions:
         config = await manager.get_config(guild_id)
         config.new_members["enabled"] = enabled
         return await manager.save_config(config)
-
-    @staticmethod
-    async def has_channel_configured(guild_id: int) -> bool:
-        """Return True if a greeting channel has been saved for this guild."""
-        config = await get_config(guild_id)
-        return bool(config.new_members.get("greeting_channel_id"))

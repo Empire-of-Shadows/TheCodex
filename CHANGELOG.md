@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased] - 2026-11-22 (expired drops)
+
+### Fixed
+- **Expired Prime Gaming drops are no longer posted.** A drop that had just expired could still
+  go out with the next drops post, until the drop tracker's next clean-up removed it. Expired
+  drops are now skipped, and `/drop`'s list of drops waiting to post leaves them out too.
+
 ## [Unreleased] - 2026-11-21 (roles with access limit)
 
 ### Fixed

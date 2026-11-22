@@ -272,11 +272,6 @@ class SetupGatekeeper:
 
         return False
 
-    def invalidate_new_members(self, guild_id: int) -> None:
-        """Remove a guild's New Members setup cache entry so the next check re-queries."""
-        self._new_members_gate.invalidate(guild_id)
-        logger.debug(f"Guild {guild_id} New Members setup cache invalidated")
-
     # ------------------------------------------------------------------
     # Per-tier gate (requires specific tier to have roles assigned)
     # ------------------------------------------------------------------

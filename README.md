@@ -166,7 +166,7 @@ The invite link takes its permission set from the bot's Discord Developer Portal
 
 **Intents:** Guilds, Server Members, Guild Messages and Message Content. Server Members is needed
 for screening joins and the tag role; Message Content for guide mentions. The bot cannot ping
-@everyone or roles.
+@everyone, and the only role it pings is the daily question's ping role, when you set one.
 
 ## Development
 
