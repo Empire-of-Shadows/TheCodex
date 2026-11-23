@@ -196,7 +196,10 @@ function makeSelectValidator(ids: Set<string>): ActionValidator {
       }
       return validateActionTarget(opt, pfx, ids);
     };
-    return validateStringSelect(comp, prefix, optionValidator);
+    // Same value board_renderer._build_select gives the option (encode_select_value).
+    const optionValue = (opt: Record<string, unknown>) =>
+      `${(opt.action as string) ?? "reply"}:${(opt.target as string) ?? ""}`;
+    return validateStringSelect(comp, prefix, optionValidator, optionValue);
   };
 }
 

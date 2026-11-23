@@ -124,7 +124,12 @@ def _validate_greeting_button(comp: dict, prefix: str) -> Tuple[bool, str]:
 def _validate_greeting_select(comp: Any, prefix: str) -> Tuple[bool, str]:
     """Validate a string select with greeting-specific option actions."""
     from utils.component_validators import validate_string_select
-    return validate_string_select(comp, prefix, option_validator=_validate_greeting_select_option)
+    return validate_string_select(
+        comp, prefix,
+        option_validator=_validate_greeting_select_option,
+        # Same value greeting_renderer._build_select gives the option.
+        option_value=lambda opt: encode_custom_id(opt.get("action", ""), opt.get("params")),
+    )
 
 
 def _validate_greeting_select_option(opt: Any, prefix: str) -> Tuple[bool, str]:

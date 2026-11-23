@@ -289,9 +289,13 @@ async def _auto_enable_feature_if_ready(
 
     cfg["invalidate"](guild_id)
 
+    # discord.py refuses an explicit view=None on a followup (TypeError), so pass a view
+    # only when this feature has one. Embed has none and crashed here before 2026-11-23.
+    send_kwargs = {"ephemeral": True}
     view_factory = cfg.get("view_factory")
-    view = view_factory(guild_id) if view_factory else None
-    await interaction.followup.send(cfg["message"], view=view, ephemeral=True)
+    if view_factory:
+        send_kwargs["view"] = view_factory(guild_id)
+    await interaction.followup.send(cfg["message"], **send_kwargs)
 
 
 async def _warn_unconfigured_feature_tiers(interaction, guild_id: int, selected_tiers: list) -> None:

@@ -1,5 +1,23 @@
 # Changelog
 
+## [Unreleased] - 2026-11-23 (drops channel screen)
+
+### Fixed
+- **The Drops Channel screen opens on a server with no drops channel yet.** In the admin panel,
+  Updates & Drops -> Drops Channel failed to open until a channel had been set, which meant the
+  first channel could never be picked there. It now opens and lets you choose one.
+- **Giving the first roles to an embed tier no longer shows an error.** Saving roles on a tier
+  (for example Tier 1) switches Embed creation on. The switch worked, but the message saying so
+  failed and the admin panel reported an error instead. You now get the confirmation.
+- **Role and channel pickers open even when more is saved than the picker normally allows.**
+  If a server had more roles or channels saved than an admin panel picker holds (for example
+  more than 10 Panel Access Roles, saved before that limit existed), the screen would not
+  open. It now opens showing everything that is saved, so the list can be kept or shortened.
+- **Boards, guides and greetings catch dropdown mistakes when you save them.** A dropdown with
+  two options that do the same thing, or one that allows more picks than it has options, used to
+  save fine and then fail to post in Discord. Saving now stops and names the option to fix, both
+  in the dashboard and when uploading a file in the admin panel.
+
 ## [Unreleased] - 2026-11-22 (expired drops)
 
 ### Fixed

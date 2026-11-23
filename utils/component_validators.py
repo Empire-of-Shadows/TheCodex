@@ -173,7 +173,19 @@ def validate_action_row(
     return True, ""
 
 
-def validate_string_select(comp: Any, prefix: str, option_validator: Optional[ActionValidator] = None) -> Tuple[bool, str]:
+def validate_string_select(
+    comp: Any,
+    prefix: str,
+    option_validator: Optional[ActionValidator] = None,
+    option_value: Optional[Callable[[dict], str]] = None,
+) -> Tuple[bool, str]:
+    """Validate a string select.
+
+    ``option_value`` returns the value the feature's renderer will give an option.
+    When it is passed, two options that would render the same value are refused:
+    Discord rejects a dropdown with repeated values, so the whole message would
+    fail to post.
+    """
     if not isinstance(comp, dict):
         return False, f"{prefix} - must be an object."
 
@@ -199,11 +211,33 @@ def validate_string_select(comp: Any, prefix: str, option_validator: Optional[Ac
         if not ok:
             return False, msg
 
+    if option_value is not None:
+        first_index: dict = {}
+        for i, opt in enumerate(options):
+            value = option_value(opt)
+            if value in first_index:
+                j = first_index[value]
+                return False, (
+                    f"{prefix} -> {_option_label(opt, i)} - does the same thing as "
+                    f"{_option_label(options[j], j)}. Each option in a dropdown must do something different."
+                )
+            first_index[value] = i
+
     for field_name in ("min_values", "max_values"):
         val = comp.get(field_name)
         if val is not None:
             if not isinstance(val, int) or not (1 <= val <= 25):
                 return False, f"{prefix} - {field_name} must be an integer between 1 and 25."
+
+    # Discord refuses a dropdown that asks for more picks than it has options, or a
+    # minimum above its maximum. An unset max is 1, which is what the renderers send.
+    max_v = comp.get("max_values")
+    if max_v is not None and max_v > len(options):
+        return False, f"{prefix} - max_values ({max_v}) is more than the number of options ({len(options)})."
+    min_v = comp.get("min_values")
+    effective_max = max_v if max_v is not None else 1
+    if min_v is not None and min_v > effective_max:
+        return False, f"{prefix} - min_values ({min_v}) is more than max_values ({effective_max})."
 
     return True, ""
 

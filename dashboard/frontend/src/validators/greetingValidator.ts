@@ -79,5 +79,7 @@ const validateGreetingSelect: ActionValidator = (comp, prefix) => {
     }
     return { valid: true, error: "" };
   };
-  return validateStringSelect(comp, prefix, optionValidator);
+  // Same value greeting_renderer._build_select gives the option (encode_custom_id: "gr:<action>").
+  const optionValue = (opt: Record<string, unknown>) => `gr:${(opt.action as string) ?? ""}`;
+  return validateStringSelect(comp, prefix, optionValidator, optionValue);
 };

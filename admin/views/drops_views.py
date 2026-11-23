@@ -60,8 +60,17 @@ def build_drops_channel_view(
     select_row = discord.ui.ActionRow()
     select_row.add_item(channel_select)
 
-    btn_row = discord.ui.ActionRow()
+    editor_items: list[discord.ui.Item] = [
+        discord.ui.TextDisplay(
+            f"**Current Channel:** {channel_display}\n"
+            f"**Status:** {status_display}"
+        ),
+        select_row,
+    ]
 
+    # The toggle row only exists once a channel is set. Discord rejects an empty
+    # ActionRow (400, "Must be between 1 and 5 in length"), so never add the row
+    # without its button - that broke the first-time channel pick on a fresh guild.
     if channel_id and on_toggle is not None:
         toggle_btn = discord.ui.Button(
             label="Disable" if enabled else "Enable",
@@ -69,16 +78,11 @@ def build_drops_channel_view(
             custom_id=cid("editor", "toggle", "drops_channel"),
         )
         toggle_btn.callback = on_toggle
+        btn_row = discord.ui.ActionRow()
         btn_row.add_item(toggle_btn)
+        editor_items.append(btn_row)
 
-    builder.add_item(editable_container(
-        discord.ui.TextDisplay(
-            f"**Current Channel:** {channel_display}\n"
-            f"**Status:** {status_display}"
-        ),
-        select_row,
-        btn_row,
-    ))
+    builder.add_item(editable_container(*editor_items))
 
     done_btn = discord.ui.Button(
         label="Back",

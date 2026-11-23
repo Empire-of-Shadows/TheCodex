@@ -315,6 +315,8 @@ def _validate_guide_select(comp: Any, prefix: str, navigate_targets: list) -> Tu
 	return validate_string_select(
 		comp, prefix,
 		option_validator=lambda opt, pfx: _validate_guide_select_option(opt, pfx, navigate_targets),
+		# Same value guide_renderer._build_guide_select gives the option.
+		option_value=lambda opt: encode_select_value(opt.get("action", "navigate"), opt.get("target", "")),
 	)
 
 

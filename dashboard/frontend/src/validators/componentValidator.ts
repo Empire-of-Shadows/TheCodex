@@ -135,10 +135,16 @@ function validateSelectOptionStructure(opt: unknown, prefix: string): Validation
   return OK;
 }
 
+/**
+ * Mirrors validate_string_select in component_validators.py. `optionValue` returns the
+ * value the bot's renderer gives an option; when passed, two options that would render
+ * the same value are refused, because Discord rejects the whole message for it.
+ */
 export function validateStringSelect(
   comp: unknown,
   prefix: string,
-  optionValidator?: ActionValidator
+  optionValidator?: ActionValidator,
+  optionValue?: (opt: Record<string, unknown>) => string
 ): ValidationResult {
   if (typeof comp !== "object" || comp === null) {
     return { valid: false, error: `${prefix} - must be an object.` };
@@ -162,6 +168,22 @@ export function validateStringSelect(
       : validateSelectOptionStructure(options[i], optPfx);
     if (!r.valid) return r;
   }
+  if (optionValue) {
+    const firstIndex = new Map<string, number>();
+    for (let i = 0; i < options.length; i++) {
+      const value = optionValue(options[i] as Record<string, unknown>);
+      const j = firstIndex.get(value);
+      if (j !== undefined) {
+        return {
+          valid: false,
+          error:
+            `${prefix} -> ${optionLabel(options[i], i)} - does the same thing as ` +
+            `${optionLabel(options[j], j)}. Each option in a dropdown must do something different.`,
+        };
+      }
+      firstIndex.set(value, i);
+    }
+  }
   for (const field of ["min_values", "max_values"] as const) {
     const val = c[field];
     if (val !== undefined && val !== null) {
@@ -169,6 +191,17 @@ export function validateStringSelect(
         return { valid: false, error: `${prefix} - ${field} must be an integer between 1 and 25.` };
       }
     }
+  }
+  // Discord refuses a dropdown that asks for more picks than it has options, or a
+  // minimum above its maximum. An unset max is 1, which is what the renderers send.
+  const maxV = c.max_values as number | undefined | null;
+  if (maxV !== undefined && maxV !== null && maxV > options.length) {
+    return { valid: false, error: `${prefix} - max_values (${maxV}) is more than the number of options (${options.length}).` };
+  }
+  const minV = c.min_values as number | undefined | null;
+  const effectiveMax = maxV !== undefined && maxV !== null ? maxV : 1;
+  if (minV !== undefined && minV !== null && minV > effectiveMax) {
+    return { valid: false, error: `${prefix} - min_values (${minV}) is more than max_values (${effectiveMax}).` };
   }
   return OK;
 }

@@ -20,7 +20,7 @@ import json
 import re
 from typing import Any, Dict, Set, Tuple
 
-from Features.Board.board_actions import VALID_ACTIONS, encode_custom_id
+from Features.Board.board_actions import VALID_ACTIONS, encode_custom_id, encode_select_value
 from utils.component_validators import (
     validate_accent_color,
     validate_components_list,
@@ -185,6 +185,8 @@ def _select_validator(response_ids: Set[str]):
         return validate_string_select(
             comp, prefix,
             option_validator=lambda opt, p: _validate_board_option(opt, p, response_ids),
+            # Same value board_renderer._build_select gives the option.
+            option_value=lambda opt: encode_select_value(opt.get("action", "reply"), opt.get("target", "")),
         )
     return _validate
 

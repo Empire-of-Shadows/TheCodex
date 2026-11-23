@@ -263,5 +263,8 @@ function validateGuideSelect(
     }
     return { valid: true, error: "" };
   };
-  return validateStringSelect(comp, prefix, optionValidator);
+  // Same value guide_renderer._build_guide_select gives the option (encode_select_value).
+  const optionValue = (opt: Record<string, unknown>) =>
+    `${(opt.action as string) ?? "navigate"}:${(opt.target as string) ?? ""}`;
+  return validateStringSelect(comp, prefix, optionValidator, optionValue);
 }
