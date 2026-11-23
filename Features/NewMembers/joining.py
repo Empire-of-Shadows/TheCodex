@@ -810,6 +810,7 @@ class GuildEventHandler:
 
             # --- Guide content ---
             totals["guide_content"] = await col("guide_content").delete_many({"guild_id": gid_str})
+            totals["guide_sessions"] = await col("guide_sessions").delete_many({"guild_id": gid_str})
 
             # --- Info board content ---
             totals["board_content"] = await col("board_content").delete_many({"guild_id": gid_str})

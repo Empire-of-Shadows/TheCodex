@@ -5,12 +5,14 @@ Components V2 guide with page-tree navigation, search, and interaction dispatch.
 Guide content is stored as a JSON page tree in the guide_content collection.
 """
 
+import asyncio
 import re
+import weakref
 from typing import Dict, List, Optional, Tuple, Any, Union
 from datetime import datetime, timedelta, timezone
 
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from rapidfuzz import fuzz
 
 from startup.bot import bot
@@ -18,6 +20,15 @@ from storage.log import get_logger, PerformanceLogger
 from storage.settings.collections import db_manager
 from Features.Guide.guide_store import guide_store
 from Features.Guide.guide_renderer import GuideRenderer
+from Features.Guide.guide_sessions import (
+	guide_sessions,
+	has_interactive_items,
+	now_ts,
+	push_page,
+	pop_page,
+	reset_path,
+	SWEEP_INTERVAL_SECONDS,
+)
 from Features.Guide.guide_actions import (
 	decode_custom_id,
 	decode_select_value,
@@ -156,52 +167,19 @@ class SearchEngine:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Navigation Breadcrumbs - per-guild, per-user
-# ─────────────────────────────────────────────────────────────────────────────
-
-class NavigationBreadcrumbs:
-	"""Tracks user navigation path per guild (bounded to _MAX_USERS)."""
-
-	_MAX_USERS = 5000
-
-	def __init__(self):
-		self.breadcrumbs: Dict[tuple, list] = {}  # (guild_id, user_id) -> [page_id, ...]
-
-	def push(self, guild_id: int, user_id: int, page_id: str):
-		key = (guild_id, user_id)
-		# Bound memory: evict the oldest tracked user when over capacity.
-		if key not in self.breadcrumbs and len(self.breadcrumbs) >= self._MAX_USERS:
-			self.breadcrumbs.pop(next(iter(self.breadcrumbs)), None)
-		path = self.breadcrumbs.setdefault(key, [])
-		# Avoid duplicates at the end
-		if not path or path[-1] != page_id:
-			path.append(page_id)
-
-	def pop(self, guild_id: int, user_id: int) -> Optional[str]:
-		key = (guild_id, user_id)
-		path = self.breadcrumbs.get(key, [])
-		if len(path) > 1:
-			path.pop()
-			return path[-1]
-		return None
-
-	def get_path(self, guild_id: int, user_id: int) -> list:
-		return list(self.breadcrumbs.get((guild_id, user_id), []))
-
-	def reset(self, guild_id: int, user_id: int):
-		self.breadcrumbs.pop((guild_id, user_id), None)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Guide Manager - core orchestrator
 # ─────────────────────────────────────────────────────────────────────────────
 
 class GuideManager:
-	"""Loads guide data, navigates pages, renders via GuideRenderer."""
+	"""Loads guide data, navigates pages, renders via GuideRenderer.
+
+	Navigation methods take ``path``: the Back history of ONE guide message (a
+	plain list of page ids, kept on that message's session record). They update
+	it in place; the caller saves it.
+	"""
 
 	def __init__(self):
 		self.search_engine = SearchEngine()
-		self.navigation = NavigationBreadcrumbs()
 		self._guide_cache: Dict[int, Dict[str, Any]] = {}
 		self._cache_time: Dict[int, datetime] = {}
 
@@ -292,7 +270,7 @@ class GuideManager:
 	# ─────────────────────────────────────────────────────────────────────
 
 	async def get_usage_view(
-		self, guild_id: int, user_id: int,
+		self, guild_id: int, path: List[str],
 		interaction: discord.Interaction = None,
 		guild: discord.Guild = None,
 		member: Union[discord.Member, discord.User] = None,
@@ -300,7 +278,7 @@ class GuideManager:
 		"""Render the "how to use the guide" instructions (shown on a bare mention)."""
 		guide_data = await self._get_guide(guild_id)
 
-		self.navigation.reset(guild_id, user_id)
+		reset_path(path)
 
 		return GuideRenderer.render_usage(
 			guide_data,
@@ -314,7 +292,7 @@ class GuideManager:
 		return sorted(pages, key=lambda p: p.get("order", 999))[0].get("id")
 
 	async def get_page_view(
-		self, guild_id: int, user_id: int, page_id: str,
+		self, guild_id: int, path: List[str], page_id: str,
 		interaction: discord.Interaction = None,
 		guild: discord.Guild = None,
 		member: Union[discord.Member, discord.User] = None,
@@ -328,7 +306,7 @@ class GuideManager:
 			return self._render_not_found(guide_data, page_id)
 
 		# Track
-		self.navigation.push(guild_id, user_id, page_id)
+		push_page(path, page_id)
 
 		# Breadcrumb labels
 		labels = self._get_breadcrumb_labels(pages, page_id)
@@ -343,7 +321,7 @@ class GuideManager:
 		)
 
 	async def get_home_view(
-		self, guild_id: int, user_id: int,
+		self, guild_id: int, path: List[str],
 		interaction: discord.Interaction = None,
 		guild: discord.Guild = None,
 		member: Union[discord.Member, discord.User] = None,
@@ -372,15 +350,15 @@ class GuideManager:
 				setup_hint=hint,
 			)
 
-		self.navigation.reset(guild_id, user_id)
+		reset_path(path)
 		home_id = self._home_page_id(pages)
 		return await self.get_page_view(
-			guild_id, user_id, home_id,
+			guild_id, path, home_id,
 			interaction=interaction, guild=guild, member=member,
 		)
 
 	async def handle_back(
-		self, guild_id: int, user_id: int,
+		self, guild_id: int, path: List[str],
 		interaction: discord.Interaction = None,
 	) -> discord.ui.LayoutView:
 		"""Navigate back one level."""
@@ -388,21 +366,19 @@ class GuideManager:
 		pages = guide_data.get("pages", [])
 
 		# Get current path
-		nav_path = self.navigation.get_path(guild_id, user_id)
-		if len(nav_path) <= 1:
-			return await self.get_home_view(guild_id, user_id, interaction=interaction)
+		if len(path) <= 1:
+			return await self.get_home_view(guild_id, path, interaction=interaction)
 
 		# Pop current, navigate to parent
-		self.navigation.pop(guild_id, user_id)
-		nav_path = self.navigation.get_path(guild_id, user_id)
+		pop_page(path)
 
-		if not nav_path:
-			return await self.get_home_view(guild_id, user_id, interaction=interaction)
+		if not path:
+			return await self.get_home_view(guild_id, path, interaction=interaction)
 
-		parent_id = nav_path[-1]
+		parent_id = path[-1]
 		page = self._find_page(pages, parent_id)
 		if not page:
-			return await self.get_home_view(guild_id, user_id, interaction=interaction)
+			return await self.get_home_view(guild_id, path, interaction=interaction)
 
 		labels = self._get_breadcrumb_labels(pages, parent_id)
 		breadcrumb_path = ["Guide"] + (labels or [page.get("label", "")])
@@ -534,9 +510,12 @@ guide_manager = GuideManager()
 class GuideSearchModal(SupportAwareModalMixin, discord.ui.Modal):
 	"""Modal for searching guide content."""
 
-	def __init__(self, guild_id: int):
+	def __init__(self, guild_id: int, session: Dict[str, Any]):
 		super().__init__(title="🔍 Search Guide")
 		self.guild_id = guild_id
+		# The guide message this form was opened from, so submitting it renews
+		# that guide's timer (or finds it already closed).
+		self.session = session
 		self.search_input = discord.ui.TextInput(
 			label="What are you looking for?",
 			placeholder="e.g., rules, commands, music, channels...",
@@ -548,8 +527,14 @@ class GuideSearchModal(SupportAwareModalMixin, discord.ui.Modal):
 	async def on_submit(self, interaction: discord.Interaction):
 		query = self.search_input.value
 		try:
+			message_id = int(self.session["message_id"])
+			# The guide may have closed while the form was open.
+			if not await guide_sessions.touch(message_id):
+				await _respond_closed(interaction, self.guild_id, message_id)
+				return
 			layout = await guide_manager.handle_search(query, self.guild_id, interaction.user.id)
 			await interaction.response.edit_message(view=layout)
+			await _after_edit(interaction, self.session, message_id, path=None)
 		except Exception as e:
 			logger.error(f"Search error: {e}", exc_info=True)
 			await interaction.response.send_message(
@@ -562,44 +547,229 @@ class GuideSearchModal(SupportAwareModalMixin, discord.ui.Modal):
 # Action dispatch helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def _handle_channel_action(interaction: discord.Interaction, channel_id: str):
+async def _reply_privately(interaction: discord.Interaction, content: str) -> None:
+	"""The usual answer to a channel or role button: a private reply."""
+	await interaction.response.send_message(content, ephemeral=True)
+
+
+def _reply_beside_private_guide(message_id: int):
+	"""The answer to a channel or role button on a PRIVATE guide.
+
+	A private guide can only be edited later (to close it) through an
+	interaction whose original response IS the guide. Deferring the click as a
+	message update makes this click one, so it is kept as the guide's newest
+	token; the note itself goes out as a private followup.
+	"""
+	async def reply(interaction: discord.Interaction, content: str) -> None:
+		await interaction.response.defer()
+		guide_sessions.remember_interaction(message_id, interaction)
+		await interaction.followup.send(content, ephemeral=True)
+	return reply
+
+
+async def _handle_channel_action(interaction: discord.Interaction, channel_id: str, reply=_reply_privately):
 	"""Respond with an ephemeral channel link."""
-	await interaction.response.send_message(
-		f"Head over to <#{channel_id}>!",
-		ephemeral=True,
-	)
+	await reply(interaction, f"Head over to <#{channel_id}>!")
 
 
-async def _handle_role_action(interaction: discord.Interaction, role_id: str):
+async def _handle_role_action(interaction: discord.Interaction, role_id: str, reply=_reply_privately):
 	"""Toggle a role on the interacting member."""
 	guild = interaction.guild
 	member = interaction.user
 	if not guild or not isinstance(member, discord.Member):
-		await interaction.response.send_message("This action is only available in a server.", ephemeral=True)
+		await reply(interaction, "This action is only available in a server.")
 		return
 
 	role = guild.get_role(int(role_id))
 	if not role:
-		await interaction.response.send_message("That role no longer exists.", ephemeral=True)
+		await reply(interaction, "That role no longer exists.")
 		return
 
 	try:
 		if role in member.roles:
 			await member.remove_roles(role, reason="Guide role toggle")
-			await interaction.response.send_message(f"Removed **{role.name}** from you.", ephemeral=True)
+			await reply(interaction, f"Removed **{role.name}** from you.")
 		else:
 			if is_blocked(role, where="guide"):
-				await interaction.response.send_message(blocked_role_reason(role), ephemeral=True)
+				await reply(interaction, blocked_role_reason(role))
 				return
 			await member.add_roles(role, reason="Guide role toggle")
-			await interaction.response.send_message(f"Gave you **{role.name}**!", ephemeral=True)
+			await reply(interaction, f"Gave you **{role.name}**!")
 	except discord.Forbidden:
-		await interaction.response.send_message("I don't have permission to manage that role.", ephemeral=True)
+		await reply(interaction, "I don't have permission to manage that role.")
 	except discord.HTTPException as e:
 		logger.error(f"Role toggle error: {e}", exc_info=True)
+		await reply(interaction, f"Something went wrong managing the role.\n\n{SUPPORT_LINE}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Guide sessions: who a guide is for, and closing it
+# ─────────────────────────────────────────────────────────────────────────────
+
+#: Per guide message, held while one click is handled. Weak values: a lock
+#: disappears once no click holds or waits on it, so this never grows.
+_message_locks: "weakref.WeakValueDictionary[Any, asyncio.Lock]" = weakref.WeakValueDictionary()
+
+
+def _message_lock(message_id: Any) -> asyncio.Lock:
+	lock = _message_locks.get(message_id)
+	if lock is None:
+		lock = asyncio.Lock()
+		_message_locks[message_id] = lock
+	return lock
+
+
+async def _closed_view(guild_id: int) -> discord.ui.LayoutView:
+	"""The closed card in the guide's own colour. Reads the guide without
+	creating one, so closing a guide in a server the bot has left cannot
+	write a fresh default guide there."""
+	guide_data = guide_manager._guide_cache.get(guild_id)
+	if guide_data is None:
+		guide_data = await guide_store.get_guide(guild_id)
+	return GuideRenderer.render_closed(guide_data)
+
+
+async def _respond_closed(interaction: discord.Interaction, guild_id: int, message_id: int) -> None:
+	"""Answer a click on a guide that has closed by turning it into the closed card."""
+	await guide_sessions.close(message_id)
+	await interaction.response.edit_message(view=await _closed_view(guild_id))
+
+
+async def _open_session(
+	interaction: discord.Interaction, guild_id: int, edits_guide: bool = True,
+) -> Optional[Dict[str, Any]]:
+	"""Return the live session behind this click, or answer the click and return None.
+
+	- No session, or its time is up: the guide is closed and the click says so.
+	  This also covers guides posted before sessions existed.
+	- Someone other than the owner: a private refusal; the guide is untouched and
+	  its timer is NOT renewed.
+	- The owner: the timer is renewed and the session handed back.
+
+	``edits_guide`` is False for a click whose response is not the guide itself
+	(opening the search form). On a private guide such a click leaves no token
+	that can close the guide later, so its renewal stops where the newest
+	usable token runs out - otherwise the guide could outlive every token and
+	never visibly close.
+	"""
+	message_id = interaction.message.id
+	session = await guide_sessions.get(message_id)
+	if session is None or session.get("expires_at", 0) <= now_ts():
+		await _respond_closed(interaction, guild_id, message_id)
+		return None
+
+	if session.get("owner_id") != str(interaction.user.id):
 		await interaction.response.send_message(
-			f"Something went wrong managing the role.\n\n{SUPPORT_LINE}", ephemeral=True,
+			f"This guide was opened by <@{session['owner_id']}>. Mention me to open your own.",
+			ephemeral=True,
+			allowed_mentions=discord.AllowedMentions.none(),
 		)
+		return None
+
+	until = None
+	if session.get("ephemeral") and not edits_guide:
+		until = guide_sessions.token_deadline(message_id)
+	if not await guide_sessions.touch(message_id, until=until):
+		# The sweep closed it between the read and the renewal.
+		await _respond_closed(interaction, guild_id, message_id)
+		return None
+	return session
+
+
+async def _after_edit(
+	interaction: discord.Interaction, session: Dict[str, Any], message_id: int,
+	path: Optional[List[str]],
+) -> None:
+	"""Bookkeeping after a click edited the guide message itself."""
+	if session.get("ephemeral"):
+		# Only an interaction that edited the guide can edit it again later.
+		guide_sessions.remember_interaction(message_id, interaction)
+	if path is not None and path != session.get("path"):
+		await guide_sessions.save_path(message_id, path)
+
+
+async def post_guide(
+	channel: Any, layout: Any, *, guild_id: int, owner_id: int, path: List[str],
+):
+	"""Post a guide message in a channel and open its session.
+
+	``owner_id`` is the member the guide is for. A view with nothing to click
+	(the empty-guide notice) gets no session.
+	"""
+	message = await channel.send(view=layout)
+	if message is None or not has_interactive_items(layout):
+		return message
+	try:
+		await guide_sessions.open(
+			message_id=message.id, guild_id=guild_id, channel_id=channel.id,
+			owner_id=owner_id, path=path, ephemeral=False,
+		)
+	except Exception as e:
+		# The guide is up but untracked: its first click will show it closed.
+		logger.error(f"Could not record guide session for message {message.id}: {e}", exc_info=True)
+	return message
+
+
+async def open_private_guide(interaction: discord.Interaction) -> None:
+	"""Send the guide's Home page privately to whoever clicked (the greeting's
+	"Open Guide" button) and open its session."""
+	path: List[str] = []
+	layout = await guide_manager.get_home_view(
+		interaction.guild.id, path, interaction=interaction,
+	)
+	callback = await interaction.response.send_message(view=layout, ephemeral=True)
+	if not has_interactive_items(layout):
+		return
+	message_id = getattr(callback, "message_id", None)
+	try:
+		if message_id is None:
+			message_id = (await interaction.original_response()).id
+		await guide_sessions.open(
+			message_id=message_id, guild_id=interaction.guild.id,
+			channel_id=interaction.channel_id, owner_id=interaction.user.id,
+			path=path, ephemeral=True,
+		)
+	except Exception as e:
+		# The member already has their guide; only its session is missing, so
+		# its first click will show it closed. Not worth a failure notice.
+		logger.error(f"Could not record private guide session ({message_id}): {e}", exc_info=True)
+		return
+	guide_sessions.remember_interaction(message_id, interaction)
+
+
+async def _close_guide_message(client: Any, session: Dict[str, Any]) -> bool:
+	"""Edit one expired guide into the closed card. False when it cannot be reached."""
+	layout = await _closed_view(int(session["guild_id"]))
+	if session.get("ephemeral"):
+		interaction = guide_sessions.take_interaction(session["message_id"])
+		if interaction is None:
+			# Restarted since, or the token is too old. The member's next click
+			# on it gets the closed card instead.
+			return False
+		await interaction.edit_original_response(view=layout)
+		return True
+
+	channel_id = int(session["channel_id"])
+	channel = client.get_channel(channel_id) or await client.fetch_channel(channel_id)
+	await channel.get_partial_message(int(session["message_id"])).edit(view=layout)
+	return True
+
+
+async def close_expired_guides(client: Any) -> int:
+	"""Close every guide whose time is up. Returns how many were edited."""
+	closed = 0
+	for session in await guide_sessions.claim_expired():
+		try:
+			if await _close_guide_message(client, session):
+				closed += 1
+		except (discord.NotFound, discord.Forbidden) as e:
+			# Message deleted, channel gone, or access lost: nothing left to close.
+			logger.info(f"Guide {session.get('message_id')} could not be closed ({type(e).__name__})")
+		except Exception as e:
+			logger.warning(f"Failed to close guide {session.get('message_id')}: {e}")
+	if closed:
+		logger.info(f"Closed {closed} expired guide(s)")
+	return closed
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -608,30 +778,37 @@ async def _handle_role_action(interaction: discord.Interaction, role_id: str):
 
 async def _dispatch_action(
 	interaction: discord.Interaction, action: str, target: str | None,
-	guild_id: int, user_id: int,
+	guild_id: int, session: Dict[str, Any],
 ):
 	"""Route a decoded action to the appropriate handler."""
+	message_id = interaction.message.id
+	path = list(session.get("path") or [])
+
 	if action == "nav":
-		layout = await guide_manager.get_page_view(guild_id, user_id, target, interaction=interaction)
+		layout = await guide_manager.get_page_view(guild_id, path, target, interaction=interaction)
 		await interaction.response.edit_message(view=layout)
+		await _after_edit(interaction, session, message_id, path)
 
 	elif action == "back":
-		layout = await guide_manager.handle_back(guild_id, user_id, interaction=interaction)
+		layout = await guide_manager.handle_back(guild_id, path, interaction=interaction)
 		await interaction.response.edit_message(view=layout)
+		await _after_edit(interaction, session, message_id, path)
 
 	elif action == "home":
-		layout = await guide_manager.get_home_view(guild_id, user_id, interaction=interaction)
+		layout = await guide_manager.get_home_view(guild_id, path, interaction=interaction)
 		await interaction.response.edit_message(view=layout)
+		await _after_edit(interaction, session, message_id, path)
 
 	elif action == "search":
-		modal = GuideSearchModal(guild_id)
+		modal = GuideSearchModal(guild_id, session)
 		await interaction.response.send_modal(modal)
 
-	elif action == "channel":
-		await _handle_channel_action(interaction, target)
-
-	elif action == "role":
-		await _handle_role_action(interaction, target)
+	elif action in ("channel", "role"):
+		handler = _handle_channel_action if action == "channel" else _handle_role_action
+		if session.get("ephemeral"):
+			await handler(interaction, target, reply=_reply_beside_private_guide(message_id))
+		else:
+			await handler(interaction, target)
 
 
 async def dispatch_guide_interaction(interaction: discord.Interaction) -> bool:
@@ -653,39 +830,48 @@ async def dispatch_guide_interaction(interaction: discord.Interaction) -> bool:
 
 	component_type = interaction.data.get("component_type")
 	guild_id = interaction.guild.id
-	user_id = interaction.user.id
 
 	try:
-		# Handle select menus
+		# Work out what was clicked before touching the guide's session, so an
+		# id this dispatcher does not own is passed on untouched.
+		page_id = None
+		action = target = None
 		if component_type == 3:  # String select
-			# Auto-generated children / sections / search select - value is a page_id
-			if custom_id in ("g:_select", "g:_sections"):
-				values = interaction.data.get("values", [])
-				if not values:
-					return True
-				page_id = values[0]
-				layout = await guide_manager.get_page_view(guild_id, user_id, page_id, interaction=interaction)
-				await interaction.response.edit_message(view=layout)
+			# Auto-generated children / sections / search select - value is a page_id.
+			# User-defined select (g:_uselect) - value encodes action:target.
+			if custom_id not in ("g:_select", "g:_sections", "g:_uselect"):
+				return False
+			values = interaction.data.get("values", [])
+			if not values:
 				return True
-
-			# User-defined select - value encodes action:target
 			if custom_id == "g:_uselect":
-				values = interaction.data.get("values", [])
-				if not values:
-					return True
 				action, target = decode_select_value(values[0])
-				await _dispatch_action(interaction, action, target, guild_id, user_id)
+			else:
+				page_id = values[0]
+		else:
+			# Handle buttons
+			action, target = decode_custom_id(custom_id)
+			if action is None:
+				return False
+
+		# One click at a time per guide message, so two quick clicks cannot both
+		# read the same Back history and have the later save undo the earlier.
+		async with _message_lock(getattr(getattr(interaction, "message", None), "id", None)):
+			# Closed, someone else's, or live (timer renewed) - see _open_session.
+			# Opening the search form is the one click whose answer is not the guide.
+			session = await _open_session(interaction, guild_id, edits_guide=action != "search")
+			if session is None:
 				return True
 
-			return False
+			if page_id is not None:
+				path = list(session.get("path") or [])
+				layout = await guide_manager.get_page_view(guild_id, path, page_id, interaction=interaction)
+				await interaction.response.edit_message(view=layout)
+				await _after_edit(interaction, session, interaction.message.id, path)
+				return True
 
-		# Handle buttons
-		action, target = decode_custom_id(custom_id)
-		if action is None:
-			return False
-
-		await _dispatch_action(interaction, action, target, guild_id, user_id)
-		return True
+			await _dispatch_action(interaction, action, target, guild_id, session)
+			return True
 
 	except Exception as e:
 		# A raw on_interaction listener never reaches a view's on_error, so this is
@@ -695,29 +881,30 @@ async def dispatch_guide_interaction(interaction: discord.Interaction) -> bool:
 
 
 class GuideCog(commands.Cog):
-	"""Handles guide interactions and commands."""
+	"""Owns the guide's background work: closing guides whose time is up."""
 
 	def __init__(self, bot_instance):
 		self.bot = bot_instance
 
+	async def cog_load(self):
+		# The first pass runs at once, so guides that expired while the bot
+		# was down are closed right after startup.
+		self._close_expired.start()
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Module-level helpers for external callers
-# ─────────────────────────────────────────────────────────────────────────────
+	async def cog_unload(self):
+		self._close_expired.cancel()
 
-async def get_help_menu(
-	user_id: int, guild_id: int = None,
-	interaction: discord.Interaction = None,
-	guild: discord.Guild = None,
-	member: Union[discord.Member, discord.User] = None,
-) -> discord.ui.LayoutView:
-	"""Get the guide's Home page. Used by greeting_actions open_guide handler."""
-	if guild_id is None:
-		raise ValueError("guild_id is required")
-	return await guide_manager.get_home_view(
-		guild_id, user_id,
-		interaction=interaction, guild=guild, member=member,
-	)
+	@tasks.loop(seconds=SWEEP_INTERVAL_SECONDS)
+	async def _close_expired(self):
+		try:
+			await close_expired_guides(self.bot)
+		except Exception as e:
+			# Never let one bad pass stop the loop for good.
+			logger.error(f"Guide close sweep failed: {e}", exc_info=True)
+
+	@_close_expired.before_loop
+	async def _before_close_expired(self):
+		await self.bot.wait_until_ready()
 
 
 async def setup(bot_instance):

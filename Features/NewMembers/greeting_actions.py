@@ -61,9 +61,8 @@ def decode_custom_id(raw: str) -> tuple[str | None, dict]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def _handle_open_guide(interaction, params: dict):
-    from Features.Guide.guide import get_help_menu
-    layout = await get_help_menu(interaction.user.id, guild_id=interaction.guild.id, interaction=interaction)
-    await interaction.response.send_message(view=layout, ephemeral=True)
+    from Features.Guide.guide import open_private_guide
+    await open_private_guide(interaction)
 
 
 async def _handle_server_info(interaction, params: dict):

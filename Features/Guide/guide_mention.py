@@ -12,7 +12,7 @@ import time
 
 from discord.ext import commands
 
-from Features.Guide.guide import guide_manager
+from Features.Guide.guide import guide_manager, post_guide
 from storage.settings.config_manager import get_config
 from storage.log import get_logger
 
@@ -115,14 +115,16 @@ class HelpListener(commands.Cog):
 		content = message.content.lower().strip()
 		guild_id = message.guild.id
 
-		# Who are we helping?
+		# Who are we helping? That member owns the guide message: only they can
+		# click through it, and its {member}/{member_name} placeholders name them.
 		if message.author.bot:
 			mentioned_users = [m for m in message.mentions if m.id != self.bot.user.id]
 			if not mentioned_users:
 				return
-			user_id = mentioned_users[0].id
+			member = mentioned_users[0]
 		else:
-			user_id = message.author.id
+			member = message.author
+		user_id = member.id
 
 		# Strip bot mention from content for cleaner search
 		clean = content
@@ -130,20 +132,24 @@ class HelpListener(commands.Cog):
 			clean = clean.replace(mention_format, "").strip()
 
 		guild = message.guild
-		member = message.author
+		# This guide message's own Back history; the views below fill it in.
+		path: list = []
+
+		async def _post(layout):
+			await post_guide(message.channel, layout, guild_id=guild_id, owner_id=user_id, path=path)
 
 		if not clean:
 			# Just a mention with no query - show how-to-use instructions and tips
-			layout = await guide_manager.get_usage_view(guild_id, user_id, guild=guild, member=member)
-			await message.channel.send(view=layout)
+			layout = await guide_manager.get_usage_view(guild_id, path, guild=guild, member=member)
+			await _post(layout)
 			return
 
 		# Generic help words → guide Home page. Checked before search so a help
 		# word always lands on Home rather than jumping to a matching page.
 		if any(word in clean for word in HELP_WORDS):
 			logger.info("Generic help triggered")
-			layout = await guide_manager.get_home_view(guild_id, user_id, guild=guild, member=member)
-			await message.channel.send(view=layout)
+			layout = await guide_manager.get_home_view(guild_id, path, guild=guild, member=member)
+			await _post(layout)
 			return
 
 		# Non-help word (trigger word) - search the guide
@@ -152,14 +158,14 @@ class HelpListener(commands.Cog):
 		if results and results[0]["score"] >= _CONFIDENCE_THRESHOLD:
 			best = results[0]
 			logger.info(f"Search match: '{clean}' -> '{best['name']}' (score {best['score']})")
-			layout = await guide_manager.get_page_view(guild_id, user_id, best["page_id"], guild=guild, member=member)
-			await message.channel.send(view=layout)
+			layout = await guide_manager.get_page_view(guild_id, path, best["page_id"], guild=guild, member=member)
+			await _post(layout)
 			return
 
 		# No match - open the guide's Home page
 		logger.info(f"No matches found for: '{clean}'")
-		layout = await guide_manager.get_home_view(guild_id, user_id, guild=guild, member=member)
-		await message.channel.send(view=layout)
+		layout = await guide_manager.get_home_view(guild_id, path, guild=guild, member=member)
+		await _post(layout)
 
 
 async def setup(bot):

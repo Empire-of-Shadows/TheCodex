@@ -7,11 +7,15 @@ shown, braces included, and they fill themselves in.
 They are case sensitive. `{member_name}` works, `{Member_Name}` does not and will
 just sit there as literal text.
 
+Every guide message belongs to the member it was opened for: the one who
+mentioned the bot, or who pressed a greeting's Open Guide button. Only they can
+click through it, so `{member}` and `{member_name}` always name that member.
+
 ## The list
 
 | Type this | And the member sees |
 |---|---|
-| `{member}` | A mention of whoever is reading, like @CoolGamer42 |
+| `{member}` | A mention of the member the guide was opened for, like @CoolGamer42 |
 | `{member_name}` | Their display name as plain text, like CoolGamer42 |
 | `{member_count}` | How many real members the server has right now, bots excluded |
 | `{guild_name}` | Your server's name |

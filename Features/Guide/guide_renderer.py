@@ -29,6 +29,7 @@ from Features.Guide.guide_actions import (
 	CUSTOM_ID_USELECT,
 	CUSTOM_ID_SECTIONS,
 )
+from Features.Guide.guide_sessions import SESSION_TTL_SECONDS
 from Features.NewMembers.joining_responses import joining_responses
 from utils.component_builders import (
 	resolve_color,
@@ -178,6 +179,24 @@ class GuideRenderer:
 		container.accent_colour = accent_color
 		layout.add_item(container)
 
+		return layout
+
+	@classmethod
+	def render_closed(cls, guide_data: Optional[Dict[str, Any]] = None) -> discord.ui.LayoutView:
+		"""The card a guide message turns into when it closes. Nothing to click."""
+		from commands.help.help_content import SUPPORT_INVITE_URL
+
+		layout = discord.ui.LayoutView(timeout=None)
+		container = discord.ui.Container(
+			discord.ui.TextDisplay("## 📖 Guide closed"),
+			discord.ui.TextDisplay(
+				f"This guide closed after {SESSION_TTL_SECONDS // 60} minutes without use. "
+				"Mention me to open it again, or ask in the "
+				f"[support server](<{SUPPORT_INVITE_URL}>)."
+			),
+		)
+		container.accent_colour = resolve_color((guide_data or {}).get("accent_color", "#4D0EB3"))
+		layout.add_item(container)
 		return layout
 
 	@classmethod

@@ -1,5 +1,25 @@
 # Changelog
 
+## [Unreleased] - 2026-11-23 (guide closes and belongs to you)
+
+### Changed
+- **The guide closes itself after 10 minutes without use.** Each button or dropdown you use
+  restarts the 10 minutes. When time is up the guide message changes to a short note saying it
+  closed, with how to open it again (mention the bot) or where to ask for help (the support
+  server). Guides posted before this update close the first time someone clicks them.
+- **A guide belongs to the member it was opened for.** Only you can click through a guide you
+  opened. If someone else clicks it, they get a private note telling them to mention the bot
+  for their own, and your page stays where it was.
+- **Guides can greet you by name.** A guide page that uses `{member_name}` (or `{member}`) always
+  shows the person the guide was opened for, even when it was opened for you by another bot.
+  The Empires Support guide now opens with "Welcome to Empires Support" and your name.
+- **The privacy policy lists open guides.** While a guide you opened is open, the bot keeps
+  your account ID and the pages you visited in it, and deletes them when the guide closes.
+
+### Fixed
+- **Back works separately in each guide.** If you had two guides open, pressing Back in one
+  could jump to a page from the other. Each guide now remembers its own steps.
+
 ## [Unreleased] - 2026-11-23 (drops channel screen)
 
 ### Fixed

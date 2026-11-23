@@ -4,11 +4,12 @@ import { api } from "../api/client";
 import type { User } from "../api/types";
 import AppHeader from "../components/AppHeader";
 
-// Bumped 2026-08-17: the "what we collect" list gained the 30-day record of
-// server changes. The rule this fleet follows is that the date moves only when
-// the TEXT actually changed - a date bumped for a markup edit claims terms
-// changed on a day they did not. This one is a real change, so it moves.
-const EFFECTIVE_DATE = "August 17, 2026";
+// Bumped 2026-11-23: the "what we collect" list gained open-guide records
+// (who a guide is for, deleted when it closes). The rule this fleet follows is
+// that the date moves only when the TEXT actually changed - a date bumped for a
+// markup edit claims terms changed on a day they did not. This one is a real
+// change, so it moves.
+const EFFECTIVE_DATE = "November 23, 2026";
 
 export default function PrivacyPolicyPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -91,6 +92,12 @@ export default function PrivacyPolicyPage() {
               join or a departure, and nothing else. It is <strong>deleted automatically after 30
               days</strong>, and turning off the member snapshot stops it being written for you at
               all.
+            </li>
+            <li>
+              <strong>Open guides:</strong> while a guide you opened is open, the bot keeps your
+              account ID against that guide message, plus the guide pages you have visited in it,
+              so only you can use it and Back works. It is <strong>deleted when the guide
+              closes</strong>, about 10 minutes after you last use it.
             </li>
             <li><strong>A session cookie</strong> that keeps you signed in to the dashboard.</li>
           </ul>

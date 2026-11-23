@@ -165,6 +165,22 @@ COLLECTIONS: dict[str, CollectionConfig] = {
         ]
     ),
 
+    # Open guide messages: one document per posted guide (message_id), holding who
+    # it is for, that guide's Back history, and when it closes (expires_at, int
+    # Unix seconds). Short-lived: the guide sweep deletes each one as it closes the
+    # message, about 10 minutes after its owner last used it.
+    'guide_sessions': CollectionConfig(
+        name='Sessions',
+        database='Guide',
+        connection='primary',
+        indexes=[
+            IndexModel([('message_id', 1)], unique=True, name='message_id_unique'),
+            # The sweep's "what has expired" scan.
+            IndexModel([('expires_at', 1)], name='expires_at_asc'),
+            IndexModel([('guild_id', 1)], name='guild_lookup'),
+        ]
+    ),
+
     # Info Board: one document per guild per board (board_id is "main" today;
     # the compound key leaves room for a second board without a storage redo).
     'board_content': CollectionConfig(
